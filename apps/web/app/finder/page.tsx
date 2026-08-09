@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import { AppShell, MapIcon, SearchIcon, TableIcon, ToggleButton } from "../../components/app-shell";
+import { AppShell, ListIcon, MapIcon, SearchIcon, TableIcon, ToggleButton } from "../../components/app-shell";
 import { DistrictKpiSummary } from "../../components/district-kpi-summary";
 import { matchDistrictByQuery, PropertyFinder } from "../../components/property-finder";
 
@@ -19,7 +19,7 @@ import { matchDistrictByQuery, PropertyFinder } from "../../components/property-
  */
 export default function FinderPage(): React.JSX.Element {
   const [districtQuery, setDistrictQuery] = useState("");
-  const [view, setView] = useState<"map" | "table">("map");
+  const [view, setView] = useState<"map" | "list" | "table">("map");
 
   const matched = matchDistrictByQuery(districtQuery);
   const breadcrumb = `Hong Kong › ${matched?.nameEn ?? "All districts"}`;
@@ -43,6 +43,9 @@ export default function FinderPage(): React.JSX.Element {
           <div className="ml-auto flex items-center gap-1 rounded-full border border-line bg-surfaceMuted p-1">
             <ToggleButton active={view === "map"} onClick={() => setView("map")}>
               <MapIcon className="h-4 w-4" /> Map
+            </ToggleButton>
+            <ToggleButton active={view === "list"} onClick={() => setView("list")}>
+              <ListIcon className="h-4 w-4" /> List
             </ToggleButton>
             <ToggleButton active={view === "table"} onClick={() => setView("table")}>
               <TableIcon className="h-4 w-4" /> Table

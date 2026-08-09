@@ -17,7 +17,7 @@ import {
   type Standing,
 } from "@veela/ui";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { ListingsMap, type DistrictHeat, type FinderPin } from "./listings-map";
 import { draftToCoreInput, INITIAL_DRAFT, type Draft } from "./property-form";
@@ -113,9 +113,13 @@ const HEAT_METRICS = [
 ] as const;
 type HeatMetricId = (typeof HEAT_METRICS)[number]["id"];
 
+/** Cards and list rows only — `ListingsTable` already reads compactly at any length,
+ *  so paginating it too would just add clicks to a view built to scroll. */
+const PAGE_SIZE = 6;
+
 interface Props {
   readonly districtQuery: string;
-  readonly view: "map" | "table";
+  readonly view: "map" | "list" | "table";
 }
 
 export function PropertyFinder({ districtQuery, view }: Props): React.JSX.Element {
@@ -125,6 +129,7 @@ export function PropertyFinder({ districtQuery, view }: Props): React.JSX.Elemen
   const [sort, setSort] = useState<SortId>("yield-desc");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [heatMetric, setHeatMetric] = useState<HeatMetricId>("yield");
+  const [page, setPage] = useState(1);
 
   const mapsKey = process.env["NEXT_PUBLIC_GOOGLE_MAPS_API_KEY"];
   const matchedDistrict = matchDistrictByQuery(districtQuery);
@@ -170,6 +175,16 @@ export function PropertyFinder({ districtQuery, view }: Props): React.JSX.Elemen
     });
     return sorted;
   }, [rows, matchedDistrict, bedrooms, priceBand, yieldFloor, sort]);
+
+  // A filter change (or switching views) can strand the reader on a page number
+  // that no longer exists — back to page 1 whenever the result set could differ.
+  useEffect(() => {
+    setPage(1);
+  }, [matchedDistrict, bedrooms, priceBandId, yieldFloorId, sort, view]);
+
+  const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount);
+  const paged = visible.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   const pins: readonly FinderPin[] = visible.map((r) => ({
     listing: r.listing,
@@ -293,10 +308,32 @@ export function PropertyFinder({ districtQuery, view }: Props): React.JSX.Elemen
         </button>
       </div>
 
-      {view === "table" ? (
-        <ListingsTable rows={visible} />
-      ) : (
-        <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] lg:items-start">
+      {view === "table" && <ListingsTable rows={visible} />}
+
+      {view === "list" && (
+        <div className="space-y-4">
+          {visible.length === 0 ? (
+            <EmptyState total={rows.length} />
+          ) : (
+            <>
+              <div className="space-y-3">
+                {paged.map((r) => (
+                  <ListingRow
+                    key={r.listing.id}
+                    row={r}
+                    selected={r.listing.id === selectedId}
+                    onSelect={() => setSelectedId(r.listing.id)}
+                  />
+                ))}
+              </div>
+              <Pagination page={currentPage} pageCount={pageCount} onChange={setPage} />
+            </>
+          )}
+        </div>
+      )}
+
+      {view === "map" && (
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:items-start">
           {mapsKey !== undefined && mapsKey !== "" && (
             <div className="relative lg:sticky lg:top-24">
               <div className="absolute right-3 top-3 z-10">
@@ -331,23 +368,25 @@ export function PropertyFinder({ districtQuery, view }: Props): React.JSX.Elemen
             </div>
           )}
 
-          <div
-            className={`grid gap-5 sm:grid-cols-2 ${mapsKey === undefined || mapsKey === "" ? "xl:grid-cols-3" : ""}`}
-          >
+          <div>
             {visible.length === 0 ? (
-              <p className="card col-span-full py-10 text-center text-sm text-muted">
-                No sample listing matches these filters. Loosen one and it will
-                reappear — this is a fixed set of {rows.length}, not a live search.
-              </p>
+              <EmptyState total={rows.length} />
             ) : (
-              visible.map((r) => (
-                <PropertyCard
-                  key={r.listing.id}
-                  row={r}
-                  selected={r.listing.id === selectedId}
-                  onSelect={() => setSelectedId(r.listing.id)}
-                />
-              ))
+              <>
+                <div
+                  className={`grid grid-cols-2 gap-3 ${mapsKey === undefined || mapsKey === "" ? "xl:grid-cols-3" : ""}`}
+                >
+                  {paged.map((r) => (
+                    <PropertyCard
+                      key={r.listing.id}
+                      row={r}
+                      selected={r.listing.id === selectedId}
+                      onSelect={() => setSelectedId(r.listing.id)}
+                    />
+                  ))}
+                </div>
+                <Pagination page={currentPage} pageCount={pageCount} onChange={setPage} />
+              </>
             )}
           </div>
         </div>
@@ -414,6 +453,13 @@ function ListingsTable({ rows }: { readonly rows: readonly Row[] }): React.JSX.E
   );
 }
 
+/** Matched to Zillow's own listing card, measured directly off a reference screenshot:
+ *  a landscape ~16:9 photo (not 4:3, not square — Zillow's is wider than it looks at a
+ *  glance) that reads as dominant specifically because the text block under it is four
+ *  short lines, not five with wrapping. The yield badge sits over the photo where
+ *  Zillow's favourite-heart sits; price leads the text block the same way Zillow leads
+ *  with the number before beds/baths/address; the last line takes Zillow's small-caps
+ *  brokerage treatment for the one line here that's closest in spirit — the assumed rent. */
 function PropertyCard({
   row,
   selected,
@@ -430,38 +476,33 @@ function PropertyCard({
       onMouseEnter={onSelect}
       className={`card card-hover overflow-hidden !p-0 ${selected ? "ring-2 ring-accent" : ""}`}
     >
-      <PlaceholderArt seed={listing.id} />
+      <div className="relative">
+        <PlaceholderArt seed={listing.id} className="aspect-[16/9]" iconClassName="h-16 w-16" />
+        <span
+          className="absolute right-2.5 top-2.5 rounded-full px-2 py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.08em] shadow-card"
+          style={{ color: standingColor[standing], backgroundColor: "rgba(255,255,255,0.92)" }}
+        >
+          {formatPercent(verdict.returns.netYield)}
+        </span>
+      </div>
 
-      <div className="p-4">
-        <div className="flex items-start justify-between gap-2">
-          <div>
-            <p className="text-[15px] font-semibold leading-snug">
-              {listing.bedrooms}-bed sample flat
-            </p>
-            <p className="text-xs text-muted">
-              {districtName(listing.districtId)} · {listing.saleableAreaSqft} sq ft ·
-              floor {listing.floor}
-            </p>
-          </div>
-          <span
-            className="shrink-0 rounded-full px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-[0.08em]"
-            style={{ color: standingColor[standing], backgroundColor: `${standingColor[standing]}1A` }}
-          >
-            {formatPercent(verdict.returns.netYield)}
-          </span>
-        </div>
-
-        <p className="tnum mt-3 font-display text-[22px] font-semibold tracking-[-0.02em]">
+      <div className="p-2.5">
+        <p className="tnum font-display text-[18px] font-bold tracking-[-0.01em]">
           {formatCompactMoney(verdict.acquisition.price)}
         </p>
-        <p className="mt-0.5 text-xs text-muted">
-          Rent {formatCompactMoney(money(listing.monthlyRentHkd, "HKD"))}/mo (assumed) ·
-          net yield before financing
+        <p className="mt-0.5 text-[12px] text-mist">
+          {listing.bedrooms} bd · {listing.saleableAreaSqft} sqft · Sample flat
+        </p>
+        <p className="text-[12px] text-muted">
+          {districtName(listing.districtId)} · floor {listing.floor}
+        </p>
+        <p className="mt-0.5 font-mono text-[10px] uppercase tracking-[0.06em] text-muted">
+          Rent {formatCompactMoney(money(listing.monthlyRentHkd, "HKD"))}/mo, assumed
         </p>
 
         <Link
           href={`/analyse?listing=${listing.id}`}
-          className="btn-secondary mt-4 w-full !py-2 !text-[13px]"
+          className="btn-secondary mt-2 w-full !py-1.5 !text-[12px]"
         >
           View full analysis
         </Link>
@@ -471,23 +512,131 @@ function PropertyCard({
 }
 
 /**
+ * A single compact horizontal row — the "List" view's unit, distinct from both
+ * `PropertyCard`'s vertical tile and `ListingsTable`'s dense data row. Same fields
+ * as the card, laid out for fast vertical scanning rather than a grid.
+ */
+function ListingRow({
+  row,
+  selected,
+  onSelect,
+}: {
+  readonly row: Row;
+  readonly selected: boolean;
+  readonly onSelect: () => void;
+}): React.JSX.Element {
+  const { listing, verdict, standing } = row;
+
+  return (
+    <article
+      onMouseEnter={onSelect}
+      className={`card card-hover flex items-center gap-4 !p-3 ${selected ? "ring-2 ring-accent" : ""}`}
+    >
+      <PlaceholderArt seed={listing.id} className="h-16 w-20 shrink-0 rounded-card" iconClassName="h-7 w-7" />
+
+      <div className="min-w-0 flex-1">
+        <p className="text-[13px] font-semibold leading-snug">
+          {listing.bedrooms}-bed sample flat
+        </p>
+        <p className="text-[11px] text-muted">
+          {districtName(listing.districtId)} · {listing.saleableAreaSqft} sq ft · floor{" "}
+          {listing.floor} · rent {formatCompactMoney(money(listing.monthlyRentHkd, "HKD"))}/mo
+        </p>
+      </div>
+
+      <div className="shrink-0 text-right">
+        <p className="tnum font-display text-[15px] font-semibold tracking-[-0.02em]">
+          {formatCompactMoney(verdict.acquisition.price)}
+        </p>
+        <span
+          className="mt-0.5 inline-block rounded-full px-1.5 py-0.5 font-mono text-[9px] font-semibold uppercase tracking-[0.08em]"
+          style={{ color: standingColor[standing], backgroundColor: `${standingColor[standing]}1A` }}
+        >
+          {formatPercent(verdict.returns.netYield)}
+        </span>
+      </div>
+
+      <Link
+        href={`/analyse?listing=${listing.id}`}
+        className="btn-secondary shrink-0 !px-3 !py-1.5 !text-[12px]"
+      >
+        Analyse
+      </Link>
+    </article>
+  );
+}
+
+function EmptyState({ total }: { readonly total: number }): React.JSX.Element {
+  return (
+    <p className="card py-10 text-center text-sm text-muted">
+      No sample listing matches these filters. Loosen one and it will reappear — this
+      is a fixed set of {total}, not a live search.
+    </p>
+  );
+}
+
+function Pagination({
+  page,
+  pageCount,
+  onChange,
+}: {
+  readonly page: number;
+  readonly pageCount: number;
+  readonly onChange: (page: number) => void;
+}): React.JSX.Element | null {
+  if (pageCount <= 1) return null;
+
+  return (
+    <div className="mt-5 flex items-center justify-center gap-3">
+      <button
+        type="button"
+        onClick={() => onChange(page - 1)}
+        disabled={page <= 1}
+        className="btn-secondary !px-3 !py-1.5 !text-xs disabled:pointer-events-none disabled:opacity-40"
+      >
+        Previous
+      </button>
+      <span className="font-mono text-xs text-muted">
+        Page {page} of {pageCount}
+      </span>
+      <button
+        type="button"
+        onClick={() => onChange(page + 1)}
+        disabled={page >= pageCount}
+        className="btn-secondary !px-3 !py-1.5 !text-xs disabled:pointer-events-none disabled:opacity-40"
+      >
+        Next
+      </button>
+    </div>
+  );
+}
+
+/**
  * Deliberately not a photo. A stock or AI-generated image beside a fabricated address
  * would look like a real listing; a flat illustration cannot be mistaken for one. Hue
  * is a stable hash of the listing id, so a card doesn't repaint on every re-render.
  */
-function PlaceholderArt({ seed }: { readonly seed: string }): React.JSX.Element {
+function PlaceholderArt({
+  seed,
+  className = "h-36",
+  iconClassName = "h-14 w-14",
+}: {
+  readonly seed: string;
+  readonly className?: string;
+  readonly iconClassName?: string;
+}): React.JSX.Element {
   let hash = 0;
   for (let i = 0; i < seed.length; i += 1) hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
   const hue = hash % 360;
 
   return (
     <div
-      className="flex h-36 items-center justify-center"
+      className={`flex items-center justify-center ${className}`}
       style={{
         background: `linear-gradient(135deg, hsl(${hue} 55% 94%), hsl(${hue} 45% 86%))`,
       }}
     >
-      <svg viewBox="0 0 64 64" className="h-14 w-14" aria-hidden="true">
+      <svg viewBox="0 0 64 64" className={iconClassName} aria-hidden="true">
         <rect x="14" y="18" width="36" height="40" rx="2" fill={`hsl(${hue} 35% 55%)`} />
         {[24, 32, 40, 48].flatMap((y) =>
           [20, 30, 40].map((x) => (

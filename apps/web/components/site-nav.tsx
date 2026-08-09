@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 
 import { useAuth } from "./auth-provider";
 
@@ -16,6 +18,15 @@ import { useAuth } from "./auth-provider";
 
 export function SiteHeader(): React.JSX.Element {
   const { user, configured, signOut } = useAuth();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const pathname = usePathname();
+
+  // Tapping a link in the panel navigates — leaving it open over the new page would be
+  // a dead overlay the reader has to dismiss before they can read anything.
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [pathname]);
+
   return (
     /* An app bar, this time deliberately. Sticky, white against the tinted page, with
        a resting shadow rather than a border — the Zillow/Airbnb nav pattern, and the
@@ -80,9 +91,69 @@ export function SiteHeader(): React.JSX.Element {
               )}
             </>
           )}
+
+          {/* Everything to the left of "Analyse a property" is `hidden sm:` — without
+              this, a phone gets a header with no navigation in it at all. */}
+          <button
+            type="button"
+            onClick={() => setMenuOpen((o) => !o)}
+            aria-expanded={menuOpen}
+            aria-label={menuOpen ? "Close menu" : "Open menu"}
+            className="grid size-9 shrink-0 place-items-center rounded-card border border-line text-muted transition-colors hover:text-mist sm:hidden"
+          >
+            {menuOpen ? <CloseIcon className="h-4 w-4" /> : <MenuIcon className="h-4 w-4" />}
+          </button>
         </div>
       </nav>
+
+      {menuOpen && (
+        <div className="border-t border-line bg-surface sm:hidden">
+          <div className="col flex flex-col py-3 text-[15px]">
+            <Link href="/finder" className="py-2.5 text-muted hover:text-mist">
+              Finder
+            </Link>
+            <Link href="/map" className="py-2.5 text-muted hover:text-mist">
+              Market Explorer
+            </Link>
+            {configured &&
+              (user === null ? (
+                <Link href="/login" className="btn-primary mt-2 !py-2.5 !text-[14px]">
+                  Sign in
+                </Link>
+              ) : (
+                <>
+                  <Link href="/portfolio" className="py-2.5 text-muted hover:text-mist">
+                    My Properties
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => void signOut()}
+                    className="py-2.5 text-left text-muted hover:text-mist"
+                  >
+                    Sign out
+                  </button>
+                </>
+              ))}
+          </div>
+        </div>
+      )}
     </header>
+  );
+}
+
+function MenuIcon({ className }: { readonly className?: string }): React.JSX.Element {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+      <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function CloseIcon({ className }: { readonly className?: string }): React.JSX.Element {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+      <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
   );
 }
 

@@ -3,7 +3,7 @@
 import type { Route } from "next";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 /**
  * The dashboard-style shell for every "app" page — Finder, Dashboard, the Assistant,
@@ -42,19 +42,49 @@ interface Props {
 
 export function AppShell({ children, breadcrumb, toolbar }: Props): React.JSX.Element {
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const pathname = usePathname();
+
+  /**
+   * Two different behaviours behind one sidebar, split at `lg`. On a desktop it's a
+   * permanent column that collapses to icons; on a phone a 224px column would eat most
+   * of the screen, so it slides in over the content as a drawer instead and the collapse
+   * chevron is replaced by a hamburger. `collapsed` deliberately doesn't apply below
+   * `lg` — an icons-only rail is a desktop space-saving trick, and it would just make a
+   * phone drawer harder to read for no gain.
+   */
+  // Navigating from inside the drawer should close it — otherwise the new page renders
+  // underneath a still-open overlay.
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
 
   return (
     <div className="flex min-h-dvh">
-      <Sidebar collapsed={collapsed} />
+      {mobileOpen && (
+        <button
+          type="button"
+          aria-label="Close navigation"
+          onClick={() => setMobileOpen(false)}
+          className="fixed inset-0 z-40 bg-black/40 lg:hidden"
+        />
+      )}
+
+      <Sidebar collapsed={collapsed} mobileOpen={mobileOpen} />
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <TopBar collapsed={collapsed} onToggleCollapsed={() => setCollapsed((c) => !c)} toolbar={toolbar} />
+        <TopBar
+          collapsed={collapsed}
+          onToggleCollapsed={() => setCollapsed((c) => !c)}
+          onOpenMobile={() => setMobileOpen(true)}
+          toolbar={toolbar}
+        />
 
-        <div className="border-b border-line bg-surface px-6 py-2 text-xs text-muted">
+        <div className="border-b border-line bg-surface px-4 py-2 text-xs text-muted sm:px-6">
           {breadcrumb}
         </div>
 
-        <main className="flex-1 overflow-y-auto bg-ink px-6 py-6">{children}</main>
+        <main className="flex-1 overflow-y-auto bg-ink px-4 py-6 sm:px-6">{children}</main>
       </div>
     </div>
   );
@@ -101,7 +131,13 @@ const TAIL_LINKS: readonly NavLink[] = [
   { href: "/resources", label: "Resources", icon: BookIcon },
 ];
 
-function Sidebar({ collapsed }: { readonly collapsed: boolean }): React.JSX.Element {
+function Sidebar({
+  collapsed,
+  mobileOpen,
+}: {
+  readonly collapsed: boolean;
+  readonly mobileOpen: boolean;
+}): React.JSX.Element {
   const pathname = usePathname();
   const isActive = (href: string): boolean => pathname === href || pathname?.startsWith(`${href}/`) === true;
   const workspaceActive = isActive("/portfolio");
@@ -109,18 +145,28 @@ function Sidebar({ collapsed }: { readonly collapsed: boolean }): React.JSX.Elem
 
   return (
     <nav
-      className={`flex shrink-0 flex-col overflow-y-auto bg-gradient-to-b from-accent to-inverse py-5 transition-[width] duration-150 ${
-        collapsed ? "w-16" : "w-56"
-      }`}
+      className={`fixed inset-y-0 left-0 z-50 flex w-56 shrink-0 flex-col overflow-y-auto bg-gradient-to-b from-accent to-inverse py-5 transition-transform duration-200 lg:static lg:z-auto lg:translate-x-0 lg:transition-[width] ${
+        mobileOpen ? "translate-x-0" : "-translate-x-full"
+      } ${collapsed ? "lg:w-16" : "lg:w-56"}`}
       aria-label="App navigation"
     >
-      <Link href="/" className={`flex items-center gap-2.5 px-4 ${collapsed ? "justify-center" : ""}`}>
+      <Link href="/" className={`flex items-center gap-2.5 px-4 ${collapsed ? "lg:justify-center" : ""}`}>
         {/* eslint-disable-next-line @next/next/no-img-element -- see site-nav.tsx */}
-        {collapsed ? (
-          <img src="/brand/veela-icon.svg" alt="Veela" width={24} height={25} />
-        ) : (
-          <img src="/brand/veela-logo-white.svg" alt="Veela" width={92} height={22} />
-        )}
+        <img
+          src="/brand/veela-icon.svg"
+          alt="Veela"
+          width={24}
+          height={25}
+          className={collapsed ? "hidden lg:block" : "hidden"}
+        />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/brand/veela-logo-white.svg"
+          alt="Veela"
+          width={92}
+          height={22}
+          className={collapsed ? "lg:hidden" : ""}
+        />
       </Link>
 
       <ul className="mt-8 space-y-1 px-2.5">
@@ -129,12 +175,14 @@ function Sidebar({ collapsed }: { readonly collapsed: boolean }): React.JSX.Elem
         ))}
       </ul>
 
-      {!collapsed && (
-        <p className="mt-6 px-5 font-mono text-[10px] uppercase tracking-[0.12em] text-inverseMuted">
-          Research &amp; Analyse
-        </p>
-      )}
-      <ul className={`space-y-1 px-2.5 ${collapsed ? "mt-6" : "mt-2"}`}>
+      <p
+        className={`mt-6 px-5 font-mono text-[10px] uppercase tracking-[0.12em] text-inverseMuted ${
+          collapsed ? "lg:hidden" : ""
+        }`}
+      >
+        Research &amp; Analyse
+      </p>
+      <ul className={`mt-2 space-y-1 px-2.5 ${collapsed ? "lg:mt-6" : ""}`}>
         {RESEARCH_LINKS.map((item) => (
           <NavItem key={item.href} item={item} active={isActive(item.href)} collapsed={collapsed} />
         ))}
@@ -153,16 +201,16 @@ function Sidebar({ collapsed }: { readonly collapsed: boolean }): React.JSX.Elem
           }`}
         >
           <SearchIcon className="h-[18px] w-[18px] shrink-0" />
-          {!collapsed && (
-            <>
-              <span className="flex-1 text-left">My Workspace</span>
-              <ChevronDownIcon className={`h-3.5 w-3.5 shrink-0 transition-transform ${workspaceOpen ? "rotate-180" : ""}`} />
-            </>
-          )}
+          <span className={`flex-1 text-left ${collapsed ? "lg:hidden" : ""}`}>My Workspace</span>
+          <ChevronDownIcon
+            className={`h-3.5 w-3.5 shrink-0 transition-transform ${workspaceOpen ? "rotate-180" : ""} ${
+              collapsed ? "lg:hidden" : ""
+            }`}
+          />
         </button>
 
         {workspaceOpen && (
-          <ul className={`space-y-1 ${collapsed ? "" : "pl-4"}`}>
+          <ul className={`space-y-1 pl-4 ${collapsed ? "lg:pl-0" : ""}`}>
             {WORKSPACE_LINKS.map((item) => (
               <NavItem key={item.href} item={item} active={isActive(item.href)} collapsed={collapsed} />
             ))}
@@ -200,11 +248,15 @@ function NavItem({
             : "text-inverseMuted hover:bg-white/10 hover:text-inverseText"
         }`}
       >
-        {active && !collapsed && (
-          <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-accent" />
+        {/* `collapsed` is a desktop-only affordance — an icons-only rail saves width on a
+            wide screen, but the mobile drawer is already an overlay and hiding its labels
+            would only make it harder to read. So collapsing hides via `lg:hidden` rather
+            than by not rendering, which would apply at every width. */}
+        {active && (
+          <span aria-hidden className={`size-1.5 shrink-0 rounded-full bg-accent ${collapsed ? "lg:hidden" : ""}`} />
         )}
         <item.icon className="h-[18px] w-[18px] shrink-0" />
-        {!collapsed && <span>{item.label}</span>}
+        <span className={collapsed ? "lg:hidden" : ""}>{item.label}</span>
       </Link>
     </li>
   );
@@ -213,25 +265,49 @@ function NavItem({
 function TopBar({
   collapsed,
   onToggleCollapsed,
+  onOpenMobile,
   toolbar,
 }: {
   readonly collapsed: boolean;
   readonly onToggleCollapsed: () => void;
+  readonly onOpenMobile: () => void;
   readonly toolbar?: ReactNode;
 }): React.JSX.Element {
   return (
-    <div className="flex items-center gap-4 border-b border-line bg-surface px-4 py-3">
+    <div className="flex flex-wrap items-center gap-3 border-b border-line bg-surface px-4 py-3 sm:gap-4">
+      {/* Two buttons, one slot: below `lg` the sidebar is an off-canvas drawer and this
+          opens it; at `lg` and up it's a permanent column and the chevron collapses it
+          to icons. Same position, different job — never both at once. */}
+      <button
+        type="button"
+        onClick={onOpenMobile}
+        aria-label="Open navigation"
+        className="grid size-8 shrink-0 place-items-center rounded-card border border-line text-muted transition-colors hover:text-mist lg:hidden"
+      >
+        <MenuIcon className="h-4 w-4" />
+      </button>
+
       <button
         type="button"
         onClick={onToggleCollapsed}
         aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-        className="grid size-8 shrink-0 place-items-center rounded-card border border-line text-muted transition-colors hover:text-mist"
+        className="hidden size-8 shrink-0 place-items-center rounded-card border border-line text-muted transition-colors hover:text-mist lg:grid"
       >
         <ChevronIcon className={`h-4 w-4 transition-transform ${collapsed ? "rotate-180" : ""}`} />
       </button>
 
-      {toolbar !== undefined && <div className="flex flex-1 items-center gap-4">{toolbar}</div>}
+      {toolbar !== undefined && (
+        <div className="flex w-full flex-1 flex-wrap items-center gap-3 sm:w-auto sm:gap-4">{toolbar}</div>
+      )}
     </div>
+  );
+}
+
+function MenuIcon({ className }: { readonly className?: string }): React.JSX.Element {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+      <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
   );
 }
 
@@ -308,6 +384,22 @@ export function TableIcon({ className }: { readonly className?: string }): React
     <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
       <rect x="4" y="5" width="16" height="14" rx="1.5" stroke="currentColor" strokeWidth="1.7" />
       <path d="M4 10h16M9.5 5v14" stroke="currentColor" strokeWidth="1.7" />
+    </svg>
+  );
+}
+
+export function ListIcon({ className }: { readonly className?: string }): React.JSX.Element {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+      <path
+        d="M8 6h12M8 12h12M8 18h12"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+      />
+      <circle cx="4" cy="6" r="1.3" fill="currentColor" />
+      <circle cx="4" cy="12" r="1.3" fill="currentColor" />
+      <circle cx="4" cy="18" r="1.3" fill="currentColor" />
     </svg>
   );
 }
