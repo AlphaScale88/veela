@@ -317,10 +317,11 @@ export function PropertyFinder({ districtQuery, view }: Props): React.JSX.Elemen
           ) : (
             <>
               <div className="space-y-3">
-                {paged.map((r) => (
+                {paged.map((r, i) => (
                   <ListingRow
                     key={r.listing.id}
                     row={r}
+                    rank={(currentPage - 1) * PAGE_SIZE + i}
                     selected={r.listing.id === selectedId}
                     onSelect={() => setSelectedId(r.listing.id)}
                   />
@@ -376,10 +377,11 @@ export function PropertyFinder({ districtQuery, view }: Props): React.JSX.Elemen
                 <div
                   className={`grid grid-cols-2 gap-3 ${mapsKey === undefined || mapsKey === "" ? "xl:grid-cols-3" : ""}`}
                 >
-                  {paged.map((r) => (
+                  {paged.map((r, i) => (
                     <PropertyCard
                       key={r.listing.id}
                       row={r}
+                      rank={(currentPage - 1) * PAGE_SIZE + i}
                       selected={r.listing.id === selectedId}
                       onSelect={() => setSelectedId(r.listing.id)}
                     />
@@ -462,10 +464,12 @@ function ListingsTable({ rows }: { readonly rows: readonly Row[] }): React.JSX.E
  *  brokerage treatment for the one line here that's closest in spirit — the assumed rent. */
 function PropertyCard({
   row,
+  rank,
   selected,
   onSelect,
 }: {
   readonly row: Row;
+  readonly rank: number;
   readonly selected: boolean;
   readonly onSelect: () => void;
 }): React.JSX.Element {
@@ -477,7 +481,7 @@ function PropertyCard({
       className={`card card-hover overflow-hidden !p-0 ${selected ? "ring-2 ring-accent" : ""}`}
     >
       <div className="relative">
-        <PlaceholderArt seed={listing.id} className="aspect-[16/9]" iconClassName="h-16 w-16" />
+        <ListingPhoto rank={rank} className="aspect-[16/9]" />
         <span
           className="absolute right-2.5 top-2.5 rounded-full px-2 py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.08em] shadow-card"
           style={{ color: standingColor[standing], backgroundColor: "rgba(255,255,255,0.92)" }}
@@ -518,10 +522,12 @@ function PropertyCard({
  */
 function ListingRow({
   row,
+  rank,
   selected,
   onSelect,
 }: {
   readonly row: Row;
+  readonly rank: number;
   readonly selected: boolean;
   readonly onSelect: () => void;
 }): React.JSX.Element {
@@ -532,7 +538,7 @@ function ListingRow({
       onMouseEnter={onSelect}
       className={`card card-hover flex items-center gap-4 !p-3 ${selected ? "ring-2 ring-accent" : ""}`}
     >
-      <PlaceholderArt seed={listing.id} className="h-16 w-20 shrink-0 rounded-card" iconClassName="h-7 w-7" />
+      <ListingPhoto rank={rank} className="h-16 w-20 shrink-0 rounded-card" />
 
       <div className="min-w-0 flex-1">
         <p className="text-[13px] font-semibold leading-snug">
@@ -611,42 +617,69 @@ function Pagination({
   );
 }
 
-/**
- * Deliberately not a photo. A stock or AI-generated image beside a fabricated address
- * would look like a real listing; a flat illustration cannot be mistaken for one. Hue
- * is a stable hash of the listing id, so a card doesn't repaint on every re-render.
- */
-function PlaceholderArt({
-  seed,
-  className = "h-36",
-  iconClassName = "h-14 w-14",
-}: {
-  readonly seed: string;
-  readonly className?: string;
-  readonly iconClassName?: string;
-}): React.JSX.Element {
-  let hash = 0;
-  for (let i = 0; i < seed.length; i += 1) hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
-  const hue = hash % 360;
+/** Sixteen CC0 interiors in `public/listings/`. See that folder's CREDITS.md for the
+ *  licence, and for why these are generic anonymous interiors rather than photos of
+ *  real Hong Kong buildings — Commons had plenty of the latter, and attaching one to a
+ *  fabricated listing would make a specific false claim about a real property. */
+const LISTING_PHOTO_COUNT = 16;
 
+/**
+ * Photo path from a listing's **rank in the currently filtered-and-sorted list** — not
+ * from its id.
+ *
+ * Two earlier attempts, both wrong, both caught on screen rather than in review:
+ *
+ * 1. `hash * 31 + c`, reused from the old illustration's hue picker. Fine modulo 360,
+ *    quietly broken modulo 16: `31 ≡ -1 (mod 16)` cancels nearly all the entropy against
+ *    a power-of-two bucket count, and ids are adjacent by construction (`HK-CW-1`,
+ *    `HK-CW-2`, …), so three of six cards on one page showed the same photo.
+ * 2. FNV-1a with an avalanche mix. Fixed the clustering; still left one duplicate per
+ *    page, because a hash spreads *probabilistically* and nothing stops two of the six
+ *    listings that happen to land on a page from colliding.
+ *
+ * Rank is what the reader actually sees, so keying off rank is what removes the
+ * duplicate: a page is 6 consecutive ranks, `PAGE_SIZE` (6) ≤ `LISTING_PHOTO_COUNT` (16),
+ * so `rank % 16` cannot repeat within one page. Deterministic for a given filter/sort
+ * state, so returning to the same view shows the same photos.
+ *
+ * **The trade-off, stated rather than hidden:** a listing's photo is no longer bound to
+ * the listing — re-sorting can hand a card a different image. That would be wrong for a
+ * real listing whose photo is *of* that property. It is acceptable here precisely because
+ * these photos are stock interiors that were never of the property (see
+ * `public/listings/CREDITS.md`), so the only job they have is to look like a listing
+ * card, and six identical thumbnails on one screen fails that job badly.
+ */
+function photoForRank(rank: number): string {
+  const n = (rank % LISTING_PHOTO_COUNT) + 1;
+  return `/listings/listing-${String(n).padStart(2, "0")}.jpg`;
+}
+
+/**
+ * A real photograph — but **not of this property**, because these listings are
+ * generated (`packages/fixtures/src/listings.ts`). Photos were deliberately excluded
+ * here until 09/08/2026 on the reasoning in `.claude/CLAUDE.md` ("a photo next to a
+ * fabricated address reads as a real listing"); reversed on direct request, with the
+ * page-level `LISTINGS_NOTICE` disclosure and the "sample flat" card labels both kept.
+ * The alt text says what the image actually is rather than describing a property that
+ * doesn't exist — a screen-reader user should not be told this is the listing's own photo.
+ */
+function ListingPhoto({
+  rank,
+  className = "h-36",
+}: {
+  readonly rank: number;
+  readonly className?: string;
+}): React.JSX.Element {
   return (
-    <div
-      className={`flex items-center justify-center ${className}`}
-      style={{
-        background: `linear-gradient(135deg, hsl(${hue} 55% 94%), hsl(${hue} 45% 86%))`,
-      }}
-    >
-      <svg viewBox="0 0 64 64" className={iconClassName} aria-hidden="true">
-        <rect x="14" y="18" width="36" height="40" rx="2" fill={`hsl(${hue} 35% 55%)`} />
-        {[24, 32, 40, 48].flatMap((y) =>
-          [20, 30, 40].map((x) => (
-            <rect key={`${x}-${y}`} x={x} y={y} width="6" height="6" fill="white" opacity="0.85" />
-          )),
-        )}
-        <rect x="8" y="52" width="48" height="6" rx="1" fill={`hsl(${hue} 30% 40%)`} />
-      </svg>
-      <span className="sr-only">No photo — illustrative listing only</span>
-    </div>
+    // eslint-disable-next-line @next/next/no-img-element -- these are already sized and
+    // compressed to exactly the dimensions the card renders (800×450, ~55 KB); next/image
+    // would add a resizing pipeline over files that need no resizing.
+    <img
+      src={photoForRank(rank)}
+      alt="Stock interior photograph — illustrative only, not this property"
+      loading="lazy"
+      className={`w-full bg-surfaceMuted object-cover ${className}`}
+    />
   );
 }
 
