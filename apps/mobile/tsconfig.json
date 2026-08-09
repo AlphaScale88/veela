@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  
+  // Extends Expo's base rather than the workspace `tsconfig.base.json` that every
+  // package uses: the workspace base sets `verbatimModuleSyntax`, which doesn't suit
+  // Babel. The strictness flags below are the subset worth re-stating here.
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    // Expo's base still sets `moduleResolution: "node"` (node10), which TypeScript
+    // deprecated: it stops functioning in TypeScript 7. There is no way to silence
+    // that with `ignoreDeprecations` here, because the accepted value differs by
+    // compiler version — 5.9 takes only "5.0", newer ones demand "6.0" — so any
+    // value breaks either the CLI or the editor. The option has to go, not be muted.
+    //
+    // `bundler` is the right replacement: it is what current Expo projects default
+    // to, and it matches Metro's behaviour MORE closely than node10 did, because
+    // both honour `package.json` "exports" maps. It requires `module: esnext`.
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "forceConsistentCasingInFileNames": true,
+    "exactOptionalPropertyTypes": true,
+    "jsx": "react-jsx",
+    "types": [
+      "nativewind/types"
+    ]
+    
+    // No `paths`: nothing in this app imports through an alias, and under the old
+    // node10 resolution a `paths` entry without `baseUrl` raised TS5060 on some
+    // compiler versions. Dead config buying only an error.
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    ".expo/types/**/*.ts",
+    "expo-env.d.ts",
+    "nativewind-env.d.ts"
+  ],
+  
+  // Mirrors Expo's own exclude list. This key overrides the base rather than merging
+  // with it, so dropping the config files here would quietly put them back in scope.
+  "exclude": [
+    "node_modules",
+    "babel.config.js",
+    "metro.config.js",
+    "jest.config.js"
+  ]
+}

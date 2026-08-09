@@ -1,0 +1,26 @@
+{
+  "expo": {
+    "name": "Veela",
+    "slug": "veela",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "veela",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "backgroundColor": "#0B0F14",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.veela.app"
+    },
+    "android": {
+      "package": "com.veela.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#0B0F14"
+      }
+    },
+    "plugins": ["expo-router", "expo-secure-store"],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

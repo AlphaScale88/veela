@@ -1,0 +1,5 @@
+{
+    "enabledPlugins":  {
+                           "platform-dev@workspace-local":  true
+                       }
+}

@@ -1,0 +1,24 @@
+# === Credentials — never versioned ===
+**/.env
+**/.env.*
+!**/.env.example
+
+# Local Claude Code tooling wired to the parent workspace's shared MCP servers by
+# absolute path — not portable outside that machine, and not part of the product.
+**/.claude/mcp/
+
+# === Dependencies ===
+**/node_modules/
+
+# === Build artefacts ===
+**/dist/
+**/.next/
+**/.turbo/
+**/.expo/
+**/next-env.d.ts
+*.tsbuildinfo
+
+# === OS ===
+Thumbs.db
+desktop.ini
+.DS_Store
