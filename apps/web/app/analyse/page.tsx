@@ -15,6 +15,7 @@ import {
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { AppShell } from "../../components/app-shell";
 import { useAiChat } from "../../components/ai-chat-provider";
 import { useAuth } from "../../components/auth-provider";
 import { ImportedListingMap } from "../../components/imported-listing-map";
@@ -428,7 +429,11 @@ export default function AnalysePage(): React.JSX.Element {
   const importedLongitude = imported?.longitude;
 
   return (
-    <div className="col py-14">
+    /* In `AppShell` since 10/08/2026 — this is the core action of the product and it sat
+       behind a marketing header that reached three destinations, so from here you could
+       not get to your portfolio, the assistant or research at all. See
+       `components/site-chrome.tsx`. */
+    <AppShell breadcrumb="Analyse a property · Hong Kong">
       <header className="max-w-prose">
         <p className="eyebrow">Analyse · Hong Kong</p>
         {/* font-extrabold to match the landing hero's weight — see app/page.tsx —
@@ -523,7 +528,7 @@ export default function AnalysePage(): React.JSX.Element {
           </section>
         )}
       </div>
-    </div>
+    </AppShell>
   );
 }
 

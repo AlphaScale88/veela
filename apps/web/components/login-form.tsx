@@ -1,35 +1,33 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 
 import { useAuth } from "./auth-provider";
 
-type Mode = "signin" | "signup";
-
 /**
- * The actual sign-in/sign-up UI, extracted from `/login` so a second call site could
- * embed it without duplicating the form — currently just `/login` itself, which redirects
- * on success (`window.location.assign`, in the page wrapper) once `useAuth()`'s `user`
- * turns non-null. Every login-gated action on the site (saving a property, seeing the
- * full `/analyse` report, `/finder`) sends the reader to `/login?next=…` rather than
- * embedding this inline, so there is exactly one place a session gets established.
+ * **Sign-in only.** Creating an account moved to its own page (`app/signup/page.tsx`) —
+ * the mode toggle that used to live here cost a linkable URL and left no room to say what
+ * an account is *for*, which matters in a product that gives its report away without one.
+ *
+ * Still a component rather than page-inline so `/login` and any future call site share one
+ * implementation. Success needs no callback: `/login` redirects when `useAuth()`'s `user`
+ * turns non-null. Every gated action sends the reader to `/login?next=…`, so there is
+ * exactly one place a session gets established.
  */
 interface Props {
   readonly next: string;
-  /** Overrides the default "Log in" / "Create an account" heading that otherwise
-   *  tracks the internal sign-in/sign-up toggle. */
+  /** Overrides the default "Log in" heading. */
   readonly heading?: string;
   readonly description: string;
 }
 
 export function LoginForm({ next, heading, description }: Props): React.JSX.Element {
-  const { configured, signInWithGoogle, signInWithPassword, signUpWithPassword } = useAuth();
-  const [mode, setMode] = useState<Mode>("signin");
+  const { configured, signInWithGoogle, signInWithPassword } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [confirmSent, setConfirmSent] = useState(false);
 
   if (!configured) {
     return (
@@ -45,18 +43,10 @@ export function LoginForm({ next, heading, description }: Props): React.JSX.Elem
     setError(null);
     setPending(true);
     try {
-      const message =
-        mode === "signin"
-          ? await signInWithPassword(email, password)
-          : await signUpWithPassword(email, password);
-
-      if (message !== null) {
-        setError(message);
-      } else if (mode === "signup") {
-        setConfirmSent(true);
-      }
-      // signin success needs no explicit handling here — `/login`'s own effect redirects
-      // the moment `useAuth()`'s `user` turns non-null.
+      const message = await signInWithPassword(email, password);
+      if (message !== null) setError(message);
+      // Success needs no handling here — `/login`'s own effect redirects the moment
+      // `useAuth()`'s `user` turns non-null.
     } finally {
       setPending(false);
     }
@@ -65,7 +55,7 @@ export function LoginForm({ next, heading, description }: Props): React.JSX.Elem
   return (
     <div>
       <h2 className="font-display text-[20px] font-semibold tracking-[-0.02em]">
-        {heading ?? (mode === "signin" ? "Log in" : "Create an account")}
+        {heading ?? "Log in"}
       </h2>
       <p className="mt-1.5 text-sm text-muted">{description}</p>
 
@@ -81,69 +71,67 @@ export function LoginForm({ next, heading, description }: Props): React.JSX.Elem
         <span className="h-px flex-1 bg-line" /> or <span className="h-px flex-1 bg-line" />
       </div>
 
-      {confirmSent ? (
-        <p className="text-sm">
-          Check <strong>{email}</strong> for a confirmation link to finish creating your account.
-        </p>
-      ) : (
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            void submit();
-          }}
-          className="space-y-3"
-        >
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@example.com"
-            required
-            className="w-full rounded-card border border-line bg-surfaceMuted px-3.5 py-2.5 text-sm outline-none focus:border-accent focus:bg-surface"
-          />
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Password"
-            required
-            minLength={8}
-            autoComplete={mode === "signin" ? "current-password" : "new-password"}
-            className="w-full rounded-card border border-line bg-surfaceMuted px-3.5 py-2.5 text-sm outline-none focus:border-accent focus:bg-surface"
-          />
-
-          {error !== null && (
-            <p role="alert" className="text-xs text-negative">
-              {error}
-            </p>
-          )}
-
-          <button
-            type="submit"
-            disabled={pending}
-            className="btn-primary w-full !py-3 disabled:pointer-events-none disabled:opacity-50"
-          >
-            {pending ? "Working…" : mode === "signin" ? "Log in" : "Create account"}
-          </button>
-        </form>
-      )}
-
-      <button
-        type="button"
-        onClick={() => {
-          setMode((m) => (m === "signin" ? "signup" : "signin"));
-          setError(null);
-          setConfirmSent(false);
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          void submit();
         }}
-        className="mt-4 text-sm text-muted hover:text-mist"
+        className="space-y-3"
       >
-        {mode === "signin" ? "No account yet? Sign up" : "Already have an account? Log in"}
-      </button>
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="you@example.com"
+          autoComplete="email"
+          required
+          className="w-full rounded-card border border-line bg-surfaceMuted px-3.5 py-2.5 text-sm outline-none focus:border-accent focus:bg-surface"
+        />
+        <input
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="Password"
+          required
+          autoComplete="current-password"
+          className="w-full rounded-card border border-line bg-surfaceMuted px-3.5 py-2.5 text-sm outline-none focus:border-accent focus:bg-surface"
+        />
+
+        {error !== null && (
+          <p role="alert" className="text-xs text-negative">
+            {error}
+          </p>
+        )}
+
+        <button
+          type="submit"
+          disabled={pending}
+          className="btn-primary w-full !py-3 disabled:pointer-events-none disabled:opacity-50"
+        >
+          {pending ? "Logging in…" : "Log in"}
+        </button>
+      </form>
+
+      {/* A link to a real page, not a mode toggle. `next` is carried across so someone
+          who was sent here from a gated action still lands where they were going after
+          signing up, not on a default page. */}
+      <p className="mt-4 text-sm text-muted">
+        No account yet?{" "}
+        <Link
+          href={`/signup?next=${encodeURIComponent(next)}`}
+          className="font-medium text-accent hover:underline"
+        >
+          Create one
+        </Link>
+      </p>
     </div>
   );
 }
 
-function GoogleIcon({ className }: { readonly className?: string }): React.JSX.Element {
+/** Exported so `/signup` renders the identical button rather than a near-copy — two
+ *  hand-drawn Google marks that drift apart is exactly the kind of detail that makes a
+ *  sign-in page look untrustworthy. */
+export function GoogleIcon({ className }: { readonly className?: string }): React.JSX.Element {
   return (
     <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
       <path

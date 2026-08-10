@@ -5,6 +5,8 @@ import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 
+import { useAuth } from "./auth-provider";
+
 /**
  * The dashboard-style shell for every "app" page — Finder, Dashboard, the Assistant,
  * Research, the portfolio ("My Workspace"), Account ("Manage") and Resources — as
@@ -223,7 +225,81 @@ function Sidebar({
           <NavItem key={item.href} item={item} active={isActive(item.href)} collapsed={collapsed} />
         ))}
       </ul>
+
+      {/* `mt-auto` pins this to the bottom of the rail — account state is the one thing a
+          reader looks for in a fixed place rather than by scanning. */}
+      <SidebarAccount collapsed={collapsed} />
     </nav>
+  );
+}
+
+/**
+ * Who you are, and the way in or out. **The sidebar had no auth affordance at all** until
+ * `/analyse` and `/map` moved into it — the marketing header carried "Sign in" and the
+ * signed-in menu, so a reader inside the app shell had no way to log in, no way to log
+ * out, and no indication of whether they were signed in. Unifying the navigation is what
+ * made that gap load-bearing rather than merely odd.
+ *
+ * Unconfigured Supabase renders nothing, the same rule as everywhere else this project
+ * touches auth: an affordance that cannot work should not be shown.
+ */
+function SidebarAccount({ collapsed }: { readonly collapsed: boolean }): React.JSX.Element | null {
+  const { user, loading, configured, signOut } = useAuth();
+  if (!configured) return null;
+
+  return (
+    <div className="mt-auto border-t border-white/10 px-2.5 pt-4">
+      {loading ? (
+        <p className={`px-3 text-xs text-inverseMuted ${collapsed ? "lg:hidden" : ""}`}>…</p>
+      ) : user === null ? (
+        <Link
+          href="/login"
+          title={collapsed ? "Log in" : undefined}
+          className="flex items-center gap-2.5 rounded-full bg-white px-3 py-2.5 text-sm font-medium text-accent shadow-card transition-opacity hover:opacity-90"
+        >
+          <UserIcon className="h-[18px] w-[18px] shrink-0" />
+          <span className={collapsed ? "lg:hidden" : ""}>Log in</span>
+        </Link>
+      ) : (
+        <div>
+          {/* The email, truncated rather than wrapped — a long address must not push the
+              sign-out control out of reach. */}
+          <p
+            className={`truncate px-3 text-xs text-inverseMuted ${collapsed ? "lg:hidden" : ""}`}
+            title={user.email ?? undefined}
+          >
+            {user.email}
+          </p>
+          <button
+            type="button"
+            onClick={() => void signOut()}
+            title={collapsed ? "Sign out" : undefined}
+            className="mt-1 flex w-full items-center gap-2.5 rounded-full px-3 py-2.5 text-sm text-inverseMuted transition-colors hover:bg-white/10 hover:text-inverseText"
+          >
+            <SignOutIcon className="h-[18px] w-[18px] shrink-0" />
+            <span className={collapsed ? "lg:hidden" : ""}>Sign out</span>
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function UserIcon({ className }: { readonly className?: string }): React.JSX.Element {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+      <circle cx="12" cy="8" r="3.4" stroke="currentColor" strokeWidth="1.7" />
+      <path d="M5 20c0-3.6 3.1-5.6 7-5.6s7 2 7 5.6" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function SignOutIcon({ className }: { readonly className?: string }): React.JSX.Element {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+      <path d="M15 5H7a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h8" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+      <path d="M18 12H10m8 0-3-3m3 3-3 3" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   );
 }
 

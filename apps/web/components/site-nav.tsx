@@ -69,12 +69,21 @@ export function SiteHeader(): React.JSX.Element {
           {configured && (
             <>
               {user === null ? (
-                // A real button, not a plain text link — the Zillow "Sign in" pill this
-                // was asked to match, moved to the rightmost position and given the
-                // filled `btn-primary` treatment "Analyse a property" used to carry.
-                <Link href="/login" className="btn-primary hidden !px-5 !py-2.5 !text-[14px] sm:inline-flex">
-                  Sign in
-                </Link>
+                // "Sign in" stays the filled pill it was asked to be. "Sign up" is added
+                // beside it as plain text rather than a second button — the header had no
+                // path to *create* an account at all, only to log into one, and two
+                // filled pills next to each other would compete for the same click.
+                <>
+                  <Link
+                    href="/signup"
+                    className="hidden text-muted transition-colors hover:text-mist sm:inline"
+                  >
+                    Sign up
+                  </Link>
+                  <Link href="/login" className="btn-primary hidden !px-5 !py-2.5 !text-[14px] sm:inline-flex">
+                    Sign in
+                  </Link>
+                </>
               ) : (
                 <div className="hidden items-center gap-4 sm:flex">
                   <Link href="/portfolio" className="text-muted transition-colors hover:text-mist">
@@ -117,9 +126,14 @@ export function SiteHeader(): React.JSX.Element {
             </Link>
             {configured &&
               (user === null ? (
-                <Link href="/login" className="btn-primary mt-2 !py-2.5 !text-[14px]">
-                  Sign in
-                </Link>
+                <>
+                  <Link href="/signup" className="py-2.5 text-muted hover:text-mist">
+                    Sign up
+                  </Link>
+                  <Link href="/login" className="btn-primary mt-2 !py-2.5 !text-[14px]">
+                    Sign in
+                  </Link>
+                </>
               ) : (
                 <>
                   <Link href="/portfolio" className="py-2.5 text-muted hover:text-mist">
