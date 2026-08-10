@@ -5,6 +5,7 @@ import { HK_RULE_SETS } from "@veela/core";
 import {
   buildings,
   districts,
+  estates,
   marketObservations,
   profiles,
   properties,
@@ -15,6 +16,7 @@ import {
 import {
   chatRequestSchema,
   createPropertySchema,
+  buildingSearchQuerySchema,
   importListingRequestSchema,
   latestByDistrictQuerySchema,
   mapQuerySchema,
@@ -28,6 +30,7 @@ import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { stream as honoStream } from "hono/streaming";
 
+import { ADDRESS_LOOKUP_SOURCE, searchAddresses, type AddressMatch } from "./address-lookup.js";
 import { extractListing } from "./listing-extract.js";
 import { fetchSpaciousHtmlStealthily } from "./spacious-stealth-fetch.js";
 import { fetchHtmlSafely, FetchFailedError, UnsafeUrlError } from "./ssrf-safe-fetch.js";
@@ -609,6 +612,111 @@ export const api = new Hono<Env>()
       metric,
       values: list,
       sources: [...new Set(list.map((r) => r.source))],
+    });
+  })
+
+  /**
+   * Free-text building search, and the one place this product acquires **real
+   * per-building data**. Resolved live against the Government's Address Lookup Service
+   * (see `address-lookup.ts` for why ALS rather than Lands Department footprints), then
+   * persisted: every distinct estate and building a search resolves is upserted, so the
+   * database fills with real buildings as a by-product of use rather than needing a bulk
+   * ingestion first. That is the same "user-fed, not aggregation-first" bet the whole
+   * product is built on, applied to geography.
+   *
+   * **Persistence never blocks the response.** ALS is the authority; our table is a
+   * cache of what people have looked at. If the write fails — no `DATABASE_URL`, RLS,
+   * a race between two identical searches — the search still returns, and `persisted`
+   * says so rather than the caller silently believing a lie about what was stored.
+   */
+  .get("/buildings/search", zValidator("query", buildingSearchQuerySchema), async (c) => {
+    const { q, limit } = c.req.valid("query");
+
+    let matches: readonly AddressMatch[];
+    try {
+      matches = await searchAddresses(q, limit);
+    } catch (cause) {
+      throw new HTTPException(502, {
+        message: `Address Lookup Service is unavailable: ${
+          cause instanceof Error ? cause.message : "unknown error"
+        }`,
+      });
+    }
+
+    let persisted = 0;
+    try {
+      const db = c.get("db");
+
+      /**
+       * **Two statements, not two per result.** The first version awaited an estate
+       * upsert and a building upsert inside the loop — 2N sequential round-trips to a
+       * Singapore-region database, which measured **12 seconds for 8 results** and made
+       * search-as-you-type unusable. Latency, not query cost: the work is trivial, there
+       * was just a lot of waiting. Batched into one multi-row upsert per table it is two
+       * round-trips regardless of how many results come back.
+       */
+      const uniqueEstates = new Map<string, { districtId: string; nameEn: string; nameZh: string | null }>();
+      for (const m of matches) {
+        if (m.estateNameEn === undefined) continue;
+        uniqueEstates.set(`${m.districtId}|${m.estateNameEn}`, {
+          districtId: m.districtId,
+          nameEn: m.estateNameEn,
+          nameZh: m.estateNameZh ?? null,
+        });
+      }
+
+      const estateIdByKey = new Map<string, string>();
+      if (uniqueEstates.size > 0) {
+        const rows = await db
+          .insert(estates)
+          .values([...uniqueEstates.values()])
+          .onConflictDoUpdate({
+            target: [estates.districtId, estates.nameEn],
+            // Only fill a blank — never overwrite a curated Chinese name with a null.
+            set: { nameZh: sql`coalesce(excluded.name_zh, ${estates.nameZh})` },
+          })
+          .returning({ id: estates.id, districtId: estates.districtId, nameEn: estates.nameEn });
+        for (const r of rows) estateIdByKey.set(`${r.districtId}|${r.nameEn}`, r.id);
+      }
+
+      // `centroid` is a PostGIS point; `footprint` stays null because ALS returns a
+      // point, not a polygon. Raw SQL because the column is text in the Drizzle schema
+      // and cast to geometry by migration 0001.
+      const values = matches.map((m) => {
+        const estateId =
+          m.estateNameEn === undefined
+            ? null
+            : estateIdByKey.get(`${m.districtId}|${m.estateNameEn}`) ?? null;
+        return sql`(
+          ${m.districtId}, ${m.label}, ${m.estateNameZh ?? null},
+          ${estateId}::uuid,
+          st_setsrid(st_makepoint(${m.longitude}, ${m.latitude}), 4326),
+          ${ADDRESS_LOOKUP_SOURCE}
+        )`;
+      });
+
+      if (values.length > 0) {
+        await db.execute(sql`
+          insert into buildings (district_id, name_en, name_zh, estate_id, centroid, source)
+          values ${sql.join(values, sql`, `)}
+          on conflict (district_id, name_en) where name_en is not null
+          do update set
+            centroid = excluded.centroid,
+            estate_id = coalesce(excluded.estate_id, buildings.estate_id)
+        `);
+        persisted = values.length;
+      }
+    } catch {
+      // Deliberately swallowed — see the doc comment. `persisted` carries the truth.
+    }
+
+    return c.json({
+      query: q,
+      source: "Address Lookup Service, Government of Hong Kong (als.gov.hk)",
+      /** How many of the results made it into our own tables. Less than `results.length`
+       *  means the search worked and the cache didn't — not that the data is wrong. */
+      persisted,
+      results: matches,
     });
   })
 

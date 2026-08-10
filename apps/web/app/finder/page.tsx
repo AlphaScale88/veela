@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import { AppShell, ListIcon, MapIcon, SearchIcon, TableIcon, ToggleButton } from "../../components/app-shell";
+import { BuildingSearch } from "../../components/building-search";
 import { DistrictKpiSummary } from "../../components/district-kpi-summary";
 import { matchDistrictByQuery, PropertyFinder } from "../../components/property-finder";
 
@@ -60,11 +61,16 @@ export default function FinderPage(): React.JSX.Element {
             Find a property worth analysing
           </h1>
           <p className="text-sm leading-relaxed text-muted">
-            Filter by price, size and net yield, then open the full report on anything
-            that looks worth a closer look. There is no live Hong Kong listings feed
-            behind this yet — every card below is a generated example, clearly marked.
+            Two searches, and they are not the same thing. The one directly below finds a{" "}
+            <strong className="text-mist">real building</strong> by name, from the
+            Government&apos;s address register. The filtered cards further down are{" "}
+            <strong className="text-mist">generated examples</strong> — there is still no
+            live Hong Kong listings feed behind them.
           </p>
         </header>
+
+        {/* Real data first, fabricated second — the order is the disclosure. */}
+        <BuildingSearch />
 
         {matched !== undefined && (
           <DistrictKpiSummary districtId={matched.id} districtName={matched.nameEn} />

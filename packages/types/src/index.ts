@@ -143,6 +143,17 @@ export const latestByDistrictQuerySchema = z.object({
 });
 
 /**
+ * Free-text building/estate search, resolved against the Government's Address Lookup
+ * Service. Two characters minimum: ALS scores fuzzily and a single letter returns
+ * essentially arbitrary high-scoring matches, which reads as a broken search rather than
+ * a broad one.
+ */
+export const buildingSearchQuerySchema = z.object({
+  q: z.string().trim().min(2).max(120),
+  limit: z.coerce.number().int().min(1).max(20).default(8),
+});
+
+/**
  * How confident we are that a number shown at one geographic level actually applies
  * at the level the user is looking at. The UI must surface this: putting a district
  * vacancy rate on a single building implies precision we do not have, and that is
