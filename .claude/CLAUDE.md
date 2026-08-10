@@ -235,16 +235,35 @@ clearly-fake listings** — the full screening UI, populated with generated data
 plainly it isn't real, rather than pausing on data acquisition or quietly implying real
 inventory.
 
-**No fake addresses, no photos.** `packages/fixtures/src/listings.ts` generates ~3
-listings per district (54 total, mulberry32-seeded like `observations.ts`) with a price,
-size, rent and yield shaped plausibly for Hong Kong — but every card is labelled by what
-it is ("2-bed sample flat — Sham Shui Po"), never given a building name or street. A
+**No fake addresses.** `packages/fixtures/src/listings.ts` generates ~3 listings per
+district (54 total, mulberry32-seeded like `observations.ts`) with a price, size, rent
+and yield shaped plausibly for Hong Kong — but every card is labelled by what it is
+("2-bed sample flat — Sham Shui Po"), never given a building name or street. A
 generic-but-plausible building name was the one choice ruled out early: something like
 "Harbour Court" risks coincidentally matching a real Hong Kong building, which would be
-worse than the thing this is trying to avoid. Cards use a flat SVG illustration
-(`PlaceholderArt` in `property-finder.tsx`), not a stock or generated photo — a photo
-next to a fabricated address reads as a real listing; a deliberately abstract graphic
-cannot.
+worse than the thing this is trying to avoid.
+
+**Photos: originally none, added 09/08/2026 — the one honesty rule here that was
+deliberately reversed.** The original rule was "no photos", on the reasoning that *a
+photo next to a fabricated address reads as a real listing; a deliberately abstract
+graphic cannot*. Reversed on direct request, with the tension flagged first rather than
+silently reversed or silently refused. What holds now: sixteen **CC0** interiors in
+`public/listings/` (see that folder's `CREDITS.md`), the page-level `LISTINGS_NOTICE`
+disclosure stays, cards still say "sample flat", and **no photo shows an identifiable
+Hong Kong building** — Commons offered plenty of CC-licensed shots of named towers and
+all were rejected, because attaching a real named building to a fabricated listing in an
+unrelated district makes a specific false claim about a real property, which is worse
+than a generic interior. Alt text says what the image is, not what the listing is.
+
+Selection is by **rank in the filtered-and-sorted list**, not a hash of the listing id.
+Two hash attempts shipped visible duplicates first: `hash * 31 + c` (fine mod 360 for the
+old hue picker, broken mod 16 — `31 ≡ -1 (mod 16)` cancels the entropy, and ids are
+adjacent by construction, so three of six cards matched), then FNV-1a with avalanche
+(clustering fixed, still one duplicate per page — a hash spreads probabilistically and
+cannot guarantee six particular listings don't collide). A page is 6 consecutive ranks
+and 6 ≤ 16, so `rank % 16` cannot repeat within a page. The trade-off, stated in the code:
+a photo is no longer bound to a listing, so re-sorting can change a card's image —
+acceptable only because these were never photos of the property.
 
 **The engine is real; only the input is fabricated.** `PropertyFinder` computes each
 card's net yield with the actual `computeVerdict` against a fixed, documented
@@ -420,33 +439,25 @@ published figures, not assumed:**
 | House730 | **403 on every attempt** — the site's own infrastructure refuses the request outright. Not pursued further: matching a browser's User-Agent to get past that would be posing as a human user specifically to defeat a site's own access control, a materially more aggressive posture than reading what a page publishes, and not one this project takes. |
 | Spacious | Same 403 wall. Same reasoning, not pursued. |
 
-**Bug 1 — the text-fallback regex scanned the whole page, not the listing.** Before
-today it ran `AREA_RE`/`BEDROOM_RE` against the entire visible page text. Every listing
-site tested also renders "similar properties," filters and navigation full of *other*
-listings' numbers, and a global regex has no way to tell those apart from the subject
-property's own figures. Tested against Squarefoot and 28Hse, it returned **1,282 sqft
-misread as 4,853 and 3 bedrooms misread as 1** — confidently wrong, not merely absent,
-which is the worse failure mode by this product's own standard. Fixed by scoping the
-fallback to `og:title` + `og:description` + `twitter:description` only — still
-published metadata the site authored on purpose, just the specific field meant to
-summarise *this* listing rather than the whole DOM. Caught a second, smaller bug at the
-same time: the area pattern only recognised "sq ft"/"sqft", not the "ft²" form these
-sites actually use — both now match.
+**Bug 1 — the text fallback scanned the whole page, not the listing.** `AREA_RE`/
+`BEDROOM_RE` ran against all visible text, and every site tested also renders "similar
+properties" and filters full of *other* listings' numbers. Result on Squarefoot/28Hse:
+**1,282 sqft read as 4,853, 3 bedrooms read as 1** — confidently wrong rather than
+absent, the worse failure by this product's standard. Scoped to `og:title` +
+`og:description` + `twitter:description`: still author-published metadata, but the field
+meant to summarise *this* listing. (Same pass: the area pattern matched "sq ft"/"sqft"
+but not the "ft²" these sites actually use.)
 
-**Bug 2 — `numberOfRooms` in JSON-LD is not the same field as "bedrooms."**
-Squarefoot's own structured data carried a correct `floorSize` (1,282, matching the
-listing exactly) sitting right next to `"numberOfRooms":1` on a listing whose own
-description says "3 Bedrooms." Schema.org's room count and a marketing bedroom count
-are legitimately different numbers, and treating them as synonyms — which the code did
-— produced a wrong answer from data that was technically "structured," proving
-structured data isn't automatically trustworthy data. Fixed by dropping `numberOfRooms`
-from the bedroom search keys; only fields actually named for bedrooms count as bedrooms
-now.
+**Bug 2 — `numberOfRooms` is not "bedrooms."** Squarefoot published a correct `floorSize`
+next to `"numberOfRooms":1` on a listing whose own description said "3 Bedrooms."
+Schema.org's room count and a marketing bedroom count are legitimately different numbers;
+treating them as synonyms produced a wrong answer *from structured data*, which is the
+lesson — structured does not mean trustworthy. Only fields actually named for bedrooms
+count now.
 
-Neither fix required looking at how any of these sites lay out their pages — both came
-from reading the same two kinds of thing this importer already reads (a meta tag, a
-JSON-LD field), just more carefully and verified against real output instead of assumed
-to work.
+Neither fix required looking at how any site lays out its rendered page: both came from
+reading the same meta tags and JSON-LD the importer already read, more carefully, and
+verifying against real output instead of assuming.
 
 ### Midland Realty added (05/08/2026) — a third source, and a new sentinel bug
 
@@ -469,30 +480,22 @@ filter-range data, each with their own `price`/`net_area`-shaped fields describi
 silently return a recommended listing's price instead of the one on screen; `property`
 is the one object that describes the page's own subject.
 
-**Bug 3 — `findField` matched whichever key an object listed first, not the key the
-caller actually asked for.** It iterated the object's own entries and returned on the
-first one found in *any* of the target keys — correct for JSON-LD, where the objects
-tested so far never carried two candidate keys at once, but Midland's `property` object
-carries both `net_area` (saleable, 1,280 sqft) and `area` (gross, 1,683 sqft) as
-siblings. Asking for `["net_area", "area"]` happened to still return the right one,
-purely because `net_area` is serialised first — a coincidence of key order, not a
-guarantee. Fixed to check the caller's keys in their own priority order against the full
-object before descending, so the result no longer depends on how the source JSON happens
-to be laid out.
+**Bug 3 — `findField` returned whichever key the object listed first, not the key the
+caller asked for.** Correct for JSON-LD, where no object tested carried two candidates at
+once; wrong for Midland's `property`, which carries `net_area` (saleable, 1,280) and
+`area` (gross, 1,683) as siblings. `["net_area", "area"]` returned the right one *purely
+because `net_area` is serialised first* — key order, not a guarantee. Now checks the
+caller's keys in the caller's priority order before descending.
 
-**Bug 4 — Midland uses a literal `0`, not a missing key, as its "not entered" sentinel.**
-The second test listing (a Ma Wan village house) carried `net_area: 0, area: 0` — no
-registered floor area — while still stating a real price. Nothing in this domain is
-legitimately zero: no listing costs HK$0 or measures 0 sqft. Treating `0` as "found" put
-a false zero on the page next to a "read from the listing" claim — confidently wrong,
-the same failure mode Bug 1 exists to avoid, just from a new source. Fixed with
-`toPositiveNumber()`, used for all three `__NEXT_DATA__` fields (price, area, bedrooms).
+**Bug 4 — Midland uses a literal `0`, not a missing key, as "not entered."** A Ma Wan
+village house carried `net_area: 0, area: 0` alongside a real price. Nothing here is
+legitimately zero — no listing costs HK$0 or measures 0 sqft — so treating `0` as "found"
+printed a false zero next to a "read from the listing" claim. `toPositiveNumber()` now
+guards all three `__NEXT_DATA__` fields.
 
-**Verified against both test listings after both fixes**: listing 1 — HK$27,000,000,
-1,280 sqft saleable, 4 bedrooms, all matching the raw payload by hand. Listing 2 —
-HK$22,880,000, area correctly absent (not `0`), bedrooms correctly absent (the field
-isn't in the object at all, unlike area/price). Centanet, 28Hse and Squarefoot re-run
-after both fixes to confirm no regression — unchanged.
+**Verified against both listings after both fixes**, by hand against the raw payload:
+HK$27,000,000 / 1,280 sqft / 4 bed; and HK$22,880,000 with area correctly *absent* rather
+than `0`. Centanet, 28Hse and Squarefoot re-run: no regression.
 
 **House730 and Spacious re-tested, this time with a real browser, not just the Node
 fetcher.** Previously found `403 on every attempt` and not pursued, reasoned from this
@@ -608,56 +611,29 @@ whichever of the two doesn't apply to a given listing.
 | Rent only (a pure rental) | Monthly rent | **Not computable from this import alone** — the banner says so explicitly, and names it a rental rather than leaving a blank field to explain itself |
 | Both (Midland dual-listed) | Both | Computed directly from this one listing |
 
-**"Display the yield if it can be estimated" first looked like it needed no new code —
-it didn't, at first.** `computeVerdict` already recomputes reactively from whatever
-`draft.price` and `draft.monthlyRent` currently hold, so wiring `monthlyRentMinor` into
-`draft.monthlyRent` the same way `priceMinor` fed `draft.price` seemed to be the whole
-change, and a first test proved it: importing a pure rental on top of a draft that still
-held its *default* price recomputed net yield live from the old price and the new rent.
-**That test was misleading, not wrong — a fresh page's default price is real money, so
-combining it with an unrelated rent still produced a number, just not an alarming one.**
-See the next entry for what a genuinely stale price does instead.
+**Then the yield lied anyway — two more root causes, and a misleading green test.**
+Wiring `monthlyRentMinor` into `draft.monthlyRent` looked sufficient, and a first test
+"passed": importing a rental over a draft still holding its *default* price produced a
+plausible number. **That test was misleading rather than wrong — a default price is real
+money, so the result looked unremarkable.** Reported for real, with a screenshot: a
+Spacious rental (HK$26,000/month) showed Price *and* rent both at HK$26,000 and a net
+yield of **186%**, with the rental warning banner correctly displayed right next to it.
 
-### The banner said "it's a rental" and the number still lied anyway (05/08/2026)
+1. **`handleImported` only ever patched, never cleared.** Patch-only was deliberate, so
+   an incidental import wouldn't clobber a manual edit — but it also let a **stale price
+   from a different listing** survive into a rental import and combine with its rent.
+   Fixed: `price` and `monthlyRent` now **clear each other**; a listing stating both
+   (Midland) still sets both; fields the import didn't touch at all still only patch.
+2. **Zeroing the price wasn't enough** — the preview still showed **176%**. `ratio()`
+   already guards division by zero, so the bug wasn't there: **net yield is net income
+   over *cash to acquire***, and that is price **plus** stamp duty (which floors at a
+   nonzero minimum) plus flat agency and legal fees. Zero price still left ~HK$95k of
+   real, price-independent cost in the denominator, so `computeVerdict` "succeeded" with
+   a finite, fictitious percentage. Fixed above the engine: `preview` refuses when
+   `draft.price <= 0`, reusing the `null` state `Rail` already renders.
 
-Reported directly, with a screenshot: importing a real Spacious rental (Hampton Place,
-HK$26,000/month) showed **both** Price and Monthly rent at HK$26,000, and a live net
-yield of **186%**. The banner's rental warning was on screen at the same time — reading
-correctly, changing nothing, because the number next to it was the problem.
-
-**Root cause 1 — `handleImported` only ever patched fields, never cleared one.** A
-rental import correctly left `priceMinor` unset (verified by curling the API directly:
-only `monthlyRentMinor` came back), but "unset" meant *keep whatever `price` already
-had*, by design, so a manual edit wouldn't be clobbered by an incidental import. That
-same rule let a **stale price from a completely different listing** silently survive
-into a fresh rental import and get combined with its rent — the exact "the number
-describes two unrelated properties" failure the sale/rent split above exists to prevent,
-just one layer up, in form state rather than in extraction. Fixed: `price` and
-`monthlyRent` now **clear each other**, not just patch — finding one without the other
-zeroes the one not found, and a listing that states both (Midland's dual pages) still
-sets both. A field the import didn't touch *at all* (saleable area, label) still only
-patches, unchanged.
-
-**Root cause 2 — zeroing the price wasn't enough on its own, and this was the real
-surprise.** With `price` correctly reset to `0`, the live preview *still* showed a
-yield: **176%**, not the 186% from before but not `null` either. `ratio()` in
-`packages/core` already guards its own division by zero — the bug wasn't there. It was
-that **net yield isn't rent over price**, it's net income over *cash to acquire*, and
-cash to acquire is price **plus** stamp duty (which floors at a nonzero minimum) plus
-flat agency and legal fees that don't depend on price at all. Zero price left roughly
-HK$95k of real, price-independent cost sitting in the denominator, so `computeVerdict`
-"succeeded" and produced a large but finite, entirely fictitious percentage. Fixed one
-level up from the engine, in the live preview itself: `preview` in `app/analyse/page.tsx`
-now refuses outright when `draft.price <= 0`, the same `null` a mid-edit throw already
-produces — `Rail` needed no change, since "no preview yet" was already a designed state,
-just never reached by this path before.
-
-**Verified with the exact reported shape, not a simplified one**: a real price entered,
-then a real rental imported on top of it — Price resets to `0`, Monthly rent fills in,
-and the rail reads "Finish the figures and the preview will appear here," not a number.
-Re-checked afterward that a plain sale import (price found, no rent) still yields
-normally, and that a Midland dual listing still sets and computes from both — neither
-regressed.
+Verified with the exact reported shape, not a simplified one; sale-only imports and
+Midland dual listings re-checked for regression.
 
 ### A clear rejection reason, and an address on the map (06/08/2026)
 
@@ -665,77 +641,49 @@ Two requests, both about the paste-a-link importer: show *why* the server reject
 link, in a popup rather than easy-to-miss inline text; and pull the listing's address
 out of the page too, plotted on a map.
 
-**The popup existed as an idea before it existed as a working one — the message under
-it was wrong.** `ErrorToast` (`components/toast.tsx`) is new: fixed, dismissible,
-`top-20 right-5` rather than `bottom-5 right-5`, so it doesn't collide with
-`ai-chat.tsx`'s floating trigger, and clear of `site-nav.tsx`'s sticky header. First
-version showed **"The server rejected that link (400)"** for every rejection, no matter
-which — the specific reason `fetchHtmlSafely`/`spacious-stealth-fetch.ts` already raise
-(`"169.254.169.254 resolves only to private/internal addresses"`, an actually useful
-sentence) was being thrown away. Cause: `listing-importer.tsx` called `res.json()`
-unconditionally, but the server sends the rejection two different shapes depending on
-which layer rejects it — Hono's `HTTPException` (an unreachable or unsafe URL) sends its
-message as **plain text**; `zValidator` (a URL that fails `z.string().url()` before the
-handler runs at all) sends a **Zod error as JSON**. `res.json()` throws on the first
-shape, was silently caught, and fell back to the generic message every time — verified
-by curling both paths directly and finding `content-type: text/plain` on one and
-`application/json` on the other. `readRejectionMessage()` now reads the body as text
-first (valid for both), tries to parse it as JSON, and only falls back to the generic
-`(status)` message if neither shape is recognised.
+**The toast worked before its message did.** `ErrorToast` (`components/toast.tsx`) sits
+`top-20 right-5`, clear of `ai-chat.tsx`'s floating trigger and `site-nav.tsx`'s sticky
+header. Its first version showed "The server rejected that link (400)" for *every*
+rejection, discarding the specific reason the fetchers already raise (e.g.
+`"169.254.169.254 resolves only to private/internal addresses"`). Cause: the client called
+`res.json()` unconditionally, but rejections arrive in **two shapes** — Hono's
+`HTTPException` sends **plain text**, `zValidator` (a URL failing `z.string().url()`
+before the handler runs) sends a **Zod error as JSON**. `res.json()` threw on the first,
+was silently caught, and fell through to the generic message. Confirmed by curling both
+paths and reading the `content-type`. `readRejectionMessage()` now reads text first,
+attempts JSON, and only then falls back.
 
-**The address and coordinates came from the same three sources already read for
-everything else — no new source, a deeper read of the ones already there.** Centanet
-nests a full schema.org `PostalAddress` + `GeoCoordinates` pair three levels down,
-inside `RealEstateListing.mainEntity` — `findField`'s existing key search doesn't reach
-it, since `address`/`geo` are objects, not the number/string leaves it matches.
-Spacious states `address` as a bare string sitting next to a flatter `geo` object.
-Midland's `__NEXT_DATA__` `property.building` carries `latitude`/`longitude` directly,
-no `geo` wrapper at all, alongside `streetview_latitude`/`streetview_longitude` for its
-camera angle — a real but different pair, kept apart by matching the exact key name
-rather than a prefix. `findAddressText()` and `findGeoCoordinates()` are two new bounded
-recursive walks that handle all three shapes generically: the first checks for a literal
-`address` key at every level (string, or a `PostalAddress`-shaped object to assemble
-from `streetAddress`/`addressLocality`/`addressRegion`, deduplicated — Centanet's own
-data repeats "Tsuen Wan West" as both `streetAddress` and `addressRegion`); the second
-checks for `latitude`+`longitude` siblings at every level, regardless of what contains
-them. Squarefoot and 28Hse publish neither JSON-LD nor `__NEXT_DATA__`, but both carry
-the old ICBM `<meta name="geo.position" content="lat;lng">` tag — `extractGeoMetaTag()`
-is the third, meta-tag-only source, tried last.
+**Address and coordinates came from the same three sources already being read** — no new
+source, a deeper read. Each site nests them differently: Centanet puts `PostalAddress` +
+`GeoCoordinates` three levels down in `RealEstateListing.mainEntity` (objects, which
+`findField`'s leaf-matching never reached); Spacious has a bare `address` string beside a
+flat `geo`; Midland's `property.building` carries `latitude`/`longitude` directly, next to
+`streetview_latitude`/`streetview_longitude` — a real but different pair, kept apart by
+exact key name rather than prefix. `findAddressText()` and `findGeoCoordinates()` are
+bounded recursive walks handling all three generically (the first assembles and
+deduplicates `PostalAddress` parts — Centanet repeats "Tsuen Wan West" in two fields).
+Squarefoot and 28Hse publish neither JSON-LD nor `__NEXT_DATA__` but do carry the old
+ICBM `<meta name="geo.position">`, tried last.
 
-**Verified against a real listing on all five sites, every one returned an address and
-coordinates** — including Squarefoot and 28Hse, not expected to have an address at all
-going in, since neither publishes one via the sources already read for price. Every
-coordinate is checked against `isPlausibleHongKong()` (`@veela/fixtures` — the same
-bounding-box guard the demo fixtures use on their own generated points) before it's
-trusted; a hit outside Hong Kong is discarded with a warning rather than shown, on the
-theory that a wrong pin on a *real* map reads as data, never as the parsing bug it is.
+**All five sites returned an address and coordinates** — including the two not expected
+to. Every coordinate passes `isPlausibleHongKong()` before it is trusted; a hit outside
+the territory is discarded with a warning, because **a wrong pin on a real map reads as
+data, never as the parsing bug it is**.
 
-**Found on the way, fixed because it shares the exact root cause `findField` already
-had a name for**: Centanet's `floorSize` is schema.org's `QuantitativeValue` pattern —
-`{"@type":"QuantitativeValue","value":947,"unitCode":"FTK"}` — not a bare number, so
-`findField` skipped straight past it and Centanet's area came back "not found" on every
-import despite the page publishing it. Fixed generically, inside `findField` itself:
-a matched key whose value is an object carrying its own numeric/string `value` is
-unwrapped the same way a plain number would be — not a Centanet-specific branch, since
-`QuantitativeValue` is schema.org's own convention and nothing rules out meeting it
-again on a different field.
+**Found on the way**: Centanet's `floorSize` uses schema.org's `QuantitativeValue`
+wrapper (`{"@type":"QuantitativeValue","value":947,…}`), not a bare number, so area came
+back "not found" on every Centanet import despite being published. Fixed generically in
+`findField` — a matched key whose value is an object carrying its own `value` is
+unwrapped — not a Centanet branch, since that wrapper is schema.org convention.
 
-**The pin itself is a new, small component, not a variant of the existing map.**
-`ImportedListingMap` (`components/imported-listing-map.tsx`) is one `AdvancedMarker` at
-the listing's own coordinates — deliberately not `DistrictMap`, which only ever
-resolves a *demo* district's centroid and carries sizing/selection machinery this has
-no use for. It reuses `DistrictMap`'s `MAP_STYLE` (now exported) so the two read as one
-product rather than two different palettes, and follows the same "the caller decides
-whether there's a key" rule as `market-explorer.tsx`/`map-preview.tsx` — `ImportBanner`
-only renders it once `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` and both coordinates exist.
-**Noted, not chased**: at close zoom the muted styling doesn't suppress Google's default
-POI icons the way it visibly does on the territory-wide `DistrictMap` — a `mapId`
-appears to make Google prefer Cloud-console-configured styling over the inline `styles`
-array passed alongside it. `DistrictMap` sets the same two props together and would
-show the same thing zoomed in this close; this is a pre-existing characteristic of that
-combination, not something this component introduced, and fixing it needs either
-dropping `mapId` (losing Advanced Marker support) or a Cloud Console style this project
-doesn't have configured — out of scope for what was asked here.
+**The pin is its own small component.** `ImportedListingMap` is one `AdvancedMarker`,
+deliberately not `DistrictMap` (which resolves *demo* centroids and carries
+sizing/selection machinery this doesn't need). It reuses `DistrictMap`'s exported
+`MAP_STYLE` so the two read as one product. **Noted, not chased**: at close zoom the
+muted styling doesn't suppress Google's POI icons, because a `mapId` makes Google prefer
+Cloud-console styling over the inline `styles` array. Pre-existing to that prop
+combination, not introduced here; fixing it means dropping `mapId` (losing Advanced
+Markers) or configuring a Cloud Console style this project doesn't have.
 
 ## The star rating — a formula shown next to the number, not a score behind it
 
@@ -752,44 +700,37 @@ its formula in plain language every time it's displayed, rather than compressing
 metrics into one opaque, branded number. A rating that hides its own arithmetic reads as
 an opinion; this one reads as a restatement of the report above it.
 
-## Login — added 03/08/2026, and at the time deliberately not a paywall
+## Login — added 03/08/2026
 
-**Superseded 06/08/2026 — see "The paywall, after all" below.** This section is kept
-because the reasoning in it is still the reasoning that made the later reversal a real
-decision rather than a casual one; only the conclusion changed.
-
-Asked for "advanced mode" gated behind login, with the reports getting "full
-information." Worth recording why it didn't ship that way: this product's whole
-identity, restated in this file every time a new feature landed (the chat, Property
-Finder, listing import), is "no account, nothing saved." Gating the report itself would
-have reversed that, not extended it — so this was a real fork, asked rather than
-assumed. **The answer at the time: the report on `/analyse` stays exactly as free and
-complete as it already was. Login adds a portfolio next to it — it unlocks nothing that
-used to require an account, because nothing did.**
+**The "login is not a paywall" decision this section originally recorded was reversed on
+06/08/2026 — see "The paywall, after all" below.** The reasoning is worth one paragraph
+because it is what made the reversal a real decision rather than a casual one: this
+product's identity, restated every time a feature landed, was "no account, nothing
+saved," so gating the report would reverse that rather than extend it. It was asked, not
+assumed, and the answer *at the time* was that login adds a portfolio and unlocks nothing
+that used to be free. Only the conclusion changed; the standard for changing it didn't.
 
 **The backend was already most of the way there.** `packages/db/src/schema.ts` already
 had `profiles`, `properties` and `verdicts` (snapshots, not a cache — a stored verdict
 keeps the rules that produced it, because tax rules change), all RLS-scoped, and
-`packages/api`'s `/properties` CRUD already existed and already required a user. What
-was missing was everything upstream of that: no login page, no browser Supabase client,
-no session-refresh middleware — the route handler's own comment said "token refresh
-happens in middleware" for a middleware that didn't exist yet.
+`packages/api`'s `/properties` CRUD already required a user. Missing was everything
+upstream: no login page, no browser Supabase client, no session-refresh middleware — the
+route handler's own comment said "token refresh happens in middleware" for a middleware
+that didn't exist yet.
 
-**Both login methods asked for, not just the simpler one.** Google OAuth and
-email+password, both on `/login` (`components/auth-provider.tsx` wraps
-`@supabase/ssr`'s browser client). Email+password needed real UI (a mode toggle, a
-confirm-email state after sign-up); Google needed `middleware.ts` for session refresh
-and `app/auth/callback/route.ts` to exchange the OAuth code. Both paths converge on the
-same session, read the same way everywhere: `useAuth()` client-side, `getUser()` via
-`@supabase/ssr` server-side in the API route (unchanged from before this feature).
+**Both login methods, not just the simpler one.** Google OAuth and email+password, both
+on `/login` (`components/auth-provider.tsx` wraps `@supabase/ssr`'s browser client).
+Email+password needed real UI (a mode toggle, a confirm-email state); Google needed
+`middleware.ts` for session refresh and `app/auth/callback/route.ts` to exchange the
+code. Both converge on the same session: `useAuth()` client-side, `getUser()` server-side.
 
-**Unconfigured Supabase is not an error, anywhere in this chain** — same rule as
-`DATABASE_URL`, the Maps key and `ANTHROPIC_API_KEY`. No `.env.local` exists in this
-dev environment, which made the whole "zero configuration" path the one actually
-exercised: the header hides "Log in" entirely, `/login` and `/portfolio` show a plain
-"not configured" message instead of a broken form, `/analyse`'s save button doesn't
-render, and `GET /api/properties` 401s cleanly via `requireUser` without ever touching
-`DATABASE_URL` — verified against the running server, not assumed.
+**Unconfigured Supabase is not an error anywhere in this chain** — same rule as
+`DATABASE_URL`, the Maps key and `ANTHROPIC_API_KEY`: the header hides "Log in",
+`/login` and `/portfolio` show "not configured" instead of a broken form, and
+`GET /api/properties` 401s cleanly via `requireUser` without touching `DATABASE_URL`.
+That path was the one actually exercised for the first week, when no real project
+existed. One does now — see "Live infrastructure" — so the *configured* path is now the
+default and the fallback is the one to keep testing deliberately.
 
 **What logging in actually gets you**, built on top of the untouched report:
 
@@ -858,29 +799,23 @@ and re-arms `reportGated` so the same retry effect fires again the moment the re
 session lands — the round trip ends with the report computed, not a second click asked
 for.
 
-**`/finder` is gated in middleware, not in the page** — the opposite mechanism from
-`/analyse`, and deliberately so: there is no per-visitor state on that page worth
-preserving (a search box, a Map/Table toggle), so a plain server-side redirect before
-any client component mounts avoids the flash of the page that a client-side check would
-cause, and reads as "a typical SaaS app," which is what was asked for. `middleware.ts`
-already ran on every request to refresh the session cookie; `AUTH_REQUIRED_PREFIXES`
-reads the `user` that same call already resolves, so the redirect cost nothing extra to
-add.
+**`/finder` was gated in middleware, and was reopened on 09/08/2026.** It was the
+opposite mechanism from `/analyse` — a server-side redirect in `middleware.ts` via
+`AUTH_REQUIRED_PREFIXES`, chosen because that page has no per-visitor state worth
+preserving. It came out again after a business review made the obvious point: the finder
+shows *fabricated* listings, so it is marketing for the real report, not the product —
+gating it walled off the weakest asset while the strongest demo (the live preview) stayed
+free, and charging for it later would raise a Trade Descriptions Ordinance (Cap. 362)
+question that giving it away does not. `AUTH_REQUIRED_PREFIXES` is now empty; the
+mechanism is left in place because the next thing worth gating will want it.
+**`/analyse`'s report gate is untouched** — that one is the user's own figures, not
+fabricated data.
 
-**Unconfigured Supabase still isn't an error — verified, not just carried over by
-assumption.** Neither gate can enforce anything without an account system to check
-against, so both fall back to the pre-existing, ungated behaviour when
-`NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_ANON_KEY` aren't set — the same rule
-`/portfolio` already lives by. This dev environment has no real Supabase project
-configured, which meant the "logged out, gate triggers" path couldn't be exercised
-against a real backend either. Verified anyway, deliberately: temporary, clearly-fake
-credentials (a syntactically valid URL and JWT-shaped key, no real project behind
-either) were added to `.env.local` just long enough to flip `configured` to `true` and
-confirm the branching itself — `/finder` returned a real `307` to `/login?next=%2Ffinder`,
-and `/analyse` showed the inline gate with the form and live preview still intact behind
-it — then removed immediately after, restoring the exact unconfigured state this
-environment had before. Real sign-in was never expected to work against them and wasn't
-tested; only the gating logic was in question.
+**Unconfigured Supabase still isn't an error** — neither gate can enforce anything
+without an account system to check against, so both fall back to ungated behaviour when
+`NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_ANON_KEY` aren't set, the same rule
+`/portfolio` lives by. (This was originally verified with temporary fake credentials
+because no real Supabase project existed; one does now — see "Live infrastructure".)
 
 **Copy updated to stop asserting the thing that's no longer true.** `/analyse`'s own
 header used to say "Nothing is saved and no account is needed" — flatly wrong now for
@@ -1010,6 +945,34 @@ only plausible cause down to a single, correctly-scoped `APIProvider` (verified 
 now exactly one in the whole codebase) and by the library's own documented usage
 pattern, not by watching the original failure happen and then not happen.
 
+## Finder results and mobile navigation (09/08/2026)
+
+**Cards rebuilt to Zillow's own proportions**, measured off a reference screenshot rather
+than approximated: a landscape 16:9 photo that dominates *because the text block under it
+is four short lines*, price-first, with the yield badge over the photo where Zillow puts
+its favourite-heart. The map/cards split moved from 1:1.3 to 1:1 to match. Two earlier
+passes missed by guessing at "photo-forward" instead of measuring — the correction came
+from being shown the actual card.
+
+**A third view, and pagination.** Map / **List** / Table: the list is compact horizontal
+rows for vertical scanning, distinct from both the card grid and the dense table. Cards
+and list paginate at 6; the table doesn't, because it already reads fine at any length.
+Page resets to 1 whenever filters, search or view change — otherwise a filter that
+shortens the result set strands the reader on an empty page.
+
+**Mobile navigation existed nowhere before this.** Both shells were desktop-only:
+`AppShell`'s sidebar was a fixed 224px column that ate a phone screen, and the marketing
+header's links were `hidden sm:inline` with *no alternative*, so a phone got a header
+containing no navigation at all. Now: the sidebar becomes an off-canvas drawer below `lg`
+with a hamburger and a tap-dismiss backdrop, auto-closing on navigation; the marketing
+header gets a hamburger dropdown. The desktop collapse-chevron and the mobile hamburger
+swap at the breakpoint, never both.
+
+One subtlety worth keeping: `collapsed` now hides sidebar labels via `lg:hidden` rather
+than by not rendering them. Conditional rendering applies at every width, so a sidebar
+collapsed on desktop produced a label-less, unusable drawer on a phone — an icons-only
+rail is a desktop space-saving trick and has no business applying to an overlay.
+
 ## The hero headline, and the display face — both asked for directly
 
 Two related requests landed back to back. **The headline treatment**: dropped the
@@ -1064,14 +1027,21 @@ from the codebase entirely, not just overridden per-page.
    HK investors are wealthy, the ticket sizes are large, and the HK$10 Land Registry
    lookup gives a natural pay-per-use action. **This is now the question most likely to
    decide whether the venture works.**
-5. **Regulatory — Hong Kong only, which removes the harder half.** Estate-agency rules and
-   the **PDPO**. France's RGPD and DVF's re-identification constraint are out of scope
-   with France. The user-fed model still carries its own obligation: the figures users
-   enter about their own properties are **their** data, and reusing them to build our
-   aggregate dataset needs a lawful basis and a clear consent path under the PDPO.
-   **Settle it before the dataset has any value — retrofitting consent is not possible.**
-   *(Note the PDPO is not RGPD-equivalent; do not assume a European consent flow satisfies
-   it, nor the reverse.)*
+5. **Regulatory — mostly answered 09/08/2026, two pieces left.** The PDPO half is built:
+   `/privacy` carries a Personal Information Collection Statement (purpose, classes,
+   transferees, retention, DPP6 access route), linked from `/login` and the footer, and
+   the aggregate-data consent is now asked **at the first save** rather than only sitting
+   in `/account` — because DPP1 wants notice at or before collection, and the file's own
+   warning was that retrofitting consent is impossible. **What's left: `/privacy` names no
+   operator** (placeholder until the invoicing entity is settled) and there is no
+   self-serve export/delete, only a mailto. *(The PDPO is not RGPD-equivalent; do not
+   assume a European consent flow satisfies it, nor the reverse.)*
+
+   **Still untouched: the Estate Agents Ordinance (Cap. 511).** It doesn't bite today —
+   Veela analyses, it doesn't introduce parties to a transaction. Two plausible
+   monetisation routes would engage it directly: referral fees from agents, and selling
+   qualified investor leads. Check the licensing position *before* building either, the
+   way Cap. 349 was checked before the STR features weren't built.
 
 ## Map-first discovery + supply & demand history
 
@@ -1197,7 +1167,7 @@ This is the structural difference from France's DVF.
 
 ### Private sources
 - **[Centadata](https://hk.centanet.com/findproperty/en/centadata)** (Centaline) and
-  **[Midland transaction history](https://www.midland.com.hk/en/transaction-history/list/undefined)**
+  **[Midland transaction history](https://www.midland.com.hk/en/transaction-history)**
   are the market's de-facto transaction databases — transaction-level, per estate, with
   price/sqft and history, free to browse. **No official API**: the existence of an
   [unofficial scraper](https://github.com/mkyung/Centadata-api) on GitHub is the evidence.
@@ -1296,14 +1266,77 @@ as dated snapshots, not a cache, because tax rules change and a user needs to se
 figures their decision was based on.
 
 Deliberately not built yet, and the order that matters:
-1. **Data ingestion** — Lands Department geometry, RVD and Land Registry series. Until
-   this exists the map has nothing to show, and it ships with an empty state rather than
-   invented numbers.
-2. **Supabase Auth on mobile** — the Analyse flow works anonymously; the portfolio needs
-   an account because `properties` is RLS-scoped.
+1. **Data ingestion — partly done 09/08/2026, see "Real data" below.** Real RVD and
+   Census figures are in the database for five metrics; Lands Department geometry and a
+   per-district transaction series are still missing, so the map still has no real
+   boundaries and the finder still has no real listings.
+2. **Supabase Auth on mobile** — the web flow is live; `apps/mobile` has none of it yet.
 3. **Vietnam and France rule sets** — only Hong Kong is modelled; the API returns a clear
    400 for the others rather than guessing. France should reuse this workspace's
    `paperasse-*` plugins rather than re-deriving the rules.
+
+## Real data — what is now genuinely measured (09/08/2026)
+
+Until this date **every figure in the product except district centroids was synthetic**,
+and the demo banners said so. Two real sources are now ingested. The banners stay
+wherever they are still true, which is most places.
+
+**In the database** (`market_observations`, 90 rows, each carrying its `source`):
+
+| Metric | Source | Grain |
+|---|---|---|
+| Population, households | Census 2021 (`DC_21C.xlsx`) | 18 districts |
+| Stock, completions, vacancy rate | RVD `Dom_Stock_Completions_and_Vacancy_by_District_Eng.csv` (data.gov.hk) | 18 districts, 2024 |
+
+**In the app** (`packages/fixtures/src/rvd-real.ts`, the second non-synthetic file after
+`geo.ts`): RVD's private domestic **price and rental indices**, All Classes, monthly,
+1993→present, parsed verbatim from `his_data_3/4.xls`. `/research/market-performance`
+leads with these and labels the per-district charts below them as synthetic.
+
+**What is still synthetic, and why it wasn't faked:** price/rent indices *by district*
+and transaction counts *by district*. RVD publishes both only territory-wide as a clean
+series — district figures exist solely inside annual PDF tables. Spreading a
+territory-wide number across 18 districts would invent precision, so it wasn't done.
+Listings remain fabricated entirely; there is still no bulk HK listings feed.
+
+## Live infrastructure (09/08/2026)
+
+The app is deployed and the "zero configuration" fallbacks are no longer the only path
+being exercised.
+
+- **Production**: <https://veela-one.vercel.app>, Vercel, deployed from `apps/web` as the
+  monorepo root directory. **Deploys are run from the CLI (`vercel --prod`)** — the
+  GitHub integration stopped picking up pushes after a force-push rewrote history and has
+  not been reconnected. Reconnect it before relying on push-to-deploy.
+- **Repository**: `github.com/AlphaScale88/veela`, extracted out of the parent workspace
+  repo (which mixes in unrelated projects) as its own standalone repo with a fresh
+  history.
+- **Supabase**: real project, live. Email/password *and* Google OAuth both work
+  end-to-end. Postgres provisioned via the transaction pooler; all 7 tables created, RLS
+  enabled on every one with 13 policies, and `handle_new_user` verified to create a
+  `profiles` row on signup. Note the free tier's **email rate limit** — a handful of
+  signup confirmations per hour, which looks exactly like a broken form when hit. Custom
+  SMTP before any real volume.
+- **Still unset**: `ANTHROPIC_API_KEY`, so the assistant renders and reports itself
+  unconfigured rather than answering.
+- **Google Maps**: the key must have **Maps JavaScript API** in its API restrictions or
+  every map fails with `ApiTargetBlockedMapError` while looking like a code bug. Two keys
+  are in play and only one is unblocked; check this first when a map goes blank.
+
+## Not production-ready yet — the real gaps
+
+Verified 09/08/2026 by running the production build and reading the deployed config, not
+assumed:
+
+1. **No rate limiting anywhere.** `/chat` (spends real Anthropic tokens) and
+   `/verdict/preview` are public, unauthenticated and unlimited.
+2. **No CI.** No `.github/workflows`; nothing stops a broken build reaching production
+   except running `next build` by hand.
+3. **Tests stop at `packages/core`.** 23 tests on the engine — the part that most needs
+   them — and nothing on the API, components or end-to-end.
+4. **`/privacy` names no operator.** The PICS is written but its operator and contact
+   fields are deliberate placeholders until the invoicing entity is decided.
+5. **Restrict the Maps key by HTTP referrer** before real traffic.
 
 ## The 2024 codebase at `C:\Veela` — read it, do not merge it
 

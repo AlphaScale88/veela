@@ -205,7 +205,7 @@ export function SiteFooter(): React.JSX.Element {
           <ul className="mt-3 space-y-2 text-sm">
             <li>
               <a
-                href="https://www.ird.gov.hk/eng/tax/sduty.htm"
+                href="https://www.gov.hk/en/residents/taxes/stamp/stamp_duty_rates.htm"
                 target="_blank"
                 rel="noreferrer"
                 className="text-muted hover:text-mist"

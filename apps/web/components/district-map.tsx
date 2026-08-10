@@ -63,10 +63,16 @@ export interface DistrictDatum {
  * Normalised **within the values passed in**, not against a fixed scale: a fixed scale
  * across metrics would make vacancy and transaction counts share an axis they have no
  * business sharing, and it's why this takes the metric only to format the label.
+ *
+ * `format` overrides that labelling. Real RVD/Census metrics (`stock_units`,
+ * `population`, …) are not `DemoMetric`s and have no `DEMO_METRICS` entry to look a
+ * formatter up in, so they pass their own — the geometry above is identical either way,
+ * which is the point of routing both through one function.
  */
 export function normaliseDistrictValues(
   values: ReadonlyMap<string, number>,
   metric: DemoMetric,
+  format?: (value: number) => string,
 ): readonly DistrictDatum[] {
   const nums = [...values.values()].filter((n) => Number.isFinite(n));
   if (nums.length === 0) return [];
@@ -82,7 +88,7 @@ export function normaliseDistrictValues(
         value,
         // A flat series would divide by zero; mid-scale is the honest answer for it.
         t: span === 0 ? 0.5 : (value - lo) / span,
-        formatted: formatDemoValue(metric, value),
+        formatted: format?.(value) ?? formatDemoValue(metric, value),
       },
     ];
   });

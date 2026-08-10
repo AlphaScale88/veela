@@ -80,8 +80,8 @@ export function DistrictKpiSummary({ districtId, districtName, onSelectMetric }:
       )}
 
       <p className="mt-3 text-[11px] leading-relaxed text-muted">
-        Synthetic demo values — see the banner above. Click a tile to see its evolution
-        over the last five years.
+        Generated values, not measurements — these eight metrics have no free per-district
+        monthly source. Click a tile to see its evolution over the last five years.
       </p>
     </div>
   );

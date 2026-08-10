@@ -16,6 +16,7 @@ import {
   chatRequestSchema,
   createPropertySchema,
   importListingRequestSchema,
+  latestByDistrictQuerySchema,
   mapQuerySchema,
   seriesQuerySchema,
   updatePropertySchema,
@@ -571,6 +572,43 @@ export const api = new Hono<Env>()
       metric,
       points: rows.map((r) => ({ ...r, value: Number(r.value) })),
       sources: [...new Set(rows.map((r) => r.source))],
+    });
+  })
+
+  /**
+   * Latest value of one metric for every district that has one. Public, like the rest of
+   * the reference layer — `market_observations` carries a public-read RLS policy.
+   *
+   * Returns `[]` rather than erroring when a metric has no rows, because most metrics
+   * still have none: only what has actually been ingested is here, and the UI's job is
+   * to fall back to its labelled synthetic series rather than to show a blank map.
+   */
+  .get("/market/latest", zValidator("query", latestByDistrictQuerySchema), async (c) => {
+    const { metric } = c.req.valid("query");
+    const db = c.get("db");
+
+    // DISTINCT ON needs its leading ORDER BY columns to match the distinct key; the
+    // period_start DESC that follows is what makes it "latest".
+    const rows = await db.execute(sql`
+      select distinct on (o.district_id)
+        o.district_id, o.value, o.period_start, o.period_months, o.source
+      from market_observations o
+      where o.metric = ${metric}
+      order by o.district_id, o.period_start desc
+    `);
+
+    const list = (rows as unknown as Record<string, unknown>[]).map((r) => ({
+      districtId: String(r["district_id"]),
+      value: Number(r["value"]),
+      periodStart: String(r["period_start"]),
+      periodMonths: Number(r["period_months"]),
+      source: String(r["source"]),
+    }));
+
+    return c.json({
+      metric,
+      values: list,
+      sources: [...new Set(list.map((r) => r.source))],
     });
   })
 

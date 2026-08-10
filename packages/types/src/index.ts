@@ -131,6 +131,18 @@ export const seriesQuerySchema = z.object({
 });
 
 /**
+ * Latest observation of one metric for **every** district — what a choropleth or a
+ * symbol map needs, and deliberately not `GET /map/districts`, which answers the same
+ * question but joins district geometry and filters on `boundary && envelope`. Boundaries
+ * are not ingested yet (see "Real data" in `.claude/CLAUDE.md`), so `boundary` is NULL,
+ * `NULL && envelope` is NULL, and that endpoint returns zero rows for every viewport.
+ * This one carries no geometry and no viewport, so it works on the data we actually have.
+ */
+export const latestByDistrictQuerySchema = z.object({
+  metric: marketMetricSchema,
+});
+
+/**
  * How confident we are that a number shown at one geographic level actually applies
  * at the level the user is looking at. The UI must surface this: putting a district
  * vacancy rate on a single building implies precision we do not have, and that is

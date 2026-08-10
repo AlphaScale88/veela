@@ -47,7 +47,7 @@ const GLOSSARY: readonly { readonly term: string; readonly definition: string }[
 ];
 
 const SOURCES: readonly { readonly label: string; readonly href: string }[] = [
-  { label: "Inland Revenue Department — stamp duty", href: "https://www.ird.gov.hk/eng/tax/sduty.htm" },
+  { label: "Inland Revenue Department — stamp duty", href: "https://www.gov.hk/en/residents/taxes/stamp/stamp_duty_rates.htm" },
   { label: "Inland Revenue Department — property tax FAQ", href: "https://www.ird.gov.hk/eng/faq/avd.htm" },
   {
     label: "Rating and Valuation Department — property market statistics",
