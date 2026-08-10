@@ -154,6 +154,16 @@ export const buildingSearchQuerySchema = z.object({
 });
 
 /**
+ * What's near a point. Bounds are Hong Kong's, deliberately: this product covers one
+ * territory, the amenity radii are tuned for its density, and accepting a coordinate in
+ * another country would return a confidently empty neighbourhood rather than an error.
+ */
+export const neighbourhoodQuerySchema = z.object({
+  lat: z.coerce.number().min(22.1).max(22.6),
+  lng: z.coerce.number().min(113.8).max(114.5),
+});
+
+/**
  * How confident we are that a number shown at one geographic level actually applies
  * at the level the user is looking at. The UI must surface this: putting a district
  * vacancy rate on a single building implies precision we do not have, and that is

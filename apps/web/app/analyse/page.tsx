@@ -20,6 +20,7 @@ import { useAiChat } from "../../components/ai-chat-provider";
 import { useAuth } from "../../components/auth-provider";
 import { ImportedListingMap } from "../../components/imported-listing-map";
 import { ListingImporter } from "../../components/listing-importer";
+import { NeighbourhoodPanel } from "../../components/neighbourhood-panel";
 import {
   draftToApiInput,
   draftToCoreInput,
@@ -525,6 +526,21 @@ export default function AnalysePage(): React.JSX.Element {
             <div className="mt-6">
               <VerdictView verdict={verdict} />
             </div>
+
+            {/* Only when coordinates are actually known. The report is computed from
+                figures typed into the form, which carry no location — so this appears for
+                a property that arrived from a listing link (or a building search) and not
+                otherwise. Better an absent section than one that asks "which
+                neighbourhood?" and guesses. */}
+            {importedLatitude !== undefined && importedLongitude !== undefined && (
+              <div className="mt-6">
+                <NeighbourhoodPanel
+                  latitude={importedLatitude}
+                  longitude={importedLongitude}
+                  label={imported?.address ?? draft.label}
+                />
+              </div>
+            )}
           </section>
         )}
       </div>

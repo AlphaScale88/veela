@@ -20,6 +20,7 @@ import {
   importListingRequestSchema,
   latestByDistrictQuerySchema,
   mapQuerySchema,
+  neighbourhoodQuerySchema,
   seriesQuerySchema,
   updatePropertySchema,
   updateProfileSchema,
@@ -31,6 +32,7 @@ import { HTTPException } from "hono/http-exception";
 import { stream as honoStream } from "hono/streaming";
 
 import { ADDRESS_LOOKUP_SOURCE, searchAddresses, type AddressMatch } from "./address-lookup.js";
+import { fetchNeighbourhood } from "./neighbourhood.js";
 import { extractListing } from "./listing-extract.js";
 import { fetchSpaciousHtmlStealthily } from "./spacious-stealth-fetch.js";
 import { fetchHtmlSafely, FetchFailedError, UnsafeUrlError } from "./ssrf-safe-fetch.js";
@@ -718,6 +720,33 @@ export const api = new Hono<Env>()
       persisted,
       results: matches,
     });
+  })
+
+  /**
+   * Schools, stations, shops, health and green space near a point — see
+   * `neighbourhood.ts` for why this is OpenStreetMap rather than a government dataset,
+   * and what ODbL requires of the caller.
+   *
+   * Public and unauthenticated, like the rest of the reference layer. Nothing is
+   * persisted: Overpass is the source of truth and a stale cached amenity list would be
+   * worse than a slow fresh one. A cache is the obvious next step and is deliberately
+   * absent rather than half-built — see that file.
+   *
+   * A failure is reported as a failure. An empty neighbourhood and an unreachable Overpass
+   * look identical in a `200 {counts: all zero}`, and "no schools nearby" is a claim about
+   * a place that a timeout has no business making.
+   */
+  .get("/neighbourhood", zValidator("query", neighbourhoodQuerySchema), async (c) => {
+    const { lat, lng } = c.req.valid("query");
+    try {
+      return c.json(await fetchNeighbourhood(lat, lng));
+    } catch (cause) {
+      throw new HTTPException(502, {
+        message: `Could not reach OpenStreetMap: ${
+          cause instanceof Error ? cause.message : "unknown error"
+        }. This is a shared community service and is sometimes busy — try again shortly.`,
+      });
+    }
   })
 
   .get("/districts", async (c) => {

@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { NeighbourhoodPanel } from "./neighbourhood-panel";
+
 /**
  * Search a **real** Hong Kong building by name, against the Government's Address Lookup
  * Service via `GET /api/buildings/search`.
@@ -38,6 +40,10 @@ interface Props {
 }
 
 export function BuildingSearch({ onSelect }: Props): React.JSX.Element {
+  /** Which result has its neighbourhood open. A real address is the only thing on this
+   *  site that carries coordinates without a listing import, so this is the shortest path
+   *  from "a building I know" to "what is around it". */
+  const [openKey, setOpenKey] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<readonly Match[] | null>(null);
   const [pending, setPending] = useState(false);
@@ -118,27 +124,43 @@ export function BuildingSearch({ onSelect }: Props): React.JSX.Element {
       {results !== null && results.length > 0 && (
         <>
           <ul className="mt-3 divide-y divide-line">
-            {results.map((m) => (
-              <li key={`${m.districtId}-${m.label}`}>
-                <button
-                  type="button"
-                  onClick={() => onSelect?.(m)}
-                  disabled={onSelect === undefined}
-                  className="flex w-full items-baseline justify-between gap-3 py-2.5 text-left enabled:hover:text-accent disabled:cursor-default"
-                >
-                  <span>
-                    <span className="text-[15px] font-medium">{m.label}</span>
-                    <span className="mt-0.5 block text-xs text-muted">
-                      {[m.estateNameEn, m.districtNameAls].filter(Boolean).join(" · ")}
-                      {m.estateNameZh === undefined ? "" : ` · ${m.estateNameZh}`}
+            {results.map((m) => {
+              const key = `${m.districtId}-${m.label}`;
+              const open = openKey === key;
+              return (
+                <li key={key}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpenKey(open ? null : key);
+                      onSelect?.(m);
+                    }}
+                    aria-expanded={open}
+                    className="flex w-full items-baseline justify-between gap-3 py-2.5 text-left hover:text-accent"
+                  >
+                    <span>
+                      <span className="text-[15px] font-medium">{m.label}</span>
+                      <span className="mt-0.5 block text-xs text-muted">
+                        {[m.estateNameEn, m.districtNameAls].filter(Boolean).join(" · ")}
+                        {m.estateNameZh === undefined ? "" : ` · ${m.estateNameZh}`}
+                      </span>
                     </span>
-                  </span>
-                  <span className="tnum shrink-0 font-mono text-[10px] text-muted">
-                    {m.latitude.toFixed(4)}, {m.longitude.toFixed(4)}
-                  </span>
-                </button>
-              </li>
-            ))}
+                    <span className="tnum shrink-0 font-mono text-[10px] text-muted">
+                      {open ? "hide area" : "see area"}
+                    </span>
+                  </button>
+                  {open && (
+                    <div className="pb-3">
+                      <NeighbourhoodPanel
+                        latitude={m.latitude}
+                        longitude={m.longitude}
+                        label={m.label}
+                      />
+                    </div>
+                  )}
+                </li>
+              );
+            })}
           </ul>
           <p className="mt-3 text-[11px] leading-relaxed text-muted">
             {source}. The register covers every address, not only homes — a result may be a
