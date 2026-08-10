@@ -141,8 +141,21 @@ function Sidebar({
   readonly mobileOpen: boolean;
 }): React.JSX.Element {
   const pathname = usePathname();
-  const isActive = (href: string): boolean => pathname === href || pathname?.startsWith(`${href}/`) === true;
-  const workspaceActive = isActive("/portfolio");
+
+  /**
+   * **Exact match, not prefix.** It used to be `pathname === href || startsWith(href +
+   * "/")`, which lit up three items at once inside My Workspace: on `/portfolio/alerts`
+   * both "Property Alerts" (the real page) *and* "Saved Properties" highlighted, because
+   * `/portfolio` is a prefix of every one of its own children. A nav that claims you are
+   * in two places is worse than one that claims neither.
+   *
+   * Prefix matching is still what the *group* wants — see `workspaceActive` and
+   * `sectionActive` below — so it stays available, just not as the default for a leaf.
+   */
+  const isActive = (href: string): boolean => pathname === href;
+  const sectionActive = (href: string): boolean =>
+    pathname === href || pathname?.startsWith(`${href}/`) === true;
+  const workspaceActive = sectionActive("/portfolio");
   const [workspaceOpen, setWorkspaceOpen] = useState(workspaceActive);
 
   return (
@@ -196,9 +209,12 @@ function Sidebar({
           onClick={() => setWorkspaceOpen((o) => !o)}
           aria-expanded={workspaceOpen}
           title={collapsed ? "My Workspace" : undefined}
+          /* The group reads as "you are somewhere in here" — brighter text, no wash. The
+             wash belongs to the one leaf you are actually on, so the two are
+             distinguishable instead of two identical slabs stacked on each other. */
           className={`flex w-full items-center gap-3 rounded-full px-3 py-2.5 text-sm font-medium transition-colors ${
             workspaceActive
-              ? "bg-white text-accent shadow-card"
+              ? "text-inverseText"
               : "text-inverseMuted hover:bg-white/10 hover:text-inverseText"
           }`}
         >
@@ -318,9 +334,15 @@ function NavItem({
         href={item.href}
         aria-current={active ? "page" : undefined}
         title={collapsed ? item.label : undefined}
+        /* A translucent wash and a brighter label, not a solid white pill. The pill came
+           from a Mashvisor screenshot and worked there, on one active item at a time; here
+           it stacked — a group and its child are both "active" — and three white slabs on
+           a blue rail read as an error rather than a selection. Selected now means
+           *slightly lifted off the rail*, which is enough when only one leaf can be
+           active and the label already brightens. */
         className={`flex items-center gap-2.5 rounded-full px-3 py-2.5 text-sm transition-colors ${
           active
-            ? "bg-white font-medium text-accent shadow-card"
+            ? "bg-white/15 font-medium text-inverseText"
             : "text-inverseMuted hover:bg-white/10 hover:text-inverseText"
         }`}
       >
@@ -329,7 +351,7 @@ function NavItem({
             would only make it harder to read. So collapsing hides via `lg:hidden` rather
             than by not rendering, which would apply at every width. */}
         {active && (
-          <span aria-hidden className={`size-1.5 shrink-0 rounded-full bg-accent ${collapsed ? "lg:hidden" : ""}`} />
+          <span aria-hidden className={`size-1.5 shrink-0 rounded-full bg-white ${collapsed ? "lg:hidden" : ""}`} />
         )}
         <item.icon className="h-[18px] w-[18px] shrink-0" />
         <span className={collapsed ? "lg:hidden" : ""}>{item.label}</span>

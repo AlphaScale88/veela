@@ -73,12 +73,15 @@ export function TerritoryIndexChart({ label, points, color = viz.demand }: Props
         </h3>
       </figcaption>
 
+      {/* Scroll rather than shrink on a phone — a 720-unit viewBox squeezed to 330px
+          renders its axis labels at about 5px. See class-yield-chart.tsx. */}
+      <div className="-mx-1 overflow-x-auto px-1">
       <svg
         ref={svgRef}
         viewBox={`0 0 ${W} ${H}`}
         role="img"
         aria-labelledby={titleId}
-        className="h-auto w-full touch-none"
+        className="h-auto w-full min-w-[560px] touch-pan-x"
         onPointerMove={handleMove}
         onPointerLeave={() => setHoverIndex(null)}
       >
@@ -148,6 +151,7 @@ export function TerritoryIndexChart({ label, points, color = viz.demand }: Props
           </>
         )}
       </svg>
+      </div>
 
       {hovered !== undefined && (
         <div role="status" className="mt-1 flex items-baseline gap-2 text-xs">

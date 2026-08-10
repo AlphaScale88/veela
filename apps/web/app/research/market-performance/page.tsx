@@ -6,6 +6,7 @@ import { useMemo, useState } from "react";
 
 import { AppShell, StarIcon } from "../../../components/app-shell";
 import { useAuth } from "../../../components/auth-provider";
+import { ClassYieldChart } from "../../../components/class-yield-chart";
 import { SeriesChart } from "../../../components/series-chart";
 import { TerritoryIndexChart } from "../../../components/territory-index-chart";
 import { useFavoriteDistricts } from "../../../components/use-favorite-districts";
@@ -63,12 +64,31 @@ export default function MarketPerformancePage(): React.JSX.Element {
           Market Performance
         </h1>
         <p className="mt-3 text-sm leading-relaxed text-muted">
-          Price and rent indices, both real and district-level.
+          Measured yields, prices and rents from the Rating and Valuation Department —
+          followed by the per-district charts, which are still generated because no free
+          source publishes a monthly domestic series at district level. Every panel says
+          which it is.
         </p>
       </header>
 
       <section className="mt-8">
-        <h2 className="text-sm font-semibold text-mist">Territory-wide — real</h2>
+        <h2 className="text-sm font-semibold text-mist">
+          Gross rental yield by flat class — measured
+        </h2>
+        <p className="mt-1 max-w-prose text-xs leading-relaxed text-muted">
+          RVD&apos;s own published yields, monthly since 1999. This is the market&apos;s
+          answer rather than ours — every other yield in this product is either computed
+          from figures you typed or, on the pages that say so, generated. Small flats have
+          out-yielded large ones by more than a point for twenty-seven years, and the whole
+          market has roughly halved since 1999.
+        </p>
+        <div className="card mt-4 max-w-3xl">
+          <ClassYieldChart />
+        </div>
+      </section>
+
+      <section className="mt-10">
+        <h2 className="text-sm font-semibold text-mist">Price and rent indices — measured</h2>
         <p className="mt-1 max-w-prose text-xs leading-relaxed text-muted">
           Hong Kong&apos;s private domestic price and rental indices, All Classes, rebased
           to 100 at January 1999 — downloaded directly from the{" "}
