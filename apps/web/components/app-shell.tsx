@@ -184,7 +184,30 @@ function Sidebar({
         />
       </Link>
 
-      <ul className="mt-8 space-y-1 px-2.5">
+      {/**
+       * `/analyse` moved into this shell but was never added to its navigation — you could
+       * see the sidebar *from* the page and had no way to reach it. Fixed here, but as a
+       * **button above the list rather than an item in it**: every `NAV_LINKS` entry is a
+       * *place* you go to look at something, and this is the one *action* that creates
+       * something. Same reason Gmail separates Compose from its folders, and the same
+       * treatment the marketing header already gives it — a filled pill, not a text link.
+       *
+       * `aria-current` is still set when you are on it, so it doubles as the active
+       * indicator for the page and nothing else has to represent it.
+       */}
+      <Link
+        href="/analyse"
+        aria-current={isActive("/analyse") ? "page" : undefined}
+        title={collapsed ? "Analyse a property" : undefined}
+        className={`mx-2.5 mt-6 flex items-center gap-2.5 rounded-full bg-white px-3 py-2.5 text-sm font-semibold text-accent shadow-card transition-opacity hover:opacity-90 ${
+          collapsed ? "lg:justify-center lg:px-0" : ""
+        }`}
+      >
+        <PlusIcon className="h-[18px] w-[18px] shrink-0" />
+        <span className={collapsed ? "lg:hidden" : ""}>Analyse a property</span>
+      </Link>
+
+      <ul className="mt-4 space-y-1 px-2.5">
         {NAV_LINKS.map((item) => (
           <NavItem key={item.href} item={item} active={isActive(item.href)} collapsed={collapsed} />
         ))}
@@ -298,6 +321,14 @@ function SidebarAccount({ collapsed }: { readonly collapsed: boolean }): React.J
         </div>
       )}
     </div>
+  );
+}
+
+function PlusIcon({ className }: { readonly className?: string }): React.JSX.Element {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+      <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+    </svg>
   );
 }
 
