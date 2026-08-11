@@ -129,7 +129,7 @@ const WORKSPACE_LINKS: readonly NavLink[] = [
 ];
 
 const TAIL_LINKS: readonly NavLink[] = [
-  { href: "/account", label: "Manage", icon: GearIcon },
+  { href: "/account", label: "Settings", icon: GearIcon },
   { href: "/resources", label: "Resources", icon: BookIcon },
 ];
 
@@ -283,7 +283,7 @@ function Sidebar({
  * touches auth: an affordance that cannot work should not be shown.
  */
 function SidebarAccount({ collapsed }: { readonly collapsed: boolean }): React.JSX.Element | null {
-  const { user, loading, configured, signOut } = useAuth();
+  const { user, loading, configured } = useAuth();
   if (!configured) return null;
 
   return (
@@ -300,25 +300,23 @@ function SidebarAccount({ collapsed }: { readonly collapsed: boolean }): React.J
           <span className={collapsed ? "lg:hidden" : ""}>Log in</span>
         </Link>
       ) : (
-        <div>
-          {/* The email, truncated rather than wrapped — a long address must not push the
-              sign-out control out of reach. */}
-          <p
-            className={`truncate px-3 text-xs text-inverseMuted ${collapsed ? "lg:hidden" : ""}`}
-            title={user.email ?? undefined}
-          >
-            {user.email}
-          </p>
-          <button
-            type="button"
-            onClick={() => void signOut()}
-            title={collapsed ? "Sign out" : undefined}
-            className="mt-1 flex w-full items-center gap-2.5 rounded-full px-3 py-2.5 text-sm text-inverseMuted transition-colors hover:bg-white/10 hover:text-inverseText"
-          >
-            <SignOutIcon className="h-[18px] w-[18px] shrink-0" />
-            <span className={collapsed ? "lg:hidden" : ""}>Sign out</span>
-          </button>
-        </div>
+        /* Who you are, linking to Settings — **not** a sign-out button.
+           Sign out used to sit here, one stray click from every page in the product, which
+           is a lot of exposure for an action nobody performs often. It now lives inside
+           Settings, where a reader looks for it deliberately. */
+        <Link
+          href="/account"
+          title={collapsed ? (user.email ?? "Settings") : undefined}
+          className="flex items-center gap-2.5 rounded-full px-3 py-2 text-inverseMuted transition-colors hover:bg-white/10 hover:text-inverseText"
+        >
+          <UserIcon className="h-[18px] w-[18px] shrink-0" />
+          <span className={`min-w-0 ${collapsed ? "lg:hidden" : ""}`}>
+            <span className="block truncate text-xs" title={user.email ?? undefined}>
+              {user.email}
+            </span>
+            <span className="block text-[11px] opacity-70">Settings &amp; sign out</span>
+          </span>
+        </Link>
       )}
     </div>
   );
@@ -337,15 +335,6 @@ function UserIcon({ className }: { readonly className?: string }): React.JSX.Ele
     <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
       <circle cx="12" cy="8" r="3.4" stroke="currentColor" strokeWidth="1.7" />
       <path d="M5 20c0-3.6 3.1-5.6 7-5.6s7 2 7 5.6" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function SignOutIcon({ className }: { readonly className?: string }): React.JSX.Element {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
-      <path d="M15 5H7a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h8" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-      <path d="M18 12H10m8 0-3-3m3 3-3 3" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }

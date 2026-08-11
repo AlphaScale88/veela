@@ -30,7 +30,17 @@ interface AuthState {
   readonly signInWithGoogle: (redirectTo?: string) => Promise<void>;
   readonly signInWithPassword: (email: string, password: string) => Promise<string | null>;
   readonly signUpWithPassword: (email: string, password: string) => Promise<string | null>;
+  /** Resolves to an error message, or `null` on success. Supabase sends a confirmation
+   *  link to the **new** address; the change only lands once that link is clicked, which
+   *  is why the caller must say so rather than reporting "email changed". */
+  readonly updateEmail: (email: string) => Promise<string | null>;
+  readonly updatePassword: (password: string) => Promise<string | null>;
   readonly signOut: () => Promise<void>;
+  /** True when this account has a password to change at all. A Google-only account has
+   *  no `email` identity, and offering it a "change password" form is offering something
+   *  that cannot work — Supabase would accept the call and the user still could not sign
+   *  in with the result. */
+  readonly hasPasswordIdentity: boolean;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -90,10 +100,41 @@ export function AuthProvider({ children }: { readonly children: ReactNode }): Re
     [supabase],
   );
 
+  const updateEmail = useCallback(
+    async (email: string): Promise<string | null> => {
+      if (supabase === null) return "Account settings aren't configured on this deployment.";
+      const { error } = await supabase.auth.updateUser(
+        { email },
+        // Back to the settings page, not the site root — someone changing their address is
+        // mid-task, and dropping them on the landing page loses that context.
+        { emailRedirectTo: `${window.location.origin}/auth/callback?next=%2Faccount` },
+      );
+      return error?.message ?? null;
+    },
+    [supabase],
+  );
+
+  const updatePassword = useCallback(
+    async (password: string): Promise<string | null> => {
+      if (supabase === null) return "Account settings aren't configured on this deployment.";
+      const { error } = await supabase.auth.updateUser({ password });
+      return error?.message ?? null;
+    },
+    [supabase],
+  );
+
   const signOut = useCallback(async () => {
     if (supabase === null) return;
     await supabase.auth.signOut();
   }, [supabase]);
+
+  /* `identities` lists how this account can authenticate. Google-only accounts have no
+     "email" identity and therefore no password. Defaults to true while the session is
+     still loading, so the form doesn't flicker away from a password user. */
+  const hasPasswordIdentity =
+    user === null || user.identities === undefined
+      ? true
+      : user.identities.some((i) => i.provider === "email");
 
   const value = useMemo<AuthState>(
     () => ({
@@ -103,9 +144,23 @@ export function AuthProvider({ children }: { readonly children: ReactNode }): Re
       signInWithGoogle,
       signInWithPassword,
       signUpWithPassword,
+      updateEmail,
+      updatePassword,
       signOut,
+      hasPasswordIdentity,
     }),
-    [user, loading, supabase, signInWithGoogle, signInWithPassword, signUpWithPassword, signOut],
+    [
+      user,
+      loading,
+      supabase,
+      signInWithGoogle,
+      signInWithPassword,
+      signUpWithPassword,
+      updateEmail,
+      updatePassword,
+      signOut,
+      hasPasswordIdentity,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
