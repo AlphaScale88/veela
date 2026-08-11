@@ -18,6 +18,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AppShell } from "../../components/app-shell";
 import { useAiChat } from "../../components/ai-chat-provider";
 import { useAuth } from "../../components/auth-provider";
+import { BuildingSearch } from "../../components/building-search";
 import { ImportedListingMap } from "../../components/imported-listing-map";
 import { ListingImporter } from "../../components/listing-importer";
 import { NeighbourhoodPanel } from "../../components/neighbourhood-panel";
@@ -87,6 +88,19 @@ export default function AnalysePage(): React.JSX.Element {
   const [saveState, setSaveState] = useState<SaveState>({ status: "idle" });
   const [welcomeBack, setWelcomeBack] = useState<{ readonly id: string; readonly label: string } | null>(null);
   const autoLoadedRef = useRef(false);
+  /**
+   * A location attached by hand, via the building search below.
+   *
+   * The neighbourhood section needs coordinates, and the form does not collect any — so
+   * before this existed the section only ever appeared for a property that arrived from a
+   * listing link, which is a minority of reports. Typing figures in, the normal path, got
+   * nothing. This lets a reader say *which building* they are analysing and get the area
+   * profile on any report.
+   */
+  const [pickedPlace, setPickedPlace] = useState<
+    { readonly label: string; readonly latitude: number; readonly longitude: number } | null
+  >(null);
+
   /** `undefined` until loaded, `null` once loaded if the user has never decided either
    *  way. Drives whether `SaveToPortfolio` asks the aggregate-consent question inline
    *  right after a save — surfaced at the point data actually gets collected, not only
@@ -429,6 +443,13 @@ export default function AnalysePage(): React.JSX.Element {
   const importedLatitude = imported?.latitude;
   const importedLongitude = imported?.longitude;
 
+  /* A hand-picked building wins over an imported one: it is the more deliberate signal —
+     someone searched for it — and an import's coordinates can be a building's estate
+     centroid rather than the unit itself. */
+  const placeLatitude = pickedPlace?.latitude ?? importedLatitude;
+  const placeLongitude = pickedPlace?.longitude ?? importedLongitude;
+  const placeLabel = pickedPlace?.label ?? imported?.address ?? draft.label;
+
   return (
     /* In `AppShell` since 10/08/2026 — this is the core action of the product and it sat
        behind a marketing header that reached three destinations, so from here you could
@@ -532,15 +553,39 @@ export default function AnalysePage(): React.JSX.Element {
                 a property that arrived from a listing link (or a building search) and not
                 otherwise. Better an absent section than one that asks "which
                 neighbourhood?" and guesses. */}
-            {importedLatitude !== undefined && importedLongitude !== undefined && (
-              <div className="mt-6">
+            <div className="mt-6">
+              {placeLatitude !== undefined && placeLongitude !== undefined ? (
                 <NeighbourhoodPanel
-                  latitude={importedLatitude}
-                  longitude={importedLongitude}
-                  label={imported?.address ?? draft.label}
+                  latitude={placeLatitude}
+                  longitude={placeLongitude}
+                  label={placeLabel}
                 />
-              </div>
-            )}
+              ) : (
+                /* Rather than silently omitting the section — which is what used to happen
+                   and made the whole feature invisible on a typed-in report — say it needs
+                   a location and offer the way to give one. */
+                <section className="card">
+                  <h3 className="text-[15px] font-semibold">The neighbourhood</h3>
+                  <p className="mt-1 text-xs leading-relaxed text-muted">
+                    Schools, transport, shops, premium retail and green space — this part
+                    needs to know <em className="not-italic text-mist">where</em> the flat
+                    is, and the figures above don&apos;t say. Name the building and it
+                    appears here.
+                  </p>
+                  <div className="mt-3">
+                    <BuildingSearch
+                      onSelect={(m) =>
+                        setPickedPlace({
+                          label: m.label,
+                          latitude: m.latitude,
+                          longitude: m.longitude,
+                        })
+                      }
+                    />
+                  </div>
+                </section>
+              )}
+            </div>
           </section>
         )}
       </div>
