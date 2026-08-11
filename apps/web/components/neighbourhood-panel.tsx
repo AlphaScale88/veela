@@ -15,7 +15,14 @@ import { useState } from "react";
  * walking distance would need a routing service and is a different promise.
  */
 
-type AmenityKind = "school" | "transport" | "shop" | "health" | "park";
+type AmenityKind =
+  | "school"
+  | "transport"
+  | "shop"
+  | "health"
+  | "park"
+  | "premium"
+  | "construction";
 
 interface Amenity {
   readonly kind: AmenityKind;
@@ -36,9 +43,27 @@ const KIND_LABEL: Readonly<Record<AmenityKind, string>> = {
   shop: "Shops",
   health: "Health",
   park: "Green space",
+  premium: "Premium retail",
+  construction: "Under construction",
 };
 
-const KIND_ORDER: readonly AmenityKind[] = ["transport", "school", "shop", "health", "park"];
+/**
+ * Each signal on its own line with its own count — deliberately **not** combined into an
+ * area score. This product has twice declined to build a composite (see
+ * `.claude/CLAUDE.md` on the Mashmeter-style score), for the reason that applies doubly
+ * here: "premium retail" and "under construction" are *proxies chosen by us*, and folding
+ * proxies into a single authoritative-looking number makes a judgement look like a
+ * measurement. A reader can argue with any one row here. They could not argue with a 78.
+ */
+const KIND_ORDER: readonly AmenityKind[] = [
+  "transport",
+  "school",
+  "shop",
+  "premium",
+  "health",
+  "park",
+  "construction",
+];
 
 interface Props {
   readonly latitude: number;
@@ -98,7 +123,7 @@ export function NeighbourhoodPanel({ latitude, longitude, label }: Props): React
 
       {data !== null && (
         <>
-          <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-5">
+          <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
             {KIND_ORDER.map((k) => (
               <div key={k} className="rounded-card border border-line bg-surfaceMuted px-3 py-2.5">
                 <dt className="font-mono text-[10px] uppercase tracking-[0.08em] text-muted">
@@ -127,6 +152,13 @@ export function NeighbourhoodPanel({ latitude, longitude, label }: Props): React
             Straight-line distance, not walking distance. {data.attribution} — coverage is
             contributor-maintained, so a missing school means nobody has mapped it, not
             that there isn&apos;t one. Treat this as a prompt to look, not an inventory.
+          </p>
+          <p className="mt-1.5 text-[11px] leading-relaxed text-muted">
+            <strong className="text-mist">No area score, on purpose.</strong>{" "}
+            &ldquo;Premium retail&rdquo; counts a named list of brands kept in the codebase,
+            and &ldquo;under construction&rdquo; counts sites tagged as such — both are
+            proxies we chose, not measurements. Rolling them into one number would make a
+            judgement look like a fact; you can disagree with any single row above.
           </p>
         </>
       )}

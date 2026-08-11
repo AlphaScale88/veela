@@ -62,7 +62,44 @@ const RADIUS = {
   shop: 600,
   health: 800,
   park: 700,
+  premium: 900,
+  construction: 900,
 } as const;
+
+/**
+ * **"Prestige" is a judgement, so it is written down here rather than hidden in a score.**
+ *
+ * Asked for an assessment including "luxury store, famous schools, high end area", the
+ * honest form is a *countable signal with an editable definition*, not a number that
+ * implies measurement. A property near three of these is near three of these; whether that
+ * makes an area "high end" is the reader's call, and they can disagree with any entry
+ * because the entries are visible.
+ *
+ * Matched case-insensitively against OSM's `brand`, `name` and `operator` tags. Deliberately
+ * short and mainstream — a long list invites arguments about tiers and starts encoding
+ * opinions nobody can audit. Extend it knowingly.
+ *
+ * Note what this is *not*: a review score, a price signal, or an official designation. OSM
+ * says a shop exists and what it is called. It says nothing about whether it is any good.
+ */
+const PREMIUM_BRANDS: readonly string[] = [
+  // Fashion and leather goods
+  "louis vuitton", "hermès", "hermes", "chanel", "gucci", "prada", "dior", "fendi",
+  "bottega veneta", "balenciaga", "saint laurent", "loewe", "celine", "givenchy",
+  "burberry", "moncler", "brunello cucinelli", "loro piana", "max mara", "miu miu",
+  // Watches and jewellery
+  "rolex", "patek philippe", "audemars piguet", "cartier", "van cleef", "tiffany",
+  "bulgari", "bvlgari", "piaget", "vacheron constantin", "jaeger-lecoultre", "omega",
+  "iwc", "panerai", "chopard", "harry winston", "graff",
+  // Department stores and hotels that mark a prime address
+  "lane crawford", "harvey nichols", "joyce", "seibu",
+  "four seasons", "mandarin oriental", "the peninsula", "rosewood", "st. regis",
+  "ritz-carlton", "shangri-la", "grand hyatt", "conrad", "w hong kong", "the upper house",
+];
+
+/** OSM shop values that are premium-leaning by category rather than by brand. Kept
+ *  separate from the brand list so the two can be reasoned about independently. */
+const PREMIUM_SHOP_TYPES: readonly string[] = ["jewelry", "watches", "art", "antiques"];
 
 export type AmenityKind = keyof typeof RADIUS;
 
@@ -117,19 +154,57 @@ function buildQuery(lat: number, lng: number): string {
   nwr["amenity"="marketplace"]${at(RADIUS.shop)};
   nwr["amenity"~"^(hospital|clinic|doctors|pharmacy)$"]${at(RADIUS.health)};
   nwr["leisure"~"^(park|garden|playground)$"]${at(RADIUS.park)};
+  nwr["shop"]["brand"]${at(RADIUS.premium)};
+  nwr["shop"~"^(jewelry|watches|art|antiques)$"]${at(RADIUS.premium)};
+  nwr["tourism"="hotel"]${at(RADIUS.premium)};
+  nwr["building"="construction"]${at(RADIUS.construction)};
+  nwr["landuse"="construction"]${at(RADIUS.construction)};
 );
 out center tags;`;
 }
 
+/** Brand, name or operator against the visible allowlist. `brand` first — it is the tag
+ *  OSM actually intends for this, and a `name` can be a shopping-centre unit number. */
+function premiumMatch(tags: Record<string, string>): string | null {
+  const candidates = [tags["brand"], tags["name:en"], tags["name"], tags["operator"]]
+    .filter((v): v is string => typeof v === "string")
+    .map((v) => v.toLowerCase());
+  for (const brand of PREMIUM_BRANDS) {
+    if (candidates.some((c) => c.includes(brand))) return brand;
+  }
+  const shop = tags["shop"];
+  if (shop !== undefined && PREMIUM_SHOP_TYPES.includes(shop)) return shop;
+  return null;
+}
+
 function classify(tags: Record<string, string>): { kind: AmenityKind; subtype: string } | null {
   const { amenity, railway, station, shop, leisure } = tags;
+
+  /* Premium is tested before the generic `shop` branch, or a Cartier would be filed as an
+     ordinary jewellery shop and the signal the reader asked for would vanish into it. */
+  const premium = premiumMatch(tags);
+  if (premium !== null) return { kind: "premium", subtype: premium };
+
+  if (tags["building"] === "construction" || tags["landuse"] === "construction") {
+    return { kind: "construction", subtype: "under construction" };
+  }
   if (amenity !== undefined && /^(school|kindergarten|college|university)$/.test(amenity)) {
     return { kind: "school", subtype: amenity };
   }
   if (railway === "station" || station === "subway" || amenity === "bus_station") {
     return { kind: "transport", subtype: station === "subway" ? "subway_station" : (railway ?? amenity ?? "station") };
   }
-  if (shop !== undefined || amenity === "marketplace") {
+  /**
+   * **Only everyday-shopping types count as "shops"**, not any shop at all.
+   *
+   * The query asks for `["shop"]["brand"]` across a 900m radius purely so the premium
+   * allowlist has something to match against. Treating whatever *fails* that match as a
+   * generic shop was a regression I shipped and caught on screen: the nearest-things list
+   * filled up with IKEA, Muji, Audi and Toys R Us, burying the stations and schools that
+   * are the point. A car showroom is not a local amenity.
+   */
+  const EVERYDAY_SHOPS = ["supermarket", "mall", "convenience", "department_store"];
+  if ((shop !== undefined && EVERYDAY_SHOPS.includes(shop)) || amenity === "marketplace") {
     return { kind: "shop", subtype: shop ?? "marketplace" };
   }
   if (amenity !== undefined && /^(hospital|clinic|doctors|pharmacy)$/.test(amenity)) {
@@ -183,7 +258,9 @@ export async function fetchNeighbourhood(
 
   if (body === undefined) throw lastError ?? new Error("Overpass unreachable");
 
-  const counts: Record<AmenityKind, number> = { school: 0, transport: 0, shop: 0, health: 0, park: 0 };
+  const counts: Record<AmenityKind, number> = {
+    school: 0, transport: 0, shop: 0, health: 0, park: 0, premium: 0, construction: 0,
+  };
   const all: Amenity[] = [];
   // OSM frequently maps the same place more than once (a node inside its own polygon, or
   // a station split per entrance). Dedupe on kind + name so "Wellcome" doesn't appear
@@ -200,20 +277,30 @@ export async function fetchNeighbourhood(
     const lon = el.lon ?? el.center?.lon;
     if (lat === undefined || lon === undefined) continue;
 
-    // Prefer the English name where OSM carries both; Hong Kong tags are often bilingual
-    // in one string ("太古 Tai Koo"), which is fine to show as-is.
-    const name = tags["name:en"] ?? tags["name"];
-    if (name === undefined || name.trim() === "") continue;
-
-    const key = `${classified.kind}|${name.toLowerCase()}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-
     const metres = metresBetween(latitude, longitude, lat, lon);
     if (metres > RADIUS[classified.kind]) continue;
 
+    // Prefer the English name where OSM carries both; Hong Kong tags are often bilingual
+    // in one string ("太古 Tai Koo"), which is fine to show as-is.
+    //
+    // Construction sites are the one category allowed through unnamed: "three sites under
+    // construction within 900m" is precisely the signal, and demanding a name would drop
+    // nearly all of them. Everything else must identify itself.
+    const rawName = tags["name:en"] ?? tags["name"];
+    const named = rawName !== undefined && rawName.trim() !== "";
+    if (!named && classified.kind !== "construction") continue;
+    const name = named ? rawName.trim() : "Unnamed construction site";
+
+    // Unnamed sites would all collide on one dedupe key, so distance disambiguates them.
+    const key =
+      named
+        ? `${classified.kind}|${name.toLowerCase()}`
+        : `${classified.kind}|unnamed|${metres}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+
     counts[classified.kind] += 1;
-    all.push({ kind: classified.kind, name: name.trim(), subtype: classified.subtype, metres });
+    all.push({ kind: classified.kind, name, subtype: classified.subtype, metres });
   }
 
   all.sort((a, b) => a.metres - b.metres);
