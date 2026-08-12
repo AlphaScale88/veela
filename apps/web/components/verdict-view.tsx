@@ -48,18 +48,31 @@ export function VerdictView({ verdict }: { readonly verdict: Verdict }): React.J
         ))}
       </div>
 
-      {criticals > 0 && (
-        <p className="rounded-card border-l-2 border-negative bg-negative/5 px-4 py-3 text-sm">
-          <strong className="font-semibold text-negative">{criticals}</strong>{" "}
-          {criticals === 1 ? "issue" : "issues"} could sink this deal. Read them before you
-          commit.
-        </p>
-      )}
-
+      {/**
+       * **The standalone red "N issues could sink this deal" banner used to sit here, and
+       * it was removed on request** — opening the full report landed the reader on an alarm
+       * rather than on the report.
+       *
+       * The information is not gone, because losing it would be the wrong fix: it is now the
+       * subtitle of the findings list it was describing, a few pixels below. That is where a
+       * reader is already looking to find out *which* issues, every critical still carries
+       * its own red `CRITICAL` badge in that list, and `rateVerdict` still docks a full star
+       * per critical — so the warning is stated three times over without a full-width block
+       * shouting it before the numbers have been read.
+       */}
       <div>
         <h3 className="font-display text-[20px] font-semibold tracking-[-0.02em]">
           What to watch
         </h3>
+        {criticals > 0 && (
+          <p className="mt-1.5 text-sm text-muted">
+            <strong className="font-semibold text-negative">
+              {criticals} {criticals === 1 ? "issue" : "issues"}
+            </strong>{" "}
+            {criticals === 1 ? "is" : "are"} marked critical — read{" "}
+            {criticals === 1 ? "it" : "them"} before you commit.
+          </p>
+        )}
         <ul className="mt-4 space-y-3">
           {verdict.findings.map((f, i) => (
             <li key={`${f.id}-${i}`} className="card py-4">

@@ -22,6 +22,7 @@ import { BuildingSearch } from "../../components/building-search";
 import { ImportedListingMap } from "../../components/imported-listing-map";
 import { ListingImporter } from "../../components/listing-importer";
 import { NeighbourhoodPanel } from "../../components/neighbourhood-panel";
+import { SavedReports } from "../../components/saved-reports";
 import {
   draftToApiInput,
   draftToCoreInput,
@@ -86,7 +87,6 @@ export default function AnalysePage(): React.JSX.Element {
   const [imported, setImported] = useState<ImportedListing | null>(null);
   const [lastSubmittedDraft, setLastSubmittedDraft] = useState<Draft | null>(null);
   const [saveState, setSaveState] = useState<SaveState>({ status: "idle" });
-  const [welcomeBack, setWelcomeBack] = useState<{ readonly id: string; readonly label: string } | null>(null);
   const autoLoadedRef = useRef(false);
   /**
    * A location attached by hand, via the building search below.
@@ -258,26 +258,11 @@ export default function AnalysePage(): React.JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally once, see above
   }, []);
 
-  // A logged-in visitor who didn't arrive via either link above and hasn't started a
-  // report yet gets offered their most recent saved property — offered, not loaded:
-  // silently swapping a blank form for someone else's numbers would be a more confusing
-  // surprise than a landing page that's still blank.
-  useEffect(() => {
-    if (authLoading || user === null || autoLoadedRef.current) return;
-    let cancelled = false;
-    (async () => {
-      const res = await fetch("/api/properties");
-      if (!res.ok || cancelled) return;
-      const { properties } = (await res.json()) as {
-        properties: readonly { id: string; label: string }[];
-      };
-      const latest = properties[0]; // GET /properties already orders by updatedAt desc
-      if (latest !== undefined && !cancelled) setWelcomeBack(latest);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [authLoading, user]);
+  /* The effect that used to fetch the single most-recent property for a "Welcome back"
+     line is gone — `SavedReports` owns that fetch now, and keeping this one would have
+     meant two components requesting the same list on every visit to this page. The
+     "offered, never auto-loaded" rule it existed to honour is documented in, and enforced
+     by, that component. */
 
   // Loaded once a session exists, purely so SaveToPortfolio knows whether to ask the
   // aggregate-consent question — the save itself doesn't need this.
@@ -295,10 +280,23 @@ export default function AnalysePage(): React.JSX.Element {
     };
   }, [user]);
 
+  /**
+   * Bring the report into view once it exists.
+   *
+   * **Deferred a frame on purpose.** `VerdictView` renders a star rating and a four-cell
+   * stats grid above the findings, and a smooth scroll started in the same tick as that
+   * first paint animates towards a target whose height is still settling — so the scroll
+   * finished somewhere *below* the report heading, which is how clicking "See the full
+   * report" could leave the reader looking at the findings warning instead of the top of
+   * their own report. Waiting for the next frame means the offset is measured against the
+   * laid-out report, not a half-built one.
+   */
   useEffect(() => {
-    if (verdict !== null || reportGated) {
+    if (verdict === null && !reportGated) return;
+    const frame = requestAnimationFrame(() => {
       reportRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
+    });
+    return () => cancelAnimationFrame(frame);
   }, [verdict, reportGated]);
 
   // Gating on `submit()` (see its own doc comment) is a real navigation to `/login` and
@@ -470,21 +468,17 @@ export default function AnalysePage(): React.JSX.Element {
         </p>
       </header>
 
-      {welcomeBack !== null && verdict === null && (
-        <p className="mt-6 max-w-prose rounded-panel border border-line bg-surfaceMuted px-4 py-3 text-sm shadow-card">
-          Welcome back —{" "}
-          {/* A plain anchor, not next/link: this is a same-route navigation
-              (/analyse → /analyse?property=…), and the mount-only load effect above
-              needs a real remount to fire, not a soft client-side transition that
-              would leave the query-param effect not re-running. */}
-          <a
-            href={`/analyse?property=${welcomeBack.id}`}
-            className="font-medium text-accent hover:underline"
-          >
-            continue with {welcomeBack.label}
-          </a>
-          , or start a new one below.
-        </p>
+      {/**
+       * The reader's own saved reports, with an explicit empty state when there are none —
+       * replacing the one-line "Welcome back — continue with <latest>" this used to show.
+       *
+       * Only on a cold page (`verdict === null`). Once a report is on screen, a shelf of
+       * *other* properties above it competes with the thing the reader just asked for; the
+       * old line hid itself for the same reason. `/portfolio` is still where these are
+       * managed.
+       */}
+      {verdict === null && (
+        <SavedReports userId={user?.id ?? null} configured={authConfigured} />
       )}
 
       {fromFinder && (
@@ -815,11 +809,16 @@ function Rail({ preview }: { readonly preview: Verdict | null }): React.JSX.Elem
         <div className="mt-1 text-sm">{preview.acquisition.stampDutyScale}</div>
       </div>
 
+      {/* Kept, but reworded to match the report's own line — "could sink this deal" was
+          asked to go from the report, and leaving the identical alarm in the rail on the
+          same page would have made the change cosmetic. It still says a critical finding
+          exists and where to read it, which is the rail's job in the preview. */}
       {criticals > 0 && (
-        <p className="border-t border-line bg-negative/5 px-5 py-3.5 text-sm text-negative">
-          <strong className="font-semibold">{criticals}</strong>{" "}
-          {criticals === 1 ? "issue" : "issues"} could sink this deal — they are named in
-          the report.
+        <p className="border-t border-line px-5 py-3.5 text-sm text-muted">
+          <strong className="font-semibold text-negative">
+            {criticals} {criticals === 1 ? "issue" : "issues"}
+          </strong>{" "}
+          {criticals === 1 ? "is" : "are"} marked critical — named in the full report.
         </p>
       )}
     </aside>

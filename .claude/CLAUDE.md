@@ -1130,6 +1130,62 @@ in the code, rather than pulling the compiled server bundle into a client compon
 calibrated against (see the table in `neighbourhood-panel.tsx`), so saturating there is the
 intended top of the range, not a regression.
 
+## The report stopped opening on an alarm, and /analyse shows your own data (13/08/2026)
+
+Two requests, both about what a reader meets on `/analyse`.
+
+**1. "See the full report" landed on "1 issue could sink this deal. Read them before you
+commit."** Two causes, and only fixing one would have left it happening:
+
+- *The scroll.* The effect that brings the report into view fired in the same tick as
+  `VerdictView`'s first paint, so a **smooth** scroll animated toward a target whose height
+  was still settling (star rating, then a four-cell stats grid). It finished below the
+  report heading. Deferred one `requestAnimationFrame`, so the offset is measured against a
+  laid-out report — verified in a browser: the heading now sits 121px from the viewport top,
+  comfortably in view.
+- *The banner itself.* A full-width red block sat above the findings, saying in advance what
+  the findings say. **Removed, not silenced**: it is now the subtitle of the "What to watch"
+  list it was describing — where a reader is already looking to find out *which* issue.
+  Every critical still carries its own red badge in that list, and `rateVerdict` still docks
+  a full star per critical, so the warning survives three times over without shouting before
+  the numbers have been read.
+
+The live-preview rail carried the same sentence in different words ("could sink this deal —
+they are named in the report"). **Reworded to match**, on the reasoning that removing the
+phrase from the report and leaving an identical alarm on the same page would have made the
+change cosmetic. *(`apps/mobile` still has the original wording. Left alone: it is a separate
+surface with no full-report flow yet, and nothing here was exercised against it.)*
+
+**2. `/analyse` now shows the reader's saved reports, with a real empty state.** What was
+there was one sentence — "Welcome back — continue with *most recent*" — carrying no figures,
+and rendering nothing at all if you had never saved anything. `components/saved-reports.tsx`
+lists the four most recent with price, area, saved date and stored net yield (coloured by the
+same `gradeNetYield` bands as the finder chips and map pins, so a colour means one thing
+everywhere), and an explicit **"No saved reports yet"** panel otherwise that says where the
+Save button is.
+
+What carried over from the line it replaced, deliberately: **offered, never auto-loaded** —
+silently swapping a blank form for a saved property's numbers is a bigger surprise than a
+form that stays blank — and the plain `<a>` rather than `next/link`, because
+`/analyse → /analyse?property=…` is a same-route navigation and the loader runs on mount
+only. The old fetch effect on the page was deleted rather than left beside the new one; two
+components requesting the same list on every visit is the kind of duplicate nobody notices
+until it doubles again.
+
+It renders nothing when Supabase is unconfigured or nobody is signed in (no account system
+means no data to be empty *of*), and a failed fetch is silent — this is a convenience shelf
+above a form that works without it, and an error banner would make a working page look
+broken. It is hidden once a report is on screen, for the reason the old line hid itself: a
+shelf of *other* properties competes with the one just asked for. `/portfolio` is still where
+these are managed; both read the same two endpoints, so they cannot disagree.
+
+**Verified end-to-end in a browser** — empty state, submit, landing position, save, populated
+state — against a throwaway account created for the purpose and **deleted afterwards along
+with its properties, verdicts and profile row**, leaving only the real account. Worth noting
+for next time: creating it consumed the Supabase free tier's signup-email quota, and a second
+address hit `over_email_send_rate_limit` immediately, exactly as the *Live infrastructure*
+section warns.
+
 ## Working conventions
 - Dates DD/MM/YYYY. Currency: **HKD** for Hong Kong, **VND** for Vietnam, **EUR** for
   France — always state which, never a bare number. Keep a single reporting currency
