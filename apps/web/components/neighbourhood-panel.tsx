@@ -35,6 +35,10 @@ interface Data {
   readonly counts: Readonly<Record<AmenityKind, number>>;
   readonly nearest: readonly Amenity[];
   readonly attribution: string;
+  /** Present once the server started caching. `stale` means Overpass was unreachable and
+   *  this is an older answer served deliberately rather than an error — which the reader
+   *  is told, because silently presenting old data as current is the worse failure. */
+  readonly cache?: { readonly hit: boolean; readonly ageDays: number; readonly stale?: boolean };
 }
 
 const KIND_LABEL: Readonly<Record<AmenityKind, string>> = {
@@ -248,6 +252,15 @@ export function NeighbourhoodPanel({ latitude, longitude, label }: Props): React
               </li>
             ))}
           </ul>
+
+          {data.cache?.stale === true && (
+            <p className="mt-3 rounded-card border border-caution/40 bg-caution/10 px-3 py-2 text-[11px] leading-relaxed text-muted">
+              <strong className="text-mist">Showing a saved copy.</strong> OpenStreetMap
+              didn&apos;t answer just now, so this is the last result we have for this spot
+              — {data.cache.ageDays === 0 ? "from earlier today" : `about ${data.cache.ageDays} day${data.cache.ageDays === 1 ? "" : "s"} old`}.
+              Amenities rarely change that fast, but it isn&apos;t live.
+            </p>
+          )}
 
           <p className="mt-3 text-[11px] leading-relaxed text-muted">
             Straight-line distance, not walking distance. {data.attribution} — coverage is

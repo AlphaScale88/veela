@@ -29,21 +29,66 @@
  * failure surfaced as "unavailable" rather than as an empty neighbourhood, because "no
  * schools nearby" is a claim and "we could not check" is not.
  *
- * A cache belongs here eventually — results for a point barely change month to month, and
- * caching would remove almost all of this latency. Deliberately not built yet rather than
- * built badly: it needs a table and an eviction rule, and the feature is worth proving
- * first.
+ * **The cache this file said belonged here "eventually" now exists** — `neighbourhood_cache`
+ * (migration 0004), keyed on coordinates rounded to ~110m, with a 30-day freshness rule,
+ * applied by the `/neighbourhood` handler rather than in here. This module stays a pure
+ * client of Overpass: it fetches and parses, and knows nothing about storage. Measured
+ * effect, not hoped-for: 23.8s cold → 0.76s on a repeat lookup.
+ *
+ * That split is deliberate. Caching needs a database, and this file is the one place that
+ * must keep working without one — it is also called by paths that have no `db` in scope.
+ * Keeping the fetcher storage-free is what lets the same function serve both.
  */
 
 /**
- * Tried in order. Not redundancy for its own sake: during this work the main instance
- * returned a 504 and, minutes later, a plain XML error page to an identical query. One
- * shared community endpoint is not something to build a page section on.
+ * **Raced, not tried in order** — see the hedging block in `fetchNeighbourhood`. The list
+ * order still decides who is asked *first*, but a slow or dead entry no longer blocks the
+ * others, so being wrong about the order costs one stagger interval rather than a whole
+ * timeout.
+ *
+ * Not redundancy for its own sake: during this work the main instance returned a 504 and,
+ * minutes later, a plain XML error page to an identical query. One shared community
+ * endpoint is not something to build a page section on.
+ *
+ * **Measured per-mirror behaviour differs by network, which is why nothing here is
+ * declared "the reliable one" any more.** From one machine: `overpass-api.de` was the only
+ * mirror that responded at all (and often with *"the server is probably too busy"*),
+ * `kumi.systems` accepted the connection and sent zero bytes for 40s, and `osm.jp` failed
+ * TLS outright. An earlier version of this comment claimed kumi.systems was "measurably
+ * the more reliable of the two" and put it first — that claim was true where it was
+ * measured and false in production, which is the argument for racing rather than ranking.
  */
 const OVERPASS_ENDPOINTS = [
   "https://overpass-api.de/api/interpreter",
   "https://overpass.kumi.systems/api/interpreter",
+  "https://overpass.osm.jp/api/interpreter",
 ] as const;
+
+/**
+ * How long to wait before *also* trying the next mirror. Short enough that a hung mirror
+ * barely delays a healthy one, long enough that a healthy first mirror normally answers
+ * alone and the other two are never contacted — which is what keeps this polite to a
+ * donated service. See the hedging block for the full reasoning.
+ */
+const HEDGE_STAGGER_MS = 1_200;
+
+/**
+ * Overall budget for the race, and it exists because of a **serverless limit, not a slow
+ * API**.
+ *
+ * Vercel functions default to a 10-second maximum duration. The first version allowed 20s
+ * per attempt across two mirrors, so in production the function was killed before Overpass
+ * had a chance to answer — which surfaced to users as "Could not reach OpenStreetMap" far
+ * more often than the service itself was actually failing. The route now declares a longer
+ * `maxDuration`; because the mirrors are raced rather than tried in sequence, this is the
+ * budget for *all* of them together rather than for each, which is why it can be generous
+ * and still finish well inside the function's own ceiling.
+ */
+const ATTEMPT_TIMEOUT_MS = 14_000;
+
+/** Overpass's own server-side budget. Must be under `ATTEMPT_TIMEOUT_MS` or we abort a
+ *  query the server was still willing to finish. */
+const OVERPASS_QUERY_TIMEOUT_S = 6;
 
 /**
  * **Keep this plain.** The first version was
@@ -144,7 +189,7 @@ function metresBetween(aLat: number, aLng: number, bLat: number, bLng: number): 
  */
 function buildQuery(lat: number, lng: number): string {
   const at = (r: number): string => `(around:${r},${lat},${lng})`;
-  return `[out:json][timeout:25];
+  return `[out:json][timeout:${OVERPASS_QUERY_TIMEOUT_S}];
 (
   nwr["amenity"~"^(school|kindergarten|college|university)$"]${at(RADIUS.school)};
   nwr["railway"="station"]${at(RADIUS.transport)};
@@ -227,36 +272,98 @@ export async function fetchNeighbourhood(
    * mirror is tried both on a bad status *and* on an unparseable body, and only the last
    * failure propagates.
    */
-  let body: { elements?: readonly {
+  type Body = { elements?: readonly {
     lat?: number; lon?: number; center?: { lat: number; lon: number };
     tags?: Record<string, string>;
-  }[] } | undefined;
-  let lastError: Error | undefined;
+  }[] };
 
-  for (const endpoint of OVERPASS_ENDPOINTS) {
-    try {
-      const res = await fetchImpl(endpoint, {
-        method: "POST",
-        body: payload,
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-          "User-Agent": USER_AGENT,
-        },
-        signal: AbortSignal.timeout(20_000),
-      });
-      if (!res.ok) throw new Error(`${new URL(endpoint).host} returned ${res.status}`);
-      const text = await res.text();
-      if (!text.trimStart().startsWith("{")) {
-        throw new Error(`${new URL(endpoint).host} returned a non-JSON body (busy)`);
-      }
-      body = JSON.parse(text) as typeof body;
-      break;
-    } catch (cause) {
-      lastError = cause instanceof Error ? cause : new Error("unknown Overpass failure");
+  /**
+   * One attempt against one mirror. Throws on anything that isn't a parseable answer, so
+   * the racing logic below only ever has to distinguish "resolved" from "rejected".
+   */
+  async function attempt(endpoint: string, signal: AbortSignal): Promise<Body> {
+    const res = await fetchImpl(endpoint, {
+      method: "POST",
+      body: payload,
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "User-Agent": USER_AGENT,
+      },
+      signal,
+    });
+    if (!res.ok) throw new Error(`${new URL(endpoint).host} returned ${res.status}`);
+    const text = await res.text();
+    if (!text.trimStart().startsWith("{")) {
+      throw new Error(`${new URL(endpoint).host} returned a non-JSON body (busy)`);
     }
+    return JSON.parse(text) as Body;
   }
 
-  if (body === undefined) throw lastError ?? new Error("Overpass unreachable");
+  /**
+   * **Hedged requests, not a sequential fallback — and this was the actual production
+   * bug, not the timeout that got blamed for it.**
+   *
+   * Trying mirrors strictly in order makes every request pay for the dead ones ahead of
+   * it: measured from one machine, `kumi.systems` accepted the connection and returned
+   * **zero bytes for 40s**, `overpass.osm.jp` failed TLS, and only `overpass-api.de`
+   * answered at all. Because the dead mirror was listed *first*, a healthy answer could
+   * not arrive before the 8s attempt timeout expired — 3 of 4 cold lookups failed. Which
+   * mirror is healthy also differs by network, so no static ordering fixes this; the
+   * order was itself the bug.
+   *
+   * So each mirror is started `HEDGE_STAGGER_MS` after the previous one and the first
+   * *valid* answer wins. A hang now costs one stagger interval instead of a full timeout.
+   *
+   * **Staggered rather than all-at-once, deliberately.** Overpass is donated
+   * infrastructure and its usage policy asks for moderate use; firing three copies of
+   * every query would treble the load on a service that is already the bottleneck. The
+   * stagger means a *healthy* first mirror is usually the only one ever contacted, and
+   * the `AbortController` cancels the losers the moment one wins, so the extra load lands
+   * only when a mirror is actually failing — which is the case we already contacted all
+   * three for.
+   */
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), ATTEMPT_TIMEOUT_MS);
+
+  let body: Body;
+  try {
+    body = await new Promise<Body>((resolve, reject) => {
+      const errors: Error[] = [];
+      let settled = false;
+      const timers: ReturnType<typeof setTimeout>[] = [];
+
+      const fail = (cause: unknown): void => {
+        errors.push(cause instanceof Error ? cause : new Error("unknown Overpass failure"));
+        // Only give up once *every* mirror has failed — a single rejection means nothing
+        // while others are still in flight.
+        if (errors.length === OVERPASS_ENDPOINTS.length && !settled) {
+          settled = true;
+          reject(errors[errors.length - 1] ?? new Error("Overpass unreachable"));
+        }
+      };
+
+      OVERPASS_ENDPOINTS.forEach((endpoint, i) => {
+        timers.push(
+          setTimeout(() => {
+            if (settled) {
+              // A winner already arrived, so this mirror is never contacted at all.
+              fail(new Error(`${new URL(endpoint).host} not attempted`));
+              return;
+            }
+            void attempt(endpoint, controller.signal).then((ok) => {
+              if (settled) return;
+              settled = true;
+              for (const t of timers) clearTimeout(t);
+              controller.abort(); // cancel the mirrors still in flight
+              resolve(ok);
+            }, fail);
+          }, i * HEDGE_STAGGER_MS),
+        );
+      });
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
 
   const counts: Record<AmenityKind, number> = {
     school: 0, transport: 0, shop: 0, health: 0, park: 0, premium: 0, construction: 0,

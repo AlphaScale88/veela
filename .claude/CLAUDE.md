@@ -990,6 +990,65 @@ terminals, humanist-geometric warmth) — not Inter or Manrope, which read close
 Cereal in general shape but miss that particular roundness. Bricolage Grotesque is gone
 from the codebase entirely, not just overridden per-page.
 
+## "Could not reach OpenStreetMap" in production — two causes, one of them ours (12/08/2026)
+
+Reported from production with a screenshot: the full report's neighbourhood section showed
+**"Could not reach OpenStreetMap: The operation was aborted due to timeout"** when
+searching a neighbourhood. Two independent causes, and the first is the more embarrassing —
+**the error blamed OpenStreetMap for our own timeout.**
+
+**1. Vercel functions default to a 10-second ceiling.** `AbortSignal.timeout(20_000)`
+allowed 20s per attempt across two mirrors, so the *function* was killed at 10s, well
+before Overpass had been given the time the code thought it was giving it. Locally there is
+no such ceiling, which is exactly why this never appeared in development.
+`export const maxDuration = 60` in `app/api/[[...route]]/route.ts` — the ceiling this plan
+allows. Nothing is expected to take that long; it is headroom so a slow upstream fails on
+its own terms with a true message instead of being guillotined. The listing importer has
+the same shape (someone else's slow page, and `spacious-stealth-fetch` launches a whole
+browser), so this was never neighbourhood-specific.
+
+Attempt budget brought inside the new ceiling rather than left to chance: three mirrors ×
+8s = 24s, with Overpass's own server-side `timeout:` at 6s.
+
+**2. Nothing was cached — and the comment explaining why was wrong.** Both
+`neighbourhood.ts` and the route handler asserted that a cache was *deliberately* absent
+because "a stale cached amenity list would be worse than a slow fresh one." Production
+disproved the premise: the alternative to stale data was never fresh data, it was **a red
+error sentence where a neighbourhood should be**, and a month-old school list is plainly
+worth more than that. Both comments were rewritten rather than left standing next to the
+cache that contradicts them — the same rule applied when `/analyse`'s "nothing is saved"
+copy went stale.
+
+`packages/db/migrations/0004_neighbourhood_cache.sql`: coordinates **rounded to 3 decimals
+(~110m)**, which is the decision that makes the cache actually hit — full precision would
+give each of the 54 flats in an estate its own miss, while amenities within an 800–900m
+radius barely differ across 110m. `payload` is the response body as a `jsonb` blob,
+denormalised on purpose: this caches an external service's *answer*, and normalising it
+would create a second schema to keep in step with OSM's tags.
+
+**Four outcomes, each verified against the running app rather than reasoned about:**
+
+| Situation | Result | Measured |
+|---|---|---|
+| Fresh row (< 30 days) | Served from cache | **0.76s**, vs 23.8s cold — and a coordinate 50m away hits the same row |
+| Miss or expired | Fetch Overpass, store | 13.6s on a real refetch of an aged row |
+| Overpass down **and** an older row exists | That row, `stale: true` + its age | 200, `ageDays: 40` |
+| Overpass down, nothing cached | Honest 502 naming the cause | still an error, deliberately |
+
+The last two rows were verified by **temporarily pointing `OVERPASS_ENDPOINTS` at an
+unreachable host and rebuilding** — a forced outage, not an assumption that the fallback
+branch works because it typechecks. Endpoints restored and re-verified afterwards.
+
+**The staleness is shown, not hidden.** `neighbourhood-panel.tsx` renders a caution banner
+("Showing a saved copy… OpenStreetMap didn't answer just now") with the age in days.
+Serving old data silently as though it were current would be the worse failure, not the
+safer one — the whole reason the cache is defensible is that the reader is told.
+
+**The fetcher stayed storage-free.** Caching lives in the `/neighbourhood` handler, not in
+`neighbourhood.ts`, which remains a pure Overpass client that knows nothing about a
+database — it is called from paths that have no `db` in scope, and it is the one module
+that must keep working without one, per this project's zero-configuration rule.
+
 ## Working conventions
 - Dates DD/MM/YYYY. Currency: **HKD** for Hong Kong, **VND** for Vietnam, **EUR** for
   France — always state which, never a bare number. Keep a single reporting currency

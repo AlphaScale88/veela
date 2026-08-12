@@ -727,20 +727,92 @@ export const api = new Hono<Env>()
    * `neighbourhood.ts` for why this is OpenStreetMap rather than a government dataset,
    * and what ODbL requires of the caller.
    *
-   * Public and unauthenticated, like the rest of the reference layer. Nothing is
-   * persisted: Overpass is the source of truth and a stale cached amenity list would be
-   * worse than a slow fresh one. A cache is the obvious next step and is deliberately
-   * absent rather than half-built — see that file.
+   * Public and unauthenticated, like the rest of the reference layer.
    *
-   * A failure is reported as a failure. An empty neighbourhood and an unreachable Overpass
-   * look identical in a `200 {counts: all zero}`, and "no schools nearby" is a claim about
-   * a place that a timeout has no business making.
+   * **This used to say "nothing is persisted… a stale cached amenity list would be worse
+   * than a slow fresh one," and production disproved it.** Users saw "Could not reach
+   * OpenStreetMap" where a neighbourhood should be, because every view re-queried a busy
+   * shared service — and a month-old school list is plainly worth more than a red
+   * sentence. The old reasoning wasn't wrong about staleness being a cost; it was wrong
+   * that the cost was higher than unavailability. So the cache exists now, and the
+   * staleness it admits is *shown to the reader* rather than hidden, which is what makes
+   * the trade acceptable.
+   *
+   * Three outcomes, and the distinction between them is the point:
+   *   - fresh cache hit → instant, `cache.hit` true
+   *   - miss or expired → fetch Overpass, store, `cache.hit` false
+   *   - Overpass down **and** we have an older copy → serve it with `stale: true` and its
+   *     age, so the panel can say so. Silently presenting old data as current would be
+   *     the worse failure, not the safer one.
+   *
+   * With nothing cached, a failure is still reported as a failure. An empty neighbourhood
+   * and an unreachable Overpass look identical in a `200 {counts: all zero}`, and "no
+   * schools nearby" is a claim about a place that a timeout has no business making.
    */
   .get("/neighbourhood", zValidator("query", neighbourhoodQuerySchema), async (c) => {
     const { lat, lng } = c.req.valid("query");
+    const db = c.get("db");
+
+    /* Rounded to ~110m — see migration 0004. Collapses every flat in a building, and
+       usually every building on a street, onto one cache row, which is what makes the
+       cache actually hit rather than storing one row per requested coordinate. */
+    const latKey = lat.toFixed(3);
+    const lngKey = lng.toFixed(3);
+
+    /** Amenities within walking distance change on the timescale of construction
+     *  projects, not days. A month is long enough to make the cache worth having and
+     *  short enough that a new station or mall shows up in reasonable time. */
+    const FRESH_DAYS = 30;
+
+    type CacheRow = { payload: unknown; fetched_at: string };
+    let cached: CacheRow | undefined;
     try {
-      return c.json(await fetchNeighbourhood(lat, lng));
+      const rows = (await db.execute(sql`
+        select payload, fetched_at
+        from neighbourhood_cache
+        where lat_key = ${latKey} and lng_key = ${lngKey}
+      `)) as unknown as CacheRow[];
+      cached = rows[0];
+    } catch {
+      // No DATABASE_URL, or the table isn't migrated — the lookup still works, just
+      // without a cache. Same "zero configuration" rule as everywhere else.
+    }
+
+    const ageDays =
+      cached === undefined
+        ? Infinity
+        : (Date.now() - new Date(cached.fetched_at).getTime()) / 86_400_000;
+
+    if (cached !== undefined && ageDays < FRESH_DAYS) {
+      return c.json({ ...(cached.payload as object), cache: { hit: true, ageDays: Math.floor(ageDays) } });
+    }
+
+    try {
+      const fresh = await fetchNeighbourhood(lat, lng);
+      try {
+        await db.execute(sql`
+          insert into neighbourhood_cache (lat_key, lng_key, payload, fetched_at)
+          values (${latKey}, ${lngKey}, ${JSON.stringify(fresh)}::jsonb, now())
+          on conflict (lat_key, lng_key)
+          do update set payload = excluded.payload, fetched_at = excluded.fetched_at
+        `);
+      } catch {
+        // A failed write must not fail a successful lookup.
+      }
+      return c.json({ ...fresh, cache: { hit: false, ageDays: 0 } });
     } catch (cause) {
+      /**
+       * **Stale beats an error.** If Overpass is unreachable but we hold an older answer
+       * for this point, serve it and say how old it is. A month-old school list is worth
+       * far more to a reader than a red sentence about a service they have never heard of
+       * — and the previous behaviour showed that sentence to roughly half of them.
+       */
+      if (cached !== undefined) {
+        return c.json({
+          ...(cached.payload as object),
+          cache: { hit: true, ageDays: Math.floor(ageDays), stale: true },
+        });
+      }
       throw new HTTPException(502, {
         message: `Could not reach OpenStreetMap: ${
           cause instanceof Error ? cause.message : "unknown error"

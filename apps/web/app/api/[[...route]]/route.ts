@@ -8,6 +8,22 @@ import { cookies } from "next/headers";
 export const runtime = "nodejs";
 
 /**
+ * **Vercel functions default to a 10-second ceiling, and that was a real bug.**
+ *
+ * `GET /neighbourhood` calls Overpass, a shared community service that takes seconds when
+ * healthy and needs a retry against a mirror when not. Under the default limit the function
+ * was killed mid-flight and the user saw "Could not reach OpenStreetMap" — an error about
+ * *our* timeout wearing OpenStreetMap's name. The listing importer has the same shape: an
+ * SSRF-safe fetch of somebody else's slow page, and `spacious-stealth-fetch` launches a
+ * whole browser to do it.
+ *
+ * 60s is the ceiling this plan allows. Nothing is *expected* to take that long — the
+ * neighbourhood path budgets 3 × 8s of Overpass attempts — it is headroom so a slow
+ * upstream fails on its own terms with a real message instead of being guillotined.
+ */
+export const maxDuration = 60;
+
+/**
  * The Hono app is mounted inside a Next.js catch-all route handler, so ordinary CRUD
  * runs inside the Next deployment on Vercel. No standalone server is needed: the
  * boilerplate reserves that for Tier 4, when something must stay alive 24/7.
