@@ -81,14 +81,29 @@ const HEDGE_STAGGER_MS = 1_200;
  * had a chance to answer — which surfaced to users as "Could not reach OpenStreetMap" far
  * more often than the service itself was actually failing. The route now declares a longer
  * `maxDuration`; because the mirrors are raced rather than tried in sequence, this is the
- * budget for *all* of them together rather than for each, which is why it can be generous
- * and still finish well inside the function's own ceiling.
+ * budget for *all* of them together rather than for each.
+ *
+ * **Deliberately generous, and the cache is why.** A 14s budget was measured in production
+ * cutting off lookups that would have succeeded — 3 of 5 cold points failed at exactly the
+ * budget, and the same coordinates returned real data seconds later, so the timeout was
+ * ending requests Overpass was still working on. Once a result is cached, **only the first
+ * visitor to an area ever pays this cost**, and every later view of that spot is ~1s. That
+ * changes the trade: without a cache, a long timeout would mean everyone waits; with one, a
+ * slow success is strictly better than a fast failure, because the slow path happens once
+ * and the failure would happen to everyone until it stopped failing.
  */
-const ATTEMPT_TIMEOUT_MS = 14_000;
+const ATTEMPT_TIMEOUT_MS = 35_000;
 
-/** Overpass's own server-side budget. Must be under `ATTEMPT_TIMEOUT_MS` or we abort a
- *  query the server was still willing to finish. */
-const OVERPASS_QUERY_TIMEOUT_S = 6;
+/**
+ * Overpass's own server-side execution budget. Must be under `ATTEMPT_TIMEOUT_MS` or we
+ * abort a query the server was still willing to finish.
+ *
+ * Raised from 6s for the same reason as above: this query asks for seven amenity categories
+ * around a point, and 6s of *execution* is not always enough for the server to finish one —
+ * it was self-aborting work that had already been queued and started. Still far below
+ * Overpass's own 180s default, so this remains a modest request of a shared service.
+ */
+const OVERPASS_QUERY_TIMEOUT_S = 20;
 
 /**
  * **Keep this plain.** The first version was

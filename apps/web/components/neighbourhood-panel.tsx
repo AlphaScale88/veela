@@ -180,6 +180,19 @@ export function NeighbourhoodPanel({ latitude, longitude, label }: Props): React
         )}
       </div>
 
+      {/* Overpass is a busy shared service and a first lookup for an area can take tens of
+          seconds (the timeout is deliberately generous — see `neighbourhood.ts` — because
+          the result is then cached and nobody waits for that spot again). A bare "Checking…"
+          for that long reads as a hung page, so the wait is named rather than left to be
+          guessed at. */}
+      {pending && (
+        <p className="mt-3 text-xs leading-relaxed text-muted" aria-live="polite">
+          Asking OpenStreetMap what&apos;s nearby. The first check of an area can take up to
+          half a minute — it&apos;s a shared community service, and the answer is saved
+          afterwards so this spot loads instantly next time.
+        </p>
+      )}
+
       {error !== null && (
         <p role="alert" className="mt-3 text-xs leading-relaxed text-negative">
           {error}
