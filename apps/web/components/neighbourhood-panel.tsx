@@ -2,6 +2,17 @@
 
 import { useState } from "react";
 
+import {
+  ConstructionIcon,
+  DiamondIcon,
+  HealthIcon,
+  MapPinIcon,
+  SchoolIcon,
+  ShopIcon,
+  TrainIcon,
+  TreeIcon,
+} from "./icons";
+
 /**
  * What's within walking distance — schools, stations, shops, health, green space.
  *
@@ -94,6 +105,19 @@ const KIND_TILE_LABEL: Readonly<Record<AmenityKind, string>> = {
   park: "Green space",
   premium: "Premium retail",
   construction: "Building work",
+};
+
+/** One mark per category, so the seven tiles are told apart at a glance rather than by
+ *  reading seven labels. Shown *with* the label, never instead of it — a pictogram for
+ *  "premium retail" that a reader has to decode is worse than the words. */
+const KIND_ICON: Readonly<Record<AmenityKind, (p: { readonly className?: string }) => React.JSX.Element>> = {
+  school: SchoolIcon,
+  transport: TrainIcon,
+  shop: ShopIcon,
+  health: HealthIcon,
+  park: TreeIcon,
+  premium: DiamondIcon,
+  construction: ConstructionIcon,
 };
 
 const KIND_LABEL: Readonly<Record<AmenityKind, string>> = {
@@ -230,7 +254,8 @@ export function NeighbourhoodPanel({ latitude, longitude, label }: Props): React
     <section className="card">
       <div className="flex flex-wrap items-baseline justify-between gap-3">
         <div>
-          <h3 className="text-[15px] font-semibold">
+          <h3 className="flex items-center gap-2 text-[15px] font-semibold">
+            <MapPinIcon className="h-4 w-4 shrink-0 text-muted" />
             The neighbourhood{label === undefined ? "" : ` — ${label}`}
           </h3>
           <p className="mt-0.5 text-xs text-muted">
@@ -320,6 +345,7 @@ export function NeighbourhoodPanel({ latitude, longitude, label }: Props): React
             {KIND_ORDER.map((k) => {
               const count = data.counts[k];
               const isOpen = open === k;
+              const Icon = KIND_ICON[k];
               if (count === 0) {
                 return (
                   <div
@@ -329,7 +355,8 @@ export function NeighbourhoodPanel({ latitude, longitude, label }: Props): React
                     {/* `min-h` on the label, not the tile: a one-line and a two-line label
                         must reserve the same space, or the numbers below them sit at
                         different heights across the row. */}
-                    <dt className="min-h-[2.4em] font-mono text-[10px] uppercase leading-tight tracking-[0.06em] text-muted">
+                    <Icon className="h-4 w-4 text-muted" />
+                    <dt className="mt-1.5 min-h-[2.4em] font-mono text-[10px] uppercase leading-tight tracking-[0.06em] text-muted">
                       {KIND_TILE_LABEL[k]}
                     </dt>
                     <dd className="tnum mt-1 text-lg font-semibold text-muted">0</dd>
@@ -350,7 +377,10 @@ export function NeighbourhoodPanel({ latitude, longitude, label }: Props): React
                         : "border-line bg-surfaceMuted hover:border-accent/40 hover:bg-accent/[0.03]"
                     }`}
                   >
-                    <dt className="min-h-[2.4em] font-mono text-[10px] uppercase leading-tight tracking-[0.06em] text-muted">
+                    <Icon
+                      className={`h-4 w-4 ${isOpen ? "text-accent" : "text-muted"}`}
+                    />
+                    <dt className="mt-1.5 min-h-[2.4em] font-mono text-[10px] uppercase leading-tight tracking-[0.06em] text-muted">
                       {KIND_TILE_LABEL[k]}
                     </dt>
                     <dd className="tnum mt-1 flex items-baseline gap-1.5 text-lg font-semibold text-mist">
@@ -379,9 +409,13 @@ export function NeighbourhoodPanel({ latitude, longitude, label }: Props): React
               className="mt-4 rounded-panel border border-line bg-surfaceMuted px-4 py-3"
             >
               <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <h4 className="text-sm font-semibold text-mist">
+                <h4 className="flex items-center gap-2 text-sm font-semibold text-mist">
+                  {(() => {
+                    const OpenIcon = KIND_ICON[open];
+                    return <OpenIcon className="h-4 w-4 shrink-0 text-accent" />;
+                  })()}
                   {KIND_LABEL[open]} within {RADIUS_M[open]} m
-                  <span className="ml-2 font-normal text-muted">
+                  <span className="font-normal text-muted">
                     ({openItems.length} {openItems.length === 1 ? "place" : "places"})
                   </span>
                 </h4>
@@ -428,23 +462,33 @@ export function NeighbourhoodPanel({ latitude, longitude, label }: Props): React
               <p className="mt-4 font-mono text-[10px] uppercase tracking-[0.08em] text-muted">
                 Closest ten, all categories
               </p>
+              {/* The closest-ten list mixes all seven categories, so each row carries its
+                  own mark — without one, "Mong Kok" and "Wing Shing Dispensary" are two
+                  names with no visible clue which is the station and which the pharmacy
+                  until the subtype text is read. */}
               <ul className="mt-1 divide-y divide-line">
-                {data.items.slice(0, 10).map((a) => (
+                {data.items.slice(0, 10).map((a) => {
+                  const RowIcon = KIND_ICON[a.kind];
+                  return (
                   <li
                     key={`${a.kind}-${a.name}-${a.metres}`}
                     className="flex items-baseline justify-between gap-3 py-2"
                   >
-                    <span className="min-w-0">
-                      <span className="text-sm text-mist">{a.name}</span>
-                      <span className="ml-2 font-mono text-[10px] uppercase tracking-[0.06em] text-muted">
-                        {a.subtype.replace(/_/g, " ")}
+                    <span className="flex min-w-0 items-baseline gap-2">
+                      <RowIcon className="h-3.5 w-3.5 shrink-0 translate-y-0.5 text-muted" />
+                      <span className="min-w-0">
+                        <span className="text-sm text-mist">{a.name}</span>
+                        <span className="ml-2 font-mono text-[10px] uppercase tracking-[0.06em] text-muted">
+                          {a.subtype.replace(/_/g, " ")}
+                        </span>
                       </span>
                     </span>
                     <span className="tnum shrink-0 font-mono text-xs text-muted">
                       {a.metres} m
                     </span>
                   </li>
-                ))}
+                  );
+                })}
               </ul>
             </>
           )}

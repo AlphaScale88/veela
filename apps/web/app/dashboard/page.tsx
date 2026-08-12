@@ -15,6 +15,7 @@ import {
   TrendIcon,
 } from "../../components/app-shell";
 import { useAuth } from "../../components/auth-provider";
+import { DocumentIcon } from "../../components/icons";
 
 /**
  * The front door of the "app" section — quick links to every real tool, plus (when
@@ -75,9 +76,11 @@ export default function DashboardPage(): React.JSX.Element {
       )}
 
       <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        {/* A document, not the magnifier /finder uses — two tiles side by side carrying the
+            same glyph made the primary action look like a second search box. */}
         <Tile
           href="/analyse"
-          icon={SearchIcon}
+          icon={DocumentIcon}
           title="Analyse a property"
           detail="Enter a property's figures and get the full yield, tax and stamp-duty report."
         />

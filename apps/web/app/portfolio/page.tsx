@@ -8,6 +8,7 @@ import { useEffect, useState } from "react";
 
 import { AppShell } from "../../components/app-shell";
 import { useAuth } from "../../components/auth-provider";
+import { BuildingIcon } from "../../components/icons";
 
 /**
  * The thing logging in actually buys you: properties saved from `/analyse` persist
@@ -169,7 +170,14 @@ function PropertyCard({
   return (
     <article className="card">
       <div className="flex items-start justify-between gap-2">
-        <p className="text-[15px] font-semibold leading-snug">{property.label}</p>
+        {/* The same building mark the /analyse saved-reports shelf uses, so a saved property
+            looks like the same object in both places. */}
+        <p className="flex min-w-0 items-start gap-2.5 text-[15px] font-semibold leading-snug">
+          <span className="mt-px flex h-8 w-8 shrink-0 items-center justify-center rounded-card bg-accent/10 text-accent">
+            <BuildingIcon className="h-4 w-4" />
+          </span>
+          <span className="min-w-0">{property.label}</span>
+        </p>
         <span
           className="shrink-0 rounded-full px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-[0.08em]"
           style={{ color: standingColor[standing], backgroundColor: `${standingColor[standing]}1A` }}

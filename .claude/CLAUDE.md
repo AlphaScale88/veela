@@ -1186,6 +1186,64 @@ for next time: creating it consumed the Supabase free tier's signup-email quota,
 address hit `over_email_send_rate_limit` immediately, exactly as the *Live infrastructure*
 section warns.
 
+## Icons in the report — a set in a file, and the photo that isn't there (13/08/2026)
+
+Asked for a better report design "with icons and images, throughout the app".
+
+**The icon system already existed; nobody had put it in a file.** No icon dependency, and
+nineteen inline `<svg>` blocks in `app-shell.tsx` alone plus one-offs across seven other
+components — every one 24×24, `fill="none"`, `stroke="currentColor"`, round caps. That is a
+house style being retyped. `components/icons.tsx` is that style written down: stroked
+outlines only (so an icon inherits text colour and reads at 14px and at 32px), no
+width/height (the caller sizes it), `aria-hidden` by default because every one of these sits
+beside its own text label and an icon that repeats the adjacent word is noise to a screen
+reader.
+
+**No icon package.** It would ship a few thousand glyphs to render the two dozen used here,
+and none of them would match the sidebar's existing drawing.
+
+Where they went: the four headline metrics (keyed **by label, not by index**, so reordering
+`headlineStats` can't pair "Payback" with a percent sign, and an unknown label renders with
+no icon rather than a wrong one), the two cost tables, "What to watch", the seven
+neighbourhood categories and the mixed closest-ten list, the saved-reports shelf and the
+portfolio card (same building mark in both, so a saved property looks like one object
+wherever it appears).
+
+**Severity is now shape *and* colour, which is the accessibility point.** A finding leads
+with its icon in a tinted disc and the card carries a left edge in the same colour — but the
+`Deal risk` / `Check this` / `Note` pill stays. `severityColor` is red/amber/grey, and
+roughly one man in twelve cannot separate the first two; a triangle, a circle and an `i`
+differ by shape regardless. Colour, shape and words all say the same thing, so no reader
+depends on the channel they happen to lack.
+
+**One collision, caught by checking rather than by assuming.** `app-shell.tsx` already
+exports a dozen navigation glyphs; a `SearchIcon` was about to exist twice. Resolved by not
+adding a second one. The split is now by purpose — those name *destinations*, `icons.tsx`
+names *things inside a report* — and the rule is simply that no glyph exists in both files.
+Moving the nav icons across would touch every page for no visible change, so it was not
+bundled into a design pass. (Same pass: `/dashboard` gave `/analyse` and `/finder` the same
+magnifier, which made the primary action look like a second search box. `/analyse` is a
+document now.)
+
+**Images: deliberately not in the report, and this is a product rule, not a shortcut.** The
+report is about *the reader's own flat*, for which we have no photograph. A stock Hong Kong
+interior or a shot of a real tower placed beside their figures would read as a picture of
+that property — which is the same false claim this file already refuses in two other places:
+fabricated listings carry **no photo of an identifiable Hong Kong building**, and the hero
+photo was chosen partly because using an unrelated city's skyline as "atmosphere" would
+contradict the product's own promise never to invent a plausible-looking number. A fake
+photograph is that same lie in another medium. So the report gets **iconography**, which
+labels categories the product already names, and no photography. The places imagery is
+legitimate — the CC0 interiors on the fabricated finder listings, the credited CC BY hero —
+already have it.
+
+**Verified in a browser at 1280px and 390px** through a temporary harness that renders
+`VerdictView` against a real `computeVerdict` result, since the report is login-gated and
+the free tier's signup-email quota was exhausted by the previous session's test account —
+harness deleted afterwards. 23 icons render, no console errors, no horizontal overflow at
+either width. The screenshots also caught a layout flaw unrelated to icons: the two cost
+tables stretched to equal height, leaving an empty panel under the shorter one. `items-start`.
+
 ## Working conventions
 - Dates DD/MM/YYYY. Currency: **HKD** for Hong Kong, **VND** for Vietnam, **EUR** for
   France — always state which, never a bare number. Keep a single reporting currency

@@ -5,6 +5,8 @@ import type { Property } from "@veela/db";
 import { formatCompactMoney, formatPercent, gradeNetYield, standingColor } from "@veela/ui";
 import { useEffect, useState } from "react";
 
+import { BookmarkIcon, BuildingIcon } from "./icons";
+
 /**
  * The reader's own saved reports, on `/analyse`, above the blank form.
  *
@@ -112,7 +114,13 @@ export function SavedReports({ userId, configured, onCount }: Props): React.JSX.
 
   if (rows.length === 0) {
     return (
-      <section className="mt-6 max-w-prose rounded-panel border border-dashed border-line bg-surfaceMuted px-4 py-4 shadow-card">
+      <section className="mt-6 flex max-w-prose gap-3 rounded-panel border border-dashed border-line bg-surfaceMuted px-4 py-4 shadow-card">
+        {/* An empty state is the one place an icon earns real estate: there is no content to
+            look at, and a bare paragraph reads like an error rather than a starting point. */}
+        <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent/10 text-accent">
+          <BookmarkIcon className="h-4.5 w-4.5" />
+        </span>
+        <div>
         <h2 className="text-sm font-semibold">No saved reports yet</h2>
         <p className="mt-1.5 text-sm leading-relaxed text-muted">
           Fill in the figures below and open the full report — there&apos;s a{" "}
@@ -123,6 +131,7 @@ export function SavedReports({ userId, configured, onCount }: Props): React.JSX.
           </a>
           , with the figures it was computed from.
         </p>
+        </div>
       </section>
     );
   }
@@ -152,7 +161,11 @@ export function SavedReports({ userId, configured, onCount }: Props): React.JSX.
                 href={`/analyse?property=${property.id}`}
                 className="-mx-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 rounded-card px-2 py-2.5 hover:bg-accent/[0.04]"
               >
-                <span className="min-w-0">
+                <span className="flex min-w-0 items-center gap-2.5">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-card bg-accent/10 text-accent">
+                    <BuildingIcon className="h-4 w-4" />
+                  </span>
+                  <span className="min-w-0">
                   <span className="block truncate text-sm font-medium text-mist">
                     {property.label}
                   </span>
@@ -166,6 +179,7 @@ export function SavedReports({ userId, configured, onCount }: Props): React.JSX.
                     )}
                     {" · saved "}
                     {new Date(property.updatedAt).toLocaleDateString("en-GB")}
+                  </span>
                   </span>
                 </span>
                 <span className="tnum shrink-0 text-right">
