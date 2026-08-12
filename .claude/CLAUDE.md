@@ -1030,14 +1030,45 @@ would create a second schema to keep in step with OSM's tags.
 
 | Situation | Result | Measured |
 |---|---|---|
-| Fresh row (< 30 days) | Served from cache | **0.76s**, vs 23.8s cold — and a coordinate 50m away hits the same row |
-| Miss or expired | Fetch Overpass, store | 13.6s on a real refetch of an aged row |
+| Fresh row (< 30 days) | Served from cache | **0.76s** local / 2.6s production, vs 23.8s cold — and a coordinate 50m away hits the same row |
+| Miss or expired | Fetch Overpass, store | 4–10s typically in production |
 | Overpass down **and** an older row exists | That row, `stale: true` + its age | 200, `ageDays: 40` |
 | Overpass down, nothing cached | Honest 502 naming the cause | still an error, deliberately |
 
 The last two rows were verified by **temporarily pointing `OVERPASS_ENDPOINTS` at an
 unreachable host and rebuilding** — a forced outage, not an assumption that the fallback
 branch works because it typechecks. Endpoints restored and re-verified afterwards.
+
+**3. Mirrors were tried in strict order, so every request paid for the dead ones first.**
+This turned out to be the largest single cause, and it was found only by testing each
+mirror by hand: the mirror listed **first** accepted the connection and returned **zero
+bytes for 40s**, and a third failed TLS, so a healthy answer could not arrive before the
+attempt timeout expired. An earlier comment in the file asserted that mirror was
+"measurably the more reliable" — true where it had been measured, false elsewhere, and
+that mismatch *is* the argument: **which mirror is healthy differs by network, so no static
+ordering fixes this.** The ordering was the bug.
+
+Mirrors are now **hedged**: each is started 1.2s after the previous, the first valid answer
+wins, and the losers are aborted. Staggered rather than fired all at once on purpose —
+Overpass is donated infrastructure whose usage policy asks for moderate use, so a healthy
+first mirror is still normally the only one contacted, and the extra load lands only when a
+mirror is actually failing, which is the case we would have contacted all three for anyway.
+
+**A generous timeout is correct *because* of the cache — the two changes are not
+independent.** A first 14s budget was measured in production cutting off lookups that
+would have succeeded (3 of 5 cold points failed at exactly the budget, and the same
+coordinates returned real data seconds later). Raised to 35s overall and 20s server-side,
+inside the 60s `maxDuration`. Without a cache that would mean everyone waits; with one,
+**only the first visitor to an area ever pays it** and every later view is ~1s — so a slow
+success happens once, where a fast failure would happen to everyone until it stopped
+failing. Half a minute of waiting is also now *named in the panel* rather than shown as a
+bare "Checking…", which at that length reads as a hung page.
+
+**Measured cold-lookup success in production: 6 of 8, at 4–10s** (against 2 of 5 before the
+budget change, and 1 of 4 before hedging). **Not 8 of 8, and it will not be** — the
+remaining failures are Overpass genuinely refusing under load, and the same coordinates
+succeed on retry moments later. That residue is why the cache and the stale fallback, not
+the mirror list, are what make this section dependable.
 
 **The staleness is shown, not hidden.** `neighbourhood-panel.tsx` renders a caution banner
 ("Showing a saved copy… OpenStreetMap didn't answer just now") with the age in days.
