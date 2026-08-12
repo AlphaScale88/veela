@@ -32,7 +32,7 @@ import { HTTPException } from "hono/http-exception";
 import { stream as honoStream } from "hono/streaming";
 
 import { ADDRESS_LOOKUP_SOURCE, searchAddresses, type AddressMatch } from "./address-lookup.js";
-import { fetchNeighbourhood } from "./neighbourhood.js";
+import { fetchNeighbourhood, NEIGHBOURHOOD_PAYLOAD_VERSION } from "./neighbourhood.js";
 import { extractListing } from "./listing-extract.js";
 import { fetchSpaciousHtmlStealthily } from "./spacious-stealth-fetch.js";
 import { fetchHtmlSafely, FetchFailedError, UnsafeUrlError } from "./ssrf-safe-fetch.js";
@@ -778,13 +778,28 @@ export const api = new Hono<Env>()
       // without a cache. Same "zero configuration" rule as everywhere else.
     }
 
+    /**
+     * A row whose payload predates the current shape is **not usable**, however fresh it
+     * is. Rows cached before `items` existed carry only a capped `nearest` list, and
+     * serving one to a UI whose counts are clickable would show an empty drill-down beside
+     * a non-zero count — a number contradicting itself, which is worse than a slow fetch.
+     * Old-shape rows are therefore treated as a miss and overwritten on refetch, including
+     * for the stale-fallback path below.
+     */
+    const usable =
+      cached !== undefined &&
+      (cached.payload as { version?: number } | null)?.version === NEIGHBOURHOOD_PAYLOAD_VERSION;
+
     const ageDays =
       cached === undefined
         ? Infinity
         : (Date.now() - new Date(cached.fetched_at).getTime()) / 86_400_000;
 
-    if (cached !== undefined && ageDays < FRESH_DAYS) {
-      return c.json({ ...(cached.payload as object), cache: { hit: true, ageDays: Math.floor(ageDays) } });
+    if (usable && ageDays < FRESH_DAYS) {
+      return c.json({
+        ...(cached?.payload as object),
+        cache: { hit: true, ageDays: Math.floor(ageDays) },
+      });
     }
 
     try {
@@ -807,9 +822,11 @@ export const api = new Hono<Env>()
        * far more to a reader than a red sentence about a service they have never heard of
        * — and the previous behaviour showed that sentence to roughly half of them.
        */
-      if (cached !== undefined) {
+      // `usable`, not `cached`: an old-shape row cannot stand in for a fresh one here
+      // either, for the same reason it can't be served as a hit above.
+      if (usable) {
         return c.json({
-          ...(cached.payload as object),
+          ...(cached?.payload as object),
           cache: { hit: true, ageDays: Math.floor(ageDays), stale: true },
         });
       }

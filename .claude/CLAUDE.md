@@ -1080,6 +1080,56 @@ safer one — the whole reason the cache is defensible is that the reader is tol
 database — it is called from paths that have no `db` in scope, and it is the one module
 that must keep working without one, per this project's zero-configuration rule.
 
+## Every count in the neighbourhood report opens the list behind it (12/08/2026)
+
+Asked for a report on the neighbourhood data with **the counts clickable to get the actual
+list**. The counts already existed; what didn't was any way to find out *which* 39 shops.
+
+**The counts and the list used to come from different slices of the same data, and that was
+the real problem.** The API returned `nearest: all.slice(0, 18)` — a capped preview across
+*all* categories — beside counts computed from the full set. In Mong Kok that meant a "39
+shops" badge above a list that could only ever account for a handful of them. Capping was a
+deliberate decision ("this sits inside a report, not a directory listing") and it was right
+while the number was not clickable; **a count you can click has to be able to show what it
+counted**, so the endpoint now returns `items`: every match, nearest first.
+
+**The count is `items.filter(kind).length`.** Not a parallel number — the same "one
+function, not two guesses" rule the Property Finder's yield follows, applied to a count.
+That is the property that makes this safe to make clickable, and it is checked rather than
+asserted: a test compared all seven counts against the length of the list each one opens
+(29/29 schools, 39/39 shops, 31/31 premium, 38/38 green space, 28/28 building work …) and
+confirmed in a browser that the badge saying 39 opens a list of exactly 39 rows.
+
+**A cached payload needed a version, and this is the hazard that made it non-obvious.**
+Rows were already cached carrying only the old capped `nearest`. Serving one of those to the
+new UI would have shown **an empty list next to a non-zero count** — a number contradicting
+itself, the same "confidently wrong" shape as the `numberOfRooms` and zero-sentinel bugs in
+the importer. `NEIGHBOURHOOD_PAYLOAD_VERSION` is stored in the payload and a mismatch is
+treated as a **miss**, on the hit path *and* the stale-fallback path. **Stale data and a
+stale schema are not the same thing**: 30-day-old amenities are fine, a 30-day-old shape is
+a bug. The 23 old-shape rows were deleted rather than left to be refetched one by one, since
+they could never be served.
+
+**Verified in a real browser at both viewports**, by rendering the panel through a temporary
+harness page rather than creating throwaway accounts in the production auth database (the
+report itself is login-gated) — harness deleted afterwards. One list open at a time, the
+count keyboard-reachable and toggling `aria-expanded`, a zero count deliberately *not* a
+button (a control that opens an empty list is a dead end), the list scrolling in its own box
+so a 39-row category doesn't push the report off screen, and no horizontal overflow at
+390px.
+
+Two things the browser caught that reading the markup would not have: the two-line labels
+("Premium retail", "Under construction") pushed their numbers out of alignment with the rest
+of the row, and **"UNDER CONSTRUCTION" overflowed its own tile border** at seven columns.
+Hence `KIND_TILE_LABEL`, a shorter set used only in the tiles, and a `min-h` on the label so
+one-line and two-line labels reserve the same space. `RADIUS_M` is duplicated client-side to
+label the drill-down ("Shops within 600 m") — a knowing duplication of display copy, noted
+in the code, rather than pulling the compiled server bundle into a client component.
+
+**Left alone: the score reads 100/100 here.** Mong Kok is the point the targets were
+calibrated against (see the table in `neighbourhood-panel.tsx`), so saturating there is the
+intended top of the range, not a regression.
+
 ## Working conventions
 - Dates DD/MM/YYYY. Currency: **HKD** for Hong Kong, **VND** for Vietnam, **EUR** for
   France — always state which, never a bare number. Keep a single reporting currency

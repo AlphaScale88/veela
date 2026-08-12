@@ -10,9 +10,22 @@ import { useState } from "react";
  * feel broken to buy a section most readers will not scroll to. So this renders a button
  * and fetches when asked.
  *
- * Counts and a nearest-few list, not a directory: the counts answer "how well served is
- * this area", the list answers "by what". Distances are straight-line and say so —
- * walking distance would need a routing service and is a different promise.
+ * ## Every count opens the list behind it
+ *
+ * The counts used to sit beside a fixed preview of the nearest 18 places overall, which
+ * meant a reader could see "34 shops" and had no way to find out *which* 34 — and the two
+ * were computed from different slices of the same data, so a dense area showed a shop count
+ * the visible list could not account for.
+ *
+ * Each count is now a button that expands the full itemised list for that category, sorted
+ * nearest first. **The count is literally `items.filter(kind).length`, so the number and
+ * the list it opens cannot disagree** — the same "one function, not two guesses" rule the
+ * Property Finder's yield follows, applied to a count. That property is the whole reason
+ * this is safe to make clickable: a drill-down that showed fewer rows than its own badge
+ * would undermine every other number in the report.
+ *
+ * Distances are straight-line and say so — walking distance would need a routing service
+ * and is a different promise.
  */
 
 type AmenityKind =
@@ -33,13 +46,55 @@ interface Amenity {
 
 interface Data {
   readonly counts: Readonly<Record<AmenityKind, number>>;
-  readonly nearest: readonly Amenity[];
+  /** Every match, nearest first — not a capped preview, because the counts are clickable
+   *  and open exactly this list filtered by kind. See the header comment. */
+  readonly items: readonly Amenity[];
   readonly attribution: string;
   /** Present once the server started caching. `stale` means Overpass was unreachable and
    *  this is an older answer served deliberately rather than an error — which the reader
    *  is told, because silently presenting old data as current is the worse failure. */
   readonly cache?: { readonly hit: boolean; readonly ageDays: number; readonly stale?: boolean };
 }
+
+/**
+ * The search radius per category, mirrored from `RADIUS` in `packages/api/src/neighbourhood.ts`
+ * so the drill-down can say *"Schools within 800 m"* rather than leaving the reader to
+ * assume one distance applies to everything — it doesn't; a station at 800m is still near,
+ * a supermarket at 800m is not the local shop.
+ *
+ * **A deliberate duplication, with a cost worth naming**: the API package is compiled to
+ * `dist/` and this is display copy, not logic, so importing it would couple a client
+ * component to the server bundle to render seven numbers. The risk is that a radius changes
+ * server-side and this label keeps quoting the old one — so if `RADIUS` is edited, edit
+ * this too.
+ */
+const RADIUS_M: Readonly<Record<AmenityKind, number>> = {
+  school: 800,
+  transport: 900,
+  shop: 600,
+  health: 800,
+  park: 700,
+  premium: 900,
+  construction: 900,
+};
+
+/**
+ * Shorter labels for the seven tiles specifically.
+ *
+ * Not a style preference — at seven columns a tile is ~84px wide, and "UNDER CONSTRUCTION"
+ * set in tracked 10px mono overflowed its own border (measured in a browser, not guessed).
+ * The full `KIND_LABEL` is still used everywhere there is room for it: the score formula and
+ * the drill-down heading. Every word here wraps to at most two short lines.
+ */
+const KIND_TILE_LABEL: Readonly<Record<AmenityKind, string>> = {
+  school: "Schools",
+  transport: "Transport",
+  shop: "Shops",
+  health: "Health",
+  park: "Green space",
+  premium: "Premium retail",
+  construction: "Building work",
+};
 
 const KIND_LABEL: Readonly<Record<AmenityKind, string>> = {
   school: "Schools",
@@ -141,10 +196,24 @@ export function NeighbourhoodPanel({ latitude, longitude, label }: Props): React
   const [data, setData] = useState<Data | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Which category's list is expanded. One at a time — seven simultaneously open lists is
+   *  a directory, and this is a report. */
+  const [open, setOpen] = useState<AmenityKind | null>(null);
+
+  /**
+   * The list behind the clicked count, derived from the same array the counts summarise.
+   * **Not a second fetch and not a second slice** — if this filtered a different source
+   * than the tile's number came from, the drill-down could disagree with the badge that
+   * opened it, which is the failure this feature exists to avoid.
+   */
+  const openItems =
+    open === null || data === null ? [] : data.items.filter((a) => a.kind === open);
 
   async function load(): Promise<void> {
     setPending(true);
     setError(null);
+    // A list expanded against the previous point must not survive into a new one.
+    setOpen(null);
     try {
       const res = await fetch(`/api/neighbourhood?lat=${latitude}&lng=${longitude}`);
       const body = await res.text();
@@ -241,30 +310,144 @@ export function NeighbourhoodPanel({ latitude, longitude, label }: Props): React
             );
           })()}
 
+          {/* Each tile is a real <button> with aria-expanded, not a clickable div: this is a
+              disclosure control, and a keyboard or screen-reader user has to be able to
+              reach it and be told what it does. `aria-controls` points at the panel it
+              opens. A count of zero is deliberately not clickable — there is nothing to
+              show, and a button that opens an empty list is a dead end dressed as a
+              control. */}
           <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
-            {KIND_ORDER.map((k) => (
-              <div key={k} className="rounded-card border border-line bg-surfaceMuted px-3 py-2.5">
-                <dt className="font-mono text-[10px] uppercase tracking-[0.08em] text-muted">
-                  {KIND_LABEL[k]}
-                </dt>
-                <dd className="tnum mt-1 text-lg font-semibold text-mist">{data.counts[k]}</dd>
-              </div>
-            ))}
+            {KIND_ORDER.map((k) => {
+              const count = data.counts[k];
+              const isOpen = open === k;
+              if (count === 0) {
+                return (
+                  <div
+                    key={k}
+                    className="h-full rounded-card border border-line bg-surfaceMuted px-3 py-2.5 opacity-60"
+                  >
+                    {/* `min-h` on the label, not the tile: a one-line and a two-line label
+                        must reserve the same space, or the numbers below them sit at
+                        different heights across the row. */}
+                    <dt className="min-h-[2.4em] font-mono text-[10px] uppercase leading-tight tracking-[0.06em] text-muted">
+                      {KIND_TILE_LABEL[k]}
+                    </dt>
+                    <dd className="tnum mt-1 text-lg font-semibold text-muted">0</dd>
+                    <span className="mt-0.5 block text-[10px] text-muted">None nearby</span>
+                  </div>
+                );
+              }
+              return (
+                <div key={k} className="h-full">
+                  <button
+                    type="button"
+                    onClick={() => setOpen(isOpen ? null : k)}
+                    aria-expanded={isOpen}
+                    aria-controls={`nb-list-${k}`}
+                    className={`h-full w-full rounded-card border px-3 py-2.5 text-left transition-colors ${
+                      isOpen
+                        ? "border-accent bg-accent/5"
+                        : "border-line bg-surfaceMuted hover:border-accent/40 hover:bg-accent/[0.03]"
+                    }`}
+                  >
+                    <dt className="min-h-[2.4em] font-mono text-[10px] uppercase leading-tight tracking-[0.06em] text-muted">
+                      {KIND_TILE_LABEL[k]}
+                    </dt>
+                    <dd className="tnum mt-1 flex items-baseline gap-1.5 text-lg font-semibold text-mist">
+                      {count}
+                      <span
+                        aria-hidden="true"
+                        className={`text-[10px] font-normal text-muted transition-transform ${
+                          isOpen ? "rotate-180" : ""
+                        }`}
+                      >
+                        ▾
+                      </span>
+                    </dd>
+                    <span className="mt-0.5 block text-[10px] text-muted">
+                      {isOpen ? "Hide the list" : "See the list"}
+                    </span>
+                  </button>
+                </div>
+              );
+            })}
           </dl>
 
-          <ul className="mt-4 divide-y divide-line">
-            {data.nearest.map((a) => (
-              <li key={`${a.kind}-${a.name}`} className="flex items-baseline justify-between gap-3 py-2">
-                <span className="min-w-0">
-                  <span className="text-sm text-mist">{a.name}</span>
-                  <span className="ml-2 font-mono text-[10px] uppercase tracking-[0.06em] text-muted">
-                    {a.subtype.replace(/_/g, " ")}
+          {open !== null && (
+            <div
+              id={`nb-list-${open}`}
+              className="mt-4 rounded-panel border border-line bg-surfaceMuted px-4 py-3"
+            >
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <h4 className="text-sm font-semibold text-mist">
+                  {KIND_LABEL[open]} within {RADIUS_M[open]} m
+                  <span className="ml-2 font-normal text-muted">
+                    ({openItems.length} {openItems.length === 1 ? "place" : "places"})
                   </span>
-                </span>
-                <span className="tnum shrink-0 font-mono text-xs text-muted">{a.metres} m</span>
-              </li>
-            ))}
-          </ul>
+                </h4>
+                <button
+                  type="button"
+                  onClick={() => setOpen(null)}
+                  className="font-mono text-[10px] uppercase tracking-[0.08em] text-muted underline hover:text-mist"
+                >
+                  Close
+                </button>
+              </div>
+
+              {/* Long in a dense district — 30+ shops is normal on Hong Kong Island — so it
+                  scrolls in its own box rather than pushing the rest of the report off
+                  screen. */}
+              <ol className="mt-2 max-h-80 divide-y divide-line overflow-y-auto">
+                {openItems.map((a, i) => (
+                  <li
+                    key={`${a.kind}-${a.name}-${a.metres}`}
+                    className="flex items-baseline justify-between gap-3 py-2"
+                  >
+                    <span className="flex min-w-0 items-baseline gap-2">
+                      <span className="tnum shrink-0 font-mono text-[10px] text-muted">
+                        {i + 1}.
+                      </span>
+                      <span className="min-w-0">
+                        <span className="text-sm text-mist">{a.name}</span>
+                        <span className="ml-2 font-mono text-[10px] uppercase tracking-[0.06em] text-muted">
+                          {a.subtype.replace(/_/g, " ")}
+                        </span>
+                      </span>
+                    </span>
+                    <span className="tnum shrink-0 font-mono text-xs text-muted">
+                      {a.metres} m
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          )}
+
+          {open === null && (
+            <>
+              <p className="mt-4 font-mono text-[10px] uppercase tracking-[0.08em] text-muted">
+                Closest ten, all categories
+              </p>
+              <ul className="mt-1 divide-y divide-line">
+                {data.items.slice(0, 10).map((a) => (
+                  <li
+                    key={`${a.kind}-${a.name}-${a.metres}`}
+                    className="flex items-baseline justify-between gap-3 py-2"
+                  >
+                    <span className="min-w-0">
+                      <span className="text-sm text-mist">{a.name}</span>
+                      <span className="ml-2 font-mono text-[10px] uppercase tracking-[0.06em] text-muted">
+                        {a.subtype.replace(/_/g, " ")}
+                      </span>
+                    </span>
+                    <span className="tnum shrink-0 font-mono text-xs text-muted">
+                      {a.metres} m
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
 
           {data.cache?.stale === true && (
             <p className="mt-3 rounded-card border border-caution/40 bg-caution/10 px-3 py-2 text-[11px] leading-relaxed text-muted">

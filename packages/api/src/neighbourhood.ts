@@ -174,11 +174,41 @@ export interface Amenity {
   readonly metres: number;
 }
 
+/**
+ * Bumped whenever the *shape* of a cached payload changes, so a stored row written by an
+ * older build is treated as a miss rather than served with fields the reader expects and
+ * the row does not have.
+ *
+ * This exists because of a real hazard introduced the moment caching landed: `items` was
+ * added after rows had already been cached carrying only a capped `nearest` list. Without
+ * a version, clicking a count on one of those rows would have shown an **empty list next
+ * to a non-zero number** — the exact "confidently wrong" failure this codebase keeps
+ * finding (the `numberOfRooms` bug, the zero-sentinel bug). A stale *shape* is not like
+ * stale *data*: 30-day-old amenities are fine, a 30-day-old schema is a bug.
+ *
+ * 2 — `items` (every match) replaced `nearest` (first 18).
+ */
+export const NEIGHBOURHOOD_PAYLOAD_VERSION = 2;
+
 export interface Neighbourhood {
+  readonly version: number;
   readonly latitude: number;
   readonly longitude: number;
   readonly counts: Readonly<Record<AmenityKind, number>>;
-  readonly nearest: readonly Amenity[];
+  /**
+   * **Every** match, sorted nearest first — not a capped preview.
+   *
+   * It used to be `nearest: all.slice(0, 18)`, on the reasoning that this sits inside a
+   * report rather than being a directory listing. That reasoning survives in the *UI*,
+   * which still shows a short preview by default — but the counts are now clickable, and a
+   * count you can click has to be able to show what it counted. Sending 18 and displaying
+   * "34 shops" would mean the drill-down silently disagreed with the number above it.
+   *
+   * Bounded in practice by the search radii (600–900m), which is what makes returning
+   * everything safe: measured payloads run to a few hundred items at the very densest Hong
+   * Kong points, single-digit kilobytes of JSON.
+   */
+  readonly items: readonly Amenity[];
   readonly attribution: string;
 }
 
@@ -428,12 +458,13 @@ export async function fetchNeighbourhood(
   all.sort((a, b) => a.metres - b.metres);
 
   return {
+    version: NEIGHBOURHOOD_PAYLOAD_VERSION,
     latitude,
     longitude,
     counts,
-    // Capped: this sits inside a report, not a directory listing. The counts carry the
-    // "how well served is this area" signal; the list answers "by what, exactly".
-    nearest: all.slice(0, 18),
+    // Everything, nearest first — the counts above are `items` grouped by kind, so the two
+    // cannot disagree. Capping here is what would make a clickable count lie.
+    items: all,
     attribution: OSM_ATTRIBUTION,
   };
 }
