@@ -6,24 +6,60 @@ import { useEffect, useState } from "react";
 
 import { AppShell } from "../../components/app-shell";
 import { useAuth } from "../../components/auth-provider";
+import {
+  SettingRow,
+  SettingsFooter,
+  SettingsSection,
+  Tabs,
+  Toggle,
+} from "../../components/settings-ui";
 
 /**
- * Settings. Was a two-field page (display name, aggregate consent) called "Manage"; it is
- * now the one place an account is administered, which is where a reader looks for these
- * things by convention.
+ * Settings, laid out to a supplied reference design: tabs across the top, collapsible
+ * sections with tinted headers, controls pushed right between Off/On labels, and a footer
+ * bar with a secondary action left and Save right.
  *
- * **Sign out lives here, not in the sidebar.** It was in the sidebar footer, one stray
- * click away from every page — a destructive-ish action sitting permanently beside the
- * navigation. Asked to move it inside settings, which is also where it belongs: the
- * sidebar now shows who you are and links here.
+ * **What was deliberately not copied from that reference.** Its General tab is six email
+ * preference toggles — property alerts, marketing, blog, newsletter, product updates. This
+ * product has no email pipeline at all: `/portfolio/alerts` already says outright that
+ * tracking is real and alerting isn't wired up, and the shell's own rule is that every
+ * control does something or it isn't there. Six switches that persist a preference nothing
+ * reads would be exactly the dead chrome that rule exists to prevent. The Notifications
+ * section says so instead, and links to the page where the real half lives.
  *
- * Each section saves independently. One page-wide Save would mean a password change and a
- * consent toggle share a success state, and a failure in either would leave the reader
- * unsure which half landed.
+ * The reference's second tab, "Data Management", turned out to be the right home for work
+ * that already existed and had nowhere obvious to sit: the PDPO aggregate-data consent and
+ * the export/delete route promised in `/privacy`.
  */
+
+const TABS = [
+  { id: "general", label: "General Settings" },
+  { id: "data", label: "Data Management" },
+] as const;
+
+type TabId = (typeof TABS)[number]["id"];
+
 export default function SettingsPage(): React.JSX.Element {
   const { user, loading, configured, signOut, updateEmail, updatePassword, hasPasswordIdentity } =
     useAuth();
+  const [tab, setTab] = useState<TabId>("general");
+
+  /* `?tab=data` so `/privacy` and the consent prompt can link straight to the section they
+     are talking about, rather than to a page where the reader has to hunt for it. */
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get("tab");
+    if (requested === "data" || requested === "general") setTab(requested);
+  }, []);
+
+  function selectTab(id: string): void {
+    const next = id as TabId;
+    setTab(next);
+    // Keeps the URL shareable without a navigation — replaceState, so Back still leaves
+    // the page rather than cycling tabs.
+    const url = new URL(window.location.href);
+    url.searchParams.set("tab", next);
+    window.history.replaceState(null, "", url);
+  }
 
   if (!configured) {
     return (
@@ -60,69 +96,39 @@ export default function SettingsPage(): React.JSX.Element {
 
   return (
     <AppShell breadcrumb="Settings">
-      <header className="max-w-prose">
+      <header>
         <h1 className="font-display text-[26px] font-semibold tracking-[-0.03em] text-mist">
           Settings
         </h1>
-        <p className="mt-3 text-sm leading-relaxed text-muted">
-          Signed in as <span className="font-medium text-mist">{user.email}</span>.
+        <p className="mt-1.5 text-sm text-muted">
+          Signed in as <span className="font-medium text-mist">{user.email}</span>
         </p>
       </header>
 
-      <div className="mt-6 max-w-lg space-y-5">
-        <ProfileSection />
-        <EmailSection currentEmail={user.email ?? ""} onSave={updateEmail} />
-        {hasPasswordIdentity ? (
-          <PasswordSection onSave={updatePassword} />
-        ) : (
-          <Section title="Password">
-            <p className="text-sm leading-relaxed text-muted">
-              This account signs in with Google, so it has no Veela password to change.
-              Manage it in your Google account instead.
-            </p>
-          </Section>
-        )}
-        <DataSection />
+      <div className="mt-5">
+        <Tabs tabs={TABS} active={tab} onChange={selectTab} />
+      </div>
 
-        <Section title="Sign out">
-          <p className="text-sm leading-relaxed text-muted">
-            Ends this session on this device. Your saved properties stay where they are.
-          </p>
-          <button
-            type="button"
-            onClick={() => void signOut()}
-            className="btn-secondary mt-3 !px-5 !py-2.5 !text-sm"
-          >
-            Sign out
-          </button>
-        </Section>
+      <div className="mt-6 max-w-3xl space-y-5">
+        {tab === "general" ? (
+          <>
+            <ProfileSection />
+            <EmailSection currentEmail={user.email ?? ""} onSave={updateEmail} />
+            <PasswordSection onSave={updatePassword} available={hasPasswordIdentity} />
+            <NotificationsSection />
+            <SessionSection onSignOut={() => void signOut()} />
+          </>
+        ) : (
+          <DataManagementTab />
+        )}
       </div>
     </AppShell>
   );
 }
 
-function Section({
-  title,
-  children,
-}: {
-  readonly title: string;
-  readonly children: React.ReactNode;
-}): React.JSX.Element {
-  return (
-    <section className="card">
-      <h2 className="text-[15px] font-semibold">{title}</h2>
-      <div className="mt-3">{children}</div>
-    </section>
-  );
-}
-
-/** Display name and the aggregate-data consent — the two fields this page already had,
- *  unchanged in behaviour, now just one section among several. */
 function ProfileSection(): React.JSX.Element {
   const { user } = useAuth();
-  const [profile, setProfile] = useState<Profile | null>(null);
   const [displayName, setDisplayName] = useState("");
-  const [aggregateConsent, setAggregateConsent] = useState(false);
   const [state, setState] = useState<"idle" | "saving" | "saved" | "error">("idle");
 
   useEffect(() => {
@@ -130,10 +136,7 @@ function ProfileSection(): React.JSX.Element {
     fetch("/api/profile")
       .then((res) => (res.ok ? res.json() : null))
       .then((json: { profile: Profile } | null) => {
-        if (json === null) return;
-        setProfile(json.profile);
-        setDisplayName(json.profile.displayName ?? "");
-        setAggregateConsent(json.profile.aggregateConsent);
+        if (json !== null) setDisplayName(json.profile.displayName ?? "");
       })
       .catch(() => undefined);
   }, [user]);
@@ -144,7 +147,7 @@ function ProfileSection(): React.JSX.Element {
       const res = await fetch("/api/profile", {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ displayName: displayName.trim() || null, aggregateConsent }),
+        body: JSON.stringify({ displayName: displayName.trim() || null }),
       });
       setState(res.ok ? "saved" : "error");
     } catch {
@@ -153,41 +156,27 @@ function ProfileSection(): React.JSX.Element {
   }
 
   return (
-    <Section title="Profile">
-      <label className="block">
-        <span className="text-xs text-muted">Display name</span>
+    <SettingsSection title="Profile">
+      <SettingRow label="Display name" hint="Optional. Only you see it for now.">
         <input
           value={displayName}
           onChange={(e) => setDisplayName(e.target.value)}
           placeholder="Optional"
-          className="mt-1 w-full rounded-card border border-line bg-surfaceMuted px-3 py-2.5 text-[15px] outline-none focus:border-accent focus:bg-surface"
+          className="w-56 rounded-card border border-line bg-surfaceMuted px-3 py-2 text-sm outline-none focus:border-accent focus:bg-surface"
         />
-      </label>
-
-      <label className="mt-4 flex cursor-pointer items-start gap-2.5 rounded-card bg-surfaceMuted px-3.5 py-3 text-sm">
-        <input
-          type="checkbox"
-          checked={aggregateConsent}
-          onChange={(e) => setAggregateConsent(e.target.checked)}
-          className="mt-0.5 size-4 shrink-0 accent-accent"
-        />
-        <span>
-          Let the properties I save feed Veela&apos;s aggregate market data
-          <span className="mt-0.5 block text-xs leading-snug text-muted">
-            Off by default.{" "}
-            {profile?.aggregateConsentAt !== null && profile?.aggregateConsentAt !== undefined
-              ? `Last granted ${new Date(profile.aggregateConsentAt).toLocaleDateString("en-HK")}.`
-              : "Never granted."}{" "}
-            <Link href="/privacy" className="text-accent hover:underline">
-              What this means
-            </Link>
-            .
-          </span>
-        </span>
-      </label>
-
-      <SaveRow state={state} onSave={() => void save()} />
-    </Section>
+      </SettingRow>
+      <SettingsFooter>
+        <StateNote state={state} savedLabel="Saved." />
+        <button
+          type="button"
+          onClick={() => void save()}
+          disabled={state === "saving"}
+          className="btn-primary !px-6 !py-2.5 !text-sm disabled:pointer-events-none disabled:opacity-50"
+        >
+          {state === "saving" ? "Saving…" : "Save"}
+        </button>
+      </SettingsFooter>
+    </SettingsSection>
   );
 }
 
@@ -201,7 +190,6 @@ function EmailSection({
   const [email, setEmail] = useState(currentEmail);
   const [state, setState] = useState<"idle" | "saving" | "sent" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
-
   const changed = email.trim() !== "" && email.trim() !== currentEmail;
 
   async function save(): Promise<void> {
@@ -216,47 +204,39 @@ function EmailSection({
   }
 
   return (
-    <Section title="Email">
-      <label className="block">
-        <span className="text-xs text-muted">Address you sign in with</span>
+    <SettingsSection title="Email">
+      <SettingRow
+        label="Address you sign in with"
+        hint="A confirmation link goes to the new address — nothing changes until you open it."
+      >
         <input
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           autoComplete="email"
-          className="mt-1 w-full rounded-card border border-line bg-surfaceMuted px-3 py-2.5 text-[15px] outline-none focus:border-accent focus:bg-surface"
+          className="w-64 rounded-card border border-line bg-surfaceMuted px-3 py-2 text-sm outline-none focus:border-accent focus:bg-surface"
         />
-      </label>
-
-      {/* The important part: nothing has changed yet. Supabase mails a confirmation link
-          to the new address and the change lands only when it is clicked, so reporting
-          "saved" here would be a lie the user finds out about at their next login. */}
-      {state === "sent" ? (
-        <p className="mt-3 text-sm leading-relaxed text-positive">
-          Confirmation sent to <strong>{email.trim()}</strong>. Your address changes when
-          you open that link — until then, keep signing in with {currentEmail}.
-        </p>
-      ) : (
-        <>
-          {error !== null && (
-            <p role="alert" className="mt-3 text-xs text-negative">
-              {error}
-            </p>
-          )}
-          <button
-            type="button"
-            onClick={() => void save()}
-            disabled={!changed || state === "saving"}
-            className="btn-secondary mt-3 !px-5 !py-2.5 !text-sm disabled:pointer-events-none disabled:opacity-50"
-          >
-            {state === "saving" ? "Sending…" : "Change email"}
-          </button>
-          <p className="mt-2 text-xs text-muted">
-            We send a confirmation link to the new address before anything changes.
-          </p>
-        </>
-      )}
-    </Section>
+      </SettingRow>
+      <SettingsFooter>
+        {state === "sent" ? (
+          <span className="text-sm text-positive">
+            Link sent to {email.trim()} — keep using {currentEmail} until you open it.
+          </span>
+        ) : (
+          <>
+            {error !== null && <span className="text-sm text-negative">{error}</span>}
+            <button
+              type="button"
+              onClick={() => void save()}
+              disabled={!changed || state === "saving"}
+              className="btn-primary !px-6 !py-2.5 !text-sm disabled:pointer-events-none disabled:opacity-50"
+            >
+              {state === "saving" ? "Sending…" : "Save"}
+            </button>
+          </>
+        )}
+      </SettingsFooter>
+    </SettingsSection>
   );
 }
 
@@ -264,17 +244,31 @@ const MIN_PASSWORD = 8;
 
 function PasswordSection({
   onSave,
+  available,
 }: {
   readonly onSave: (password: string) => Promise<string | null>;
+  readonly available: boolean;
 }): React.JSX.Element {
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [state, setState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
 
+  if (!available) {
+    return (
+      <SettingsSection title="Password">
+        <SettingRow label="This account signs in with Google">
+          <span className="text-xs text-muted">Managed by Google</span>
+        </SettingRow>
+        <div className="pb-4 text-xs leading-relaxed text-muted">
+          There is no Veela password on this account, so there is nothing to change here.
+        </div>
+      </SettingsSection>
+    );
+  }
+
   const longEnough = password.length >= MIN_PASSWORD;
   const matches = confirm === password;
-  const canSave = longEnough && matches && state !== "saving";
 
   async function save(): Promise<void> {
     setState("saving");
@@ -291,100 +285,206 @@ function PasswordSection({
   }
 
   return (
-    <Section title="Password">
-      <label className="block">
-        <span className="text-xs text-muted">New password</span>
+    <SettingsSection title="Password">
+      <SettingRow label="New password" hint={`${MIN_PASSWORD} characters minimum.`}>
         <input
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           autoComplete="new-password"
-          className="mt-1 w-full rounded-card border border-line bg-surfaceMuted px-3 py-2.5 text-[15px] outline-none focus:border-accent focus:bg-surface"
+          className="w-56 rounded-card border border-line bg-surfaceMuted px-3 py-2 text-sm outline-none focus:border-accent focus:bg-surface"
         />
-      </label>
-      <label className="mt-3 block">
-        <span className="text-xs text-muted">Repeat it</span>
+      </SettingRow>
+      <SettingRow label="Repeat it">
         <input
           type="password"
           value={confirm}
           onChange={(e) => setConfirm(e.target.value)}
           autoComplete="new-password"
-          className="mt-1 w-full rounded-card border border-line bg-surfaceMuted px-3 py-2.5 text-[15px] outline-none focus:border-accent focus:bg-surface"
+          className="w-56 rounded-card border border-line bg-surfaceMuted px-3 py-2 text-sm outline-none focus:border-accent focus:bg-surface"
         />
-      </label>
-
-      {/* Say which rule is unmet rather than disabling the button silently. */}
-      {password.length > 0 && !longEnough && (
-        <p className="mt-2 text-xs text-negative">
-          {MIN_PASSWORD - password.length} more character
-          {MIN_PASSWORD - password.length === 1 ? "" : "s"} needed.
-        </p>
-      )}
-      {confirm.length > 0 && !matches && (
-        <p className="mt-2 text-xs text-negative">The two don&apos;t match.</p>
-      )}
-      {error !== null && (
-        <p role="alert" className="mt-2 text-xs text-negative">
-          {error}
-        </p>
-      )}
-
-      <button
-        type="button"
-        onClick={() => void save()}
-        disabled={!canSave}
-        className="btn-secondary mt-3 !px-5 !py-2.5 !text-sm disabled:pointer-events-none disabled:opacity-50"
+      </SettingRow>
+      <SettingsFooter
+        secondary={
+          /* Say which rule is unmet rather than only disabling the button. */
+          password.length > 0 && !longEnough ? (
+            <span className="text-xs text-negative">
+              {MIN_PASSWORD - password.length} more character
+              {MIN_PASSWORD - password.length === 1 ? "" : "s"} needed.
+            </span>
+          ) : confirm.length > 0 && !matches ? (
+            <span className="text-xs text-negative">The two don&apos;t match.</span>
+          ) : error !== null ? (
+            <span className="text-xs text-negative">{error}</span>
+          ) : state === "saved" ? (
+            <span className="text-xs text-positive">
+              Changed. Other devices will need the new one.
+            </span>
+          ) : null
+        }
       >
-        {state === "saving" ? "Changing…" : "Change password"}
-      </button>
-      {state === "saved" && (
-        <p className="mt-2 text-sm text-positive">
-          Password changed. You stay signed in here; other devices will need the new one.
-        </p>
-      )}
-    </Section>
+        <button
+          type="button"
+          onClick={() => void save()}
+          disabled={!longEnough || !matches || state === "saving"}
+          className="btn-primary !px-6 !py-2.5 !text-sm disabled:pointer-events-none disabled:opacity-50"
+        >
+          {state === "saving" ? "Changing…" : "Save"}
+        </button>
+      </SettingsFooter>
+    </SettingsSection>
   );
 }
 
 /**
- * Export and deletion. Neither is self-serve yet, and `/privacy` already promises a
- * by-hand route under DPP6 — so this states the real position rather than showing a button
- * that does nothing.
+ * Where the reference had six email toggles. They are not here because nothing sends
+ * email: there is no notification pipeline, and a preference nothing reads is a control
+ * that lies about what it does.
  */
-function DataSection(): React.JSX.Element {
+function NotificationsSection(): React.JSX.Element {
   return (
-    <Section title="Your data">
-      <p className="text-sm leading-relaxed text-muted">
-        Exporting everything we hold, or deleting your account entirely, is handled by hand
-        for now — there&apos;s no self-serve button yet.{" "}
-        <Link href="/privacy" className="text-accent hover:underline">
-          How to ask, and what we hold
-        </Link>
-        .
-      </p>
-    </Section>
+    <SettingsSection title="Notifications">
+      <SettingRow
+        label="Email alerts"
+        hint="Not available yet — Veela sends no email beyond sign-in and confirmation links."
+      >
+        <Toggle checked={false} onChange={() => undefined} disabled label="Email alerts" />
+      </SettingRow>
+      <div className="pb-4 text-xs leading-relaxed text-muted">
+        Marking a property as monitored already works and is stored —{" "}
+        <Link href="/portfolio/alerts" className="text-accent hover:underline">
+          Property Alerts
+        </Link>{" "}
+        — but nothing is delivered from it. When sending exists, the preferences will appear
+        here rather than being switched on silently.
+      </div>
+    </SettingsSection>
   );
 }
 
-function SaveRow({
+function SessionSection({ onSignOut }: { readonly onSignOut: () => void }): React.JSX.Element {
+  return (
+    <SettingsSection title="Session">
+      <SettingRow
+        label="Sign out of this device"
+        hint="Your saved properties stay exactly where they are."
+      >
+        <button type="button" onClick={onSignOut} className="btn-secondary !px-5 !py-2 !text-sm">
+          Sign out
+        </button>
+      </SettingRow>
+    </SettingsSection>
+  );
+}
+
+/** The reference's second tab, filled with the data questions that genuinely exist here. */
+function DataManagementTab(): React.JSX.Element {
+  const { user } = useAuth();
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [aggregateConsent, setAggregateConsent] = useState(false);
+  const [state, setState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+
+  useEffect(() => {
+    if (user === null) return;
+    fetch("/api/profile")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json: { profile: Profile } | null) => {
+        if (json === null) return;
+        setProfile(json.profile);
+        setAggregateConsent(json.profile.aggregateConsent);
+      })
+      .catch(() => undefined);
+  }, [user]);
+
+  async function save(consent: boolean): Promise<void> {
+    setState("saving");
+    try {
+      const res = await fetch("/api/profile", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ aggregateConsent: consent }),
+      });
+      setState(res.ok ? "saved" : "error");
+    } catch {
+      setState("error");
+    }
+  }
+
+  const granted =
+    profile?.aggregateConsentAt !== null && profile?.aggregateConsentAt !== undefined
+      ? `Last granted ${new Date(profile.aggregateConsentAt).toLocaleDateString("en-HK")}.`
+      : "Never granted.";
+
+  return (
+    <>
+      <SettingsSection title="How your data is used">
+        <SettingRow
+          label="Let the properties I save feed Veela's aggregate market data"
+          hint={
+            <>
+              Off by default. {granted}{" "}
+              <Link href="/privacy" className="text-accent hover:underline">
+                What this means
+              </Link>
+              .
+            </>
+          }
+        >
+          <Toggle
+            checked={aggregateConsent}
+            onChange={setAggregateConsent}
+            label="Aggregate market data consent"
+          />
+        </SettingRow>
+        <SettingsFooter
+          secondary={
+            aggregateConsent ? null : (
+              <span className="text-xs text-muted">Nothing you save is used in aggregates.</span>
+            )
+          }
+        >
+          <StateNote state={state} savedLabel="Saved." />
+          <button
+            type="button"
+            onClick={() => void save(aggregateConsent)}
+            disabled={state === "saving"}
+            className="btn-primary !px-6 !py-2.5 !text-sm disabled:pointer-events-none disabled:opacity-50"
+          >
+            {state === "saving" ? "Saving…" : "Save"}
+          </button>
+        </SettingsFooter>
+      </SettingsSection>
+
+      <SettingsSection title="Export and deletion">
+        <SettingRow
+          label="A copy of everything we hold, or delete the account"
+          hint="Handled by hand for now — there is no self-serve button yet."
+        >
+          <Link href="/privacy" className="btn-secondary !px-5 !py-2 !text-sm">
+            How to ask
+          </Link>
+        </SettingRow>
+        <div className="pb-4 text-xs leading-relaxed text-muted">
+          Under the PDPO you can see and correct what we hold about you. What that is, and
+          who it is shared with, is listed on the{" "}
+          <Link href="/privacy" className="text-accent hover:underline">
+            privacy page
+          </Link>
+          .
+        </div>
+      </SettingsSection>
+    </>
+  );
+}
+
+function StateNote({
   state,
-  onSave,
+  savedLabel,
 }: {
   readonly state: "idle" | "saving" | "saved" | "error";
-  readonly onSave: () => void;
-}): React.JSX.Element {
-  return (
-    <div className="mt-4 flex items-center gap-3">
-      <button
-        type="button"
-        onClick={onSave}
-        disabled={state === "saving"}
-        className="btn-secondary !px-5 !py-2.5 !text-sm disabled:pointer-events-none disabled:opacity-50"
-      >
-        {state === "saving" ? "Saving…" : "Save"}
-      </button>
-      {state === "saved" && <span className="text-sm text-positive">Saved.</span>}
-      {state === "error" && <span className="text-sm text-negative">Something went wrong.</span>}
-    </div>
-  );
+  readonly savedLabel: string;
+}): React.JSX.Element | null {
+  if (state === "saved") return <span className="text-sm text-positive">{savedLabel}</span>;
+  if (state === "error") return <span className="text-sm text-negative">Something went wrong.</span>;
+  return null;
 }
