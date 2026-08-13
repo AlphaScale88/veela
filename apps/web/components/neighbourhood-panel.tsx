@@ -12,6 +12,7 @@ import {
   TrainIcon,
   TreeIcon,
 } from "./icons";
+import { KIND_PIN, NeighbourhoodMap } from "./neighbourhood-map";
 
 /**
  * What's within walking distance — schools, stations, shops, health, green space.
@@ -53,6 +54,12 @@ interface Amenity {
   readonly name: string;
   readonly subtype: string;
   readonly metres: number;
+  /** Payload v3, and **required rather than optional**: the server's version check turns a
+   *  pre-v3 cached row into a miss, so a response carrying `items` without coordinates
+   *  cannot reach this component. Typing them optional would mean writing fallbacks for a
+   *  state that cannot occur, and hiding the guarantee that makes the map safe. */
+  readonly latitude: number;
+  readonly longitude: number;
 }
 
 interface Data {
@@ -110,7 +117,12 @@ const KIND_TILE_LABEL: Readonly<Record<AmenityKind, string>> = {
 /** One mark per category, so the seven tiles are told apart at a glance rather than by
  *  reading seven labels. Shown *with* the label, never instead of it — a pictogram for
  *  "premium retail" that a reader has to decode is worse than the words. */
-const KIND_ICON: Readonly<Record<AmenityKind, (p: { readonly className?: string }) => React.JSX.Element>> = {
+const KIND_ICON: Readonly<
+  Record<
+    AmenityKind,
+    (p: { readonly className?: string; readonly style?: React.CSSProperties }) => React.JSX.Element
+  >
+> = {
   school: SchoolIcon,
   transport: TrainIcon,
   shop: ShopIcon,
@@ -232,6 +244,22 @@ export function NeighbourhoodPanel({ latitude, longitude, label }: Props): React
    */
   const openItems =
     open === null || data === null ? [] : data.items.filter((a) => a.kind === open);
+
+  /** Hovered list row, so the matching pin can lift. Keyed exactly like the list's React
+   *  key, so the two cannot drift apart. */
+  const [hovered, setHovered] = useState<string | null>(null);
+
+  /**
+   * What the map draws: **the same rows the list is showing**, never a different slice.
+   * With a category expanded that is all of it; otherwise the closest ten, matching the
+   * preview beside it. Feeding the map a fuller set than the list would put pins on screen
+   * with nothing to click back to.
+   */
+  const mapItems = data === null ? [] : open === null ? data.items.slice(0, 10) : openItems;
+
+  /** The map is optional infrastructure, like every other map in this app: no key, no map,
+   *  and the list alone still answers the question it was built to answer. */
+  const mapsKey = process.env["NEXT_PUBLIC_GOOGLE_MAPS_API_KEY"];
 
   async function load(): Promise<void> {
     setPending(true);
@@ -403,6 +431,47 @@ export function NeighbourhoodPanel({ latitude, longitude, label }: Props): React
             })}
           </dl>
 
+          {/* Between the counts and the list, because it belongs to whichever of the two is
+              currently in view: it re-frames itself when a category is expanded, and shows
+              the closest ten otherwise. */}
+          {mapsKey !== undefined && mapsKey !== "" && (
+            <div className="mt-4">
+              <NeighbourhoodMap
+                latitude={latitude}
+                longitude={longitude}
+                label={label}
+                items={mapItems}
+                radiusKind={open ?? undefined}
+                highlightKey={hovered}
+              />
+              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+                {(open === null ? KIND_ORDER : [open]).map((k) => (
+                  <span
+                    key={k}
+                    className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.06em] text-muted"
+                  >
+                    <span
+                      className="h-2 w-2 rounded-full"
+                      style={{ backgroundColor: KIND_PIN[k] }}
+                    />
+                    {KIND_TILE_LABEL[k]}
+                  </span>
+                ))}
+                <span className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.06em] text-muted">
+                  <span className="h-2.5 w-2.5 rounded-full border-2 border-white bg-accent" />
+                  This property
+                </span>
+              </div>
+              <p className="mt-1.5 text-[11px] leading-relaxed text-muted">
+                {open === null
+                  ? "The ten closest places. Open a count above to map that category on its own."
+                  : `The shaded circle is the actual ${RADIUS_M[open]} m search radius for ${KIND_LABEL[open].toLowerCase()}.`}{" "}
+                Pins are straight-line positions — a pin 300 m away can still be a longer
+                walk around a block.
+              </p>
+            </div>
+          )}
+
           {open !== null && (
             <div
               id={`nb-list-${open}`}
@@ -435,7 +504,9 @@ export function NeighbourhoodPanel({ latitude, longitude, label }: Props): React
                 {openItems.map((a, i) => (
                   <li
                     key={`${a.kind}-${a.name}-${a.metres}`}
-                    className="flex items-baseline justify-between gap-3 py-2"
+                    onMouseEnter={() => setHovered(`${a.kind}-${a.name}-${a.metres}`)}
+                    onMouseLeave={() => setHovered(null)}
+                    className="flex items-baseline justify-between gap-3 rounded-card px-1 py-2 hover:bg-accent/[0.05]"
                   >
                     <span className="flex min-w-0 items-baseline gap-2">
                       <span className="tnum shrink-0 font-mono text-[10px] text-muted">
@@ -472,10 +543,15 @@ export function NeighbourhoodPanel({ latitude, longitude, label }: Props): React
                   return (
                   <li
                     key={`${a.kind}-${a.name}-${a.metres}`}
-                    className="flex items-baseline justify-between gap-3 py-2"
+                    onMouseEnter={() => setHovered(`${a.kind}-${a.name}-${a.metres}`)}
+                    onMouseLeave={() => setHovered(null)}
+                    className="flex items-baseline justify-between gap-3 rounded-card px-1 py-2 hover:bg-accent/[0.05]"
                   >
                     <span className="flex min-w-0 items-baseline gap-2">
-                      <RowIcon className="h-3.5 w-3.5 shrink-0 translate-y-0.5 text-muted" />
+                      <RowIcon
+                        className="h-3.5 w-3.5 shrink-0 translate-y-0.5"
+                        style={{ color: KIND_PIN[a.kind] }}
+                      />
                       <span className="min-w-0">
                         <span className="text-sm text-mist">{a.name}</span>
                         <span className="ml-2 font-mono text-[10px] uppercase tracking-[0.06em] text-muted">

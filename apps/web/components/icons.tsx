@@ -37,11 +37,18 @@ interface IconProps {
   /** Supply only when the icon stands alone. With a visible text label, leave it off — the
    *  icon is then correctly hidden from assistive technology. */
   readonly title?: string;
+  /**
+   * For a colour that isn't in the Tailwind palette — specifically the neighbourhood's
+   * per-category pin hues, where the list icon has to match a map marker exactly. Every
+   * other caller should use a text-colour class and let `currentColor` do the work.
+   */
+  readonly style?: React.CSSProperties;
 }
 
 function Svg({
   className,
   title,
+  style,
   children,
 }: IconProps & { readonly children: React.ReactNode }): React.JSX.Element {
   return (
@@ -49,6 +56,7 @@ function Svg({
       viewBox="0 0 24 24"
       fill="none"
       className={className}
+      style={style}
       aria-hidden={title === undefined ? "true" : undefined}
       role={title === undefined ? undefined : "img"}
       stroke="currentColor"

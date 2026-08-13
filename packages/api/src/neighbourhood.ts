@@ -172,6 +172,17 @@ export interface Amenity {
   /** Straight-line metres. Not walking distance: OSM routing would be a different
    *  service and a bigger promise. Labelled as "straight line" in the UI for that reason. */
   readonly metres: number;
+  /**
+   * Where it actually is. **Already known and previously discarded** — `metres` is computed
+   * from exactly these two numbers and then they were thrown away, which meant the list
+   * could say a school was 240m off and had no way to show you in which direction.
+   *
+   * For a way or relation (a school campus, a park) this is OSM's `center`, so it is the
+   * middle of the thing rather than its entrance — fine for a pin, wrong for routing, which
+   * this does not attempt.
+   */
+  readonly latitude: number;
+  readonly longitude: number;
 }
 
 /**
@@ -187,8 +198,12 @@ export interface Amenity {
  * stale *data*: 30-day-old amenities are fine, a 30-day-old schema is a bug.
  *
  * 2 — `items` (every match) replaced `nearest` (first 18).
+ * 3 — each item carries `latitude`/`longitude`, so the list can be plotted. Without the
+ *     bump, a cached v2 row would feed the map a list of places with no positions: an empty
+ *     map beside a list of 39 shops, which is the same self-contradiction the v2 bump
+ *     existed to prevent.
  */
-export const NEIGHBOURHOOD_PAYLOAD_VERSION = 2;
+export const NEIGHBOURHOOD_PAYLOAD_VERSION = 3;
 
 export interface Neighbourhood {
   readonly version: number;
@@ -452,7 +467,14 @@ export async function fetchNeighbourhood(
     seen.add(key);
 
     counts[classified.kind] += 1;
-    all.push({ kind: classified.kind, name, subtype: classified.subtype, metres });
+    all.push({
+      kind: classified.kind,
+      name,
+      subtype: classified.subtype,
+      metres,
+      latitude: lat,
+      longitude: lon,
+    });
   }
 
   all.sort((a, b) => a.metres - b.metres);

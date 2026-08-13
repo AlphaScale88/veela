@@ -1244,6 +1244,60 @@ harness deleted afterwards. 23 icons render, no console errors, no horizontal ov
 either width. The screenshots also caught a layout flaw unrelated to icons: the two cost
 tables stretched to equal height, leaving an empty panel under the shorter one. `items-start`.
 
+## The neighbourhood list, on a map (13/08/2026)
+
+Asked to show the listed places on a map. The counts answered *how well served is this
+area*, the drill-down answered *by what* — neither answered **"in which direction, and is it
+all on one side?"**, which is the question a straight-line distance most obviously raises.
+Two flats can each have "12 shops within 600 m" and be completely different places: one
+ringed, one with everything across a motorway.
+
+**The coordinates were already there and were being thrown away.** `metres` is computed from
+each item's own lat/lng in `neighbourhood.ts`, and the pair was discarded immediately after.
+This is mostly the API keeping what it already had — payload **version 3**, because a cached
+v2 row would have fed the map a list of places with no positions: an empty map beside a list
+of 39 shops, the same self-contradiction the v2 bump existed to prevent. Two stale rows
+deleted rather than left to be refetched one at a time.
+
+**What the drawing claims, and what it refuses to.** The shaded ring is the *actual* search
+radius for the open category — 600 m for shops, 900 m for transport — not a decorative
+circle; drawing one ring while the pins obeyed a different bound would misstate the query.
+Distances stay straight-line, and the caption says so on the map itself, because a pin 300 m
+away can be a longer walk around a podium. Pins for anything mapped as an area are OSM
+`center` points, so a school sits in the middle of its campus rather than at its gate.
+
+**The map shows exactly the rows the list shows** — one category when a count is expanded,
+the closest ten otherwise. Feeding it a fuller set would put pins on screen with nothing to
+click back to, and would reopen the count/list disagreement the drill-down was built to
+close. Hovering a row lifts its pin; the list's row icons are tinted to their pin colours, so
+the two read as one object.
+
+**Pin colours are categorical, not the status palette.** `standingColor`'s red/amber/green
+means *good, fair, weak* everywhere else in this product, and a red pin for "health" would
+import that meaning onto a category where it is nonsense — a hospital is not a bad outcome.
+Same reasoning the finder's heat-map dropdown already uses when it switches to a sequential
+ramp for price per square foot.
+
+**`useMapsLibrary`, not the global `google`.** Needed for `LatLngBounds` in the fit-to-bounds
+effect, and this file's own note on the 2024 codebase is the reason: reaching for that global
+"works right until a slow network, a failure that appears for users and never for
+developers." It is also the honest type — the constructor does not exist until the library
+loads.
+
+**A limitation that is visible and only mitigated.** Advanced Markers require a `mapId`, and
+a `mapId` makes Google prefer Cloud-console styling over the inline `MAP_STYLE` array — so
+**Google's own POI icons show through and cannot be switched off here**. Already noted
+against `ImportedListingMap`, but it bites harder on a map *about nearby places*, since
+Google's labelled teardrops are also nearby places and could be read as ours. Screenshots
+caught it: at first draw our 10 px flat dots lost the contest outright. Mitigated three ways —
+pins ringed in white with a shadow so they sit above the basemap, a legend naming every
+colour, and the fit-to-bounds zoom capped one step below maximum, where POI labels are
+densest. A real fix needs a Cloud Console map style this project does not have.
+
+Verified at 1280 px and 390 px through a temporary harness (the report is login-gated),
+harness deleted: 204 items all carrying coordinates, none outside Hong Kong, no console
+errors, no horizontal overflow.
+
 ## Working conventions
 - Dates DD/MM/YYYY. Currency: **HKD** for Hong Kong, **VND** for Vietnam, **EUR** for
   France — always state which, never a bare number. Keep a single reporting currency
