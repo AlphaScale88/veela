@@ -119,6 +119,14 @@ const USER_AGENT = "Veela/1.0";
 const RADIUS = {
   school: 800,
   transport: 900,
+  /**
+   * Tighter than `transport` on purpose. A rail station 900m away is still *your* station —
+   * you will walk it for a fast fixed link. A bus stop 900m away is not your bus stop; you
+   * would walk to a nearer one. 500m is the ordinary walkable catchment, and it also keeps
+   * the count from ballooning: Hong Kong has bus stops on nearly every block, and at 900m
+   * Mong Kok returns 98 of them.
+   */
+  bus: 500,
   shop: 600,
   health: 800,
   park: 700,
@@ -202,8 +210,11 @@ export interface Amenity {
  *     bump, a cached v2 row would feed the map a list of places with no positions: an empty
  *     map beside a list of 39 shops, which is the same self-contradiction the v2 bump
  *     existed to prevent.
+ * 4 — transport gained trams, ferries, minor halts and ordinary bus stops (a new `bus`
+ *     kind). A v3 row would keep reporting the ~5% of transport the old query found, so it
+ *     has to be refetched rather than trusted.
  */
-export const NEIGHBOURHOOD_PAYLOAD_VERSION = 3;
+export const NEIGHBOURHOOD_PAYLOAD_VERSION = 4;
 
 export interface Neighbourhood {
   readonly version: number;
@@ -254,7 +265,11 @@ function buildQuery(lat: number, lng: number): string {
   nwr["amenity"~"^(school|kindergarten|college|university)$"]${at(RADIUS.school)};
   nwr["railway"="station"]${at(RADIUS.transport)};
   nwr["station"="subway"]${at(RADIUS.transport)};
+  nwr["railway"="halt"]${at(RADIUS.transport)};
+  nwr["railway"="tram_stop"]${at(RADIUS.transport)};
+  nwr["amenity"="ferry_terminal"]${at(RADIUS.transport)};
   nwr["amenity"="bus_station"]${at(RADIUS.transport)};
+  nwr["highway"="bus_stop"]${at(RADIUS.bus)};
   nwr["shop"~"^(supermarket|mall|convenience|department_store)$"]${at(RADIUS.shop)};
   nwr["amenity"="marketplace"]${at(RADIUS.shop)};
   nwr["amenity"~"^(hospital|clinic|doctors|pharmacy)$"]${at(RADIUS.health)};
@@ -296,8 +311,50 @@ function classify(tags: Record<string, string>): { kind: AmenityKind; subtype: s
   if (amenity !== undefined && /^(school|kindergarten|college|university)$/.test(amenity)) {
     return { kind: "school", subtype: amenity };
   }
-  if (railway === "station" || station === "subway" || amenity === "bus_station") {
-    return { kind: "transport", subtype: station === "subway" ? "subway_station" : (railway ?? amenity ?? "station") };
+  /**
+   * **Transport, by mode — and the modes matter more than the total.**
+   *
+   * This used to ask only for `railway=station`, `station=subway` and `amenity=bus_station`,
+   * and reported one number. Measured against Overpass, that captured about **5% of the
+   * transport nodes actually mapped**: Central returned 15 where 128 exist, and the two modes
+   * missing outright were the two a Hong Kong reader would notice first — **ordinary bus
+   * stops** (`highway=bus_stop`, 103 in Central alone) and **trams** (`railway=tram_stop`,
+   * the Hong Kong Tramways line and the New Territories Light Rail). Ferry piers and minor
+   * halts were missing too, which in a harbour city is not a rounding error.
+   *
+   * `amenity=bus_station` is a *terminus or interchange*, not a stop — mistaking it for
+   * "buses are covered" is exactly how the gap survived this long.
+   *
+   * Split into two kinds rather than one, because a single count would hide the useful fact.
+   * Bus stops are near-universal in urban Hong Kong (38–103 within walking distance in every
+   * area sampled), so they dominate any total and track *density* more than connectivity —
+   * while "no rail station at all", true of Ap Lei Chau, is the single most decision-relevant
+   * transport fact for an investor and was invisible in a lump sum.
+   */
+  if (
+    railway === "station" ||
+    railway === "halt" ||
+    railway === "tram_stop" ||
+    station === "subway" ||
+    amenity === "ferry_terminal" ||
+    amenity === "bus_station"
+  ) {
+    const subtype =
+      station === "subway"
+        ? "subway_station"
+        : railway === "tram_stop"
+          ? "tram_stop"
+          : railway === "halt"
+            ? "railway_halt"
+            : amenity === "ferry_terminal"
+              ? "ferry_pier"
+              : amenity === "bus_station"
+                ? "bus_terminus"
+                : (railway ?? "station");
+    return { kind: "transport", subtype };
+  }
+  if (tags["highway"] === "bus_stop") {
+    return { kind: "bus", subtype: "bus_stop" };
   }
   /**
    * **Only everyday-shopping types count as "shops"**, not any shop at all.
@@ -426,7 +483,7 @@ export async function fetchNeighbourhood(
   }
 
   const counts: Record<AmenityKind, number> = {
-    school: 0, transport: 0, shop: 0, health: 0, park: 0, premium: 0, construction: 0,
+    school: 0, transport: 0, bus: 0, shop: 0, health: 0, park: 0, premium: 0, construction: 0,
   };
   const all: Amenity[] = [];
   // OSM frequently maps the same place more than once (a node inside its own polygon, or

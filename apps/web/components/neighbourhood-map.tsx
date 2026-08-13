@@ -48,6 +48,7 @@ import { MAP_STYLE } from "./district-map";
 export type AmenityKind =
   | "school"
   | "transport"
+  | "bus"
   | "shop"
   | "health"
   | "park"
@@ -76,6 +77,9 @@ export interface MapAmenity {
 const KIND_PIN: Readonly<Record<AmenityKind, string>> = {
   school: "#7C4DFF",
   transport: "#0B5BD3",
+  /* A lighter blue than rail's: the two are related modes, so related hues, but distinct
+     enough to tell a bus stop from a station at a glance. */
+  bus: "#4FA3F7",
   shop: "#00897B",
   health: "#D81B60",
   park: "#2E7D32",
@@ -89,6 +93,7 @@ const KIND_PIN: Readonly<Record<AmenityKind, string>> = {
 const RADIUS_M: Readonly<Record<AmenityKind, number>> = {
   school: 800,
   transport: 900,
+  bus: 500,
   shop: 600,
   health: 800,
   park: 700,

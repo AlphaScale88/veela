@@ -1298,6 +1298,80 @@ Verified at 1280 px and 390 px through a temporary harness (the report is login-
 harness deleted: 204 items all carrying coordinates, none outside Hong Kong, no console
 errors, no horizontal overflow.
 
+## Transport was catching ~5% of what OSM holds (13/08/2026)
+
+Asked, about the full report: *"for the transport I noticed it's missing some Bus, Tram. Did
+you get all the data?"* **No — and the gap was far bigger than "some".**
+
+The query asked for `railway=station`, `station=subway` and `amenity=bus_station`. That last
+one is a **terminus or interchange, not a stop**, and mistaking it for "buses are covered" is
+how this survived. Measured against Overpass at 900m:
+
+| Area | reported | actually mapped | missing |
+|---|---|---|---|
+| Central | 15 | **331 raw / 128 deduped** | 299 bus stops, 15 tram stops, 2 ferry piers, 2 halts |
+| Mong Kok | 15 | **329 / 105** | 317 bus stops |
+| Causeway Bay | 6 | **274 / 87** | 248 bus stops, 22 tram stops |
+
+So roughly **5%**, and the two modes a Hong Kong reader notices first — buses and the trams
+— were absent entirely. Ferry piers too, which in a harbour city is not a rounding error.
+Now queried: `highway=bus_stop`, `railway=tram_stop`, `amenity=ferry_terminal`,
+`railway=halt`, each with its own subtype so the drill-down names the mode.
+
+**Split into two kinds rather than one count, because one number would have hidden the useful
+fact.** Bus stops are near-universal here and dominate any total, tracking *density* more than
+connectivity — while "no rail station at all", true of Ap Lei Chau, is the single most
+decision-relevant transport fact for an investor and was invisible in a lump sum. Tiles now
+read **Rail, tram, ferry** and **Bus stops** separately, and eight tiles moved the grid from
+seven columns to two rows of four (eight in a seven-column grid orphans the last one).
+
+**Bus stops use a 500m radius, not 900m.** A rail station 900m away is still your station —
+you will walk it for a fast fixed link. A bus stop 900m away is not; you would walk to a
+nearer one. It also keeps the count sane: Mong Kok returns 98 bus stops at 900m against 47 at
+500m.
+
+**The score had to be recalibrated, and this fixed a separate known problem.** A target of 10
+had been set against a badly undercounted transport number, which is why Mong Kok, Central and
+Tuen Mun all scored full marks for transport and Mong Kok reached **100/100** overall — the
+"full marks for most of urban Hong Kong discriminates nothing" failure this file already
+warned about, still present. Re-measured with the app's own radii and dedupe rule:
+
+| Area | transport (900m) | bus (500m) |
+|---|---|---|
+| Central | 27 | 48 |
+| Causeway Bay | 22 | 37 |
+| Taikoo Shing | 14 | 15 |
+| Tuen Mun | 12 | 19 |
+| Mong Kok | 10 | 47 |
+| Ap Lei Chau | 7 | 16 |
+
+Transport's 25 points are **split 18 / 7**, not added to, so the weights still sum to 100 and
+no other category was silently re-weighted. Buses take the smaller share deliberately, per the
+density argument above. Resulting transport component: Central 25, Causeway Bay 23, Mong Kok
+14, Taikoo 13, Tuen Mun 12, Ap Lei Chau 8 — a real spread. **Central now scores 85/100 rather
+than 100**, and "9 schools of 22" is visibly discriminating rather than saturated.
+
+**Payload version 4**, because a v3 row would keep serving the 5% answer. Three stale rows
+deleted.
+
+**The default list had to change too.** It was "closest ten, all categories" — which breaks
+the moment bus stops exist, since the ten closest things to any urban address become nine bus
+stops and a 7-Eleven, burying the station and school that are the point. It is now **the
+nearest of each kind**: one row per category, answering "what is my nearest school, and how
+far" and immune to whichever category happens to be densest.
+
+Verified against the live endpoint: Central returns 27 transport (5 subway, 11 tram, 7 bus
+termini, 2 halts, 1 ferry pier, 1 station) and 48 bus stops, **none beyond the 500m radius**,
+matching the calibration exactly. UI checked in a browser through a temporary harness, deleted
+after.
+
+**Still not covered, and worth knowing:** minibuses (green/red PLB) are only partly mapped in
+OSM and often tagged as ordinary bus stops; the MTR light rail is tagged inconsistently as
+both `railway=station` and `railway=tram_stop`, which is the Tuen Mun inflation artifact noted
+against `WEIGHTS`; and `public_transport=platform`/`stop_position` — the newer scheme — is not
+queried, so a stop mapped *only* that way is still missed. Coverage remains
+contributor-maintained, and the panel still says so.
+
 ## Working conventions
 - Dates DD/MM/YYYY. Currency: **HKD** for Hong Kong, **VND** for Vietnam, **EUR** for
   France — always state which, never a bare number. Keep a single reporting currency

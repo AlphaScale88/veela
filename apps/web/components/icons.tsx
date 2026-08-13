@@ -182,6 +182,19 @@ export function TrainIcon(p: IconProps): React.JSX.Element {
   );
 }
 
+/** Ordinary bus stops — a separate kind from `TrainIcon`'s rail/tram/ferry, because the two
+ *  are counted and scored separately. See the note in `neighbourhood.ts` on why. */
+export function BusIcon(p: IconProps): React.JSX.Element {
+  return (
+    <Svg {...p}>
+      <rect x="4" y="4" width="16" height="12.5" rx="2.5" />
+      <path d="M4 10.5h16" />
+      <path d="M8 13.6h.01M16 13.6h.01" />
+      <path d="M7.5 16.5V19M16.5 16.5V19" />
+    </Svg>
+  );
+}
+
 export function ShopIcon(p: IconProps): React.JSX.Element {
   return (
     <Svg {...p}>

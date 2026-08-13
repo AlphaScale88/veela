@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import {
+  BusIcon,
   ConstructionIcon,
   DiamondIcon,
   HealthIcon,
@@ -43,6 +44,7 @@ import { KIND_PIN, NeighbourhoodMap } from "./neighbourhood-map";
 type AmenityKind =
   | "school"
   | "transport"
+  | "bus"
   | "shop"
   | "health"
   | "park"
@@ -89,6 +91,7 @@ interface Data {
 const RADIUS_M: Readonly<Record<AmenityKind, number>> = {
   school: 800,
   transport: 900,
+  bus: 500,
   shop: 600,
   health: 800,
   park: 700,
@@ -106,7 +109,8 @@ const RADIUS_M: Readonly<Record<AmenityKind, number>> = {
  */
 const KIND_TILE_LABEL: Readonly<Record<AmenityKind, string>> = {
   school: "Schools",
-  transport: "Transport",
+  transport: "Rail, tram, ferry",
+  bus: "Bus stops",
   shop: "Shops",
   health: "Health",
   park: "Green space",
@@ -125,6 +129,7 @@ const KIND_ICON: Readonly<
 > = {
   school: SchoolIcon,
   transport: TrainIcon,
+  bus: BusIcon,
   shop: ShopIcon,
   health: HealthIcon,
   park: TreeIcon,
@@ -134,7 +139,8 @@ const KIND_ICON: Readonly<
 
 const KIND_LABEL: Readonly<Record<AmenityKind, string>> = {
   school: "Schools",
-  transport: "Transport",
+  bus: "Bus stops",
+  transport: "Rail, tram and ferry",
   shop: "Shops",
   health: "Health",
   park: "Green space",
@@ -152,6 +158,7 @@ const KIND_LABEL: Readonly<Record<AmenityKind, string>> = {
  */
 const KIND_ORDER: readonly AmenityKind[] = [
   "transport",
+  "bus",
   "school",
   "shop",
   "premium",
@@ -187,13 +194,40 @@ const KIND_ORDER: readonly AmenityKind[] = [
  * Saturating rather than scaling without limit is deliberate: a fortieth shop should not
  * outweigh a first railway station.
  *
- * **A known artifact, not hidden:** Tuen Mun's transport count is inflated by Light Rail,
- * which OSM tags as `railway=station` — a dozen tram-like stops score like a dozen heavy
- * rail stations. Defensible for a metric called *convenience* (it genuinely is well
- * served), but it is why this is not called a quality or desirability score.
+ * **Transport was recalibrated a second time (13/08/2026), because the input changed.** The
+ * old query found only heavy-rail stations, subway entrances and bus *termini* — about 5% of
+ * the transport nodes OSM actually holds — so a target of 10 was set against a badly
+ * undercounted number and saturated for most of urban Hong Kong. With trams, ferries, minor
+ * halts and ordinary bus stops now included and split into two kinds, measured again with
+ * the app's own radii and dedupe rule:
+ *
+ * | Area | transport (900m) | bus stops (500m) |
+ * |---|---|---|
+ * | Central | 27 | 48 |
+ * | Causeway Bay | 22 | 37 |
+ * | Taikoo Shing | 14 | 15 |
+ * | Tuen Mun | 12 | 19 |
+ * | Mong Kok | 10 | 47 |
+ * | Ap Lei Chau | 7 | 16 |
+ *
+ * The old 25 points for transport are **split 18 / 7** rather than added to, so the weights
+ * still sum to 100 and no other category was silently re-weighted. Buses get the smaller
+ * share deliberately: bus coverage is near-universal here, so it tracks *density* more than
+ * connectivity, while the presence or absence of a rail station is the thing that actually
+ * separates two Hong Kong addresses.
+ *
+ * Resulting transport component across those areas: **Central 25, Causeway Bay 23, Mong Kok
+ * 14, Taikoo 13, Tuen Mun 12, Ap Lei Chau 8** — a real spread where the previous version gave
+ * Mong Kok, Central and Tuen Mun full marks alike.
+ *
+ * **A known artifact, not hidden:** Tuen Mun's count is inflated by Light Rail, which OSM
+ * tags as `railway=station` and `railway=tram_stop` — tram-like stops scoring like heavy
+ * rail. Defensible for a metric called *convenience* (it genuinely is well served), but it is
+ * why this is not called a quality or desirability score.
  */
 const WEIGHTS: readonly { kind: AmenityKind; weight: number; target: number }[] = [
-  { kind: "transport", weight: 25, target: 10 },
+  { kind: "transport", weight: 18, target: 25 },
+  { kind: "bus", weight: 7, target: 40 },
   { kind: "school", weight: 20, target: 22 },
   { kind: "shop", weight: 15, target: 25 },
   { kind: "premium", weight: 15, target: 18 },
@@ -255,7 +289,24 @@ export function NeighbourhoodPanel({ latitude, longitude, label }: Props): React
    * preview beside it. Feeding the map a fuller set than the list would put pins on screen
    * with nothing to click back to.
    */
-  const mapItems = data === null ? [] : open === null ? data.items.slice(0, 10) : openItems;
+  /**
+   * The default preview: **the nearest of each kind**, not the ten nearest overall.
+   *
+   * It was `items.slice(0, 10)` — which broke the moment ordinary bus stops were added. Hong
+   * Kong puts a bus stop on almost every block, so the ten closest things to any urban
+   * address became nine bus stops and a 7-Eleven, burying the station and the school that are
+   * the point. One row per category always answers the more useful question ("what is my
+   * nearest school, and how far?") and cannot be crowded out by whichever category happens to
+   * be densest.
+   */
+  const nearestPerKind =
+    data === null
+      ? []
+      : KIND_ORDER.map((k) => data.items.find((a) => a.kind === k)).filter(
+          (a): a is Amenity => a !== undefined,
+        );
+
+  const mapItems = data === null ? [] : open === null ? nearestPerKind : openItems;
 
   /** The map is optional infrastructure, like every other map in this app: no key, no map,
    *  and the list alone still answers the question it was built to answer. */
@@ -369,7 +420,11 @@ export function NeighbourhoodPanel({ latitude, longitude, label }: Props): React
               opens. A count of zero is deliberately not clickable — there is nothing to
               show, and a button that opens an empty list is a dead end dressed as a
               control. */}
-          <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
+          {/* Four across, not seven: splitting transport into rail/tram/ferry and bus stops
+              made eight tiles, and eight in a seven-column grid orphans the last one on a row
+              of its own. Two rows of four also give the longer labels ("Rail, tram, ferry")
+              room to sit on one or two lines instead of three. */}
+          <dl className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
             {KIND_ORDER.map((k) => {
               const count = data.counts[k];
               const isOpen = open === k;
@@ -464,7 +519,7 @@ export function NeighbourhoodPanel({ latitude, longitude, label }: Props): React
               </div>
               <p className="mt-1.5 text-[11px] leading-relaxed text-muted">
                 {open === null
-                  ? "The ten closest places. Open a count above to map that category on its own."
+                  ? "The nearest of each kind. Open a count above to map that category on its own."
                   : `The shaded circle is the actual ${RADIUS_M[open]} m search radius for ${KIND_LABEL[open].toLowerCase()}.`}{" "}
                 Pins are straight-line positions — a pin 300 m away can still be a longer
                 walk around a block.
@@ -531,14 +586,14 @@ export function NeighbourhoodPanel({ latitude, longitude, label }: Props): React
           {open === null && (
             <>
               <p className="mt-4 font-mono text-[10px] uppercase tracking-[0.08em] text-muted">
-                Closest ten, all categories
+                Nearest of each kind
               </p>
               {/* The closest-ten list mixes all seven categories, so each row carries its
                   own mark — without one, "Mong Kok" and "Wing Shing Dispensary" are two
                   names with no visible clue which is the station and which the pharmacy
                   until the subtype text is read. */}
               <ul className="mt-1 divide-y divide-line">
-                {data.items.slice(0, 10).map((a) => {
+                {nearestPerKind.map((a) => {
                   const RowIcon = KIND_ICON[a.kind];
                   return (
                   <li
