@@ -1372,6 +1372,68 @@ against `WEIGHTS`; and `public_transport=platform`/`stop_position` — the newer
 queried, so a stop mapped *only* that way is still missed. Coverage remains
 contributor-maintained, and the panel still says so.
 
+## /analyse starts blank, and remembers your last search (13–14/08/2026)
+
+Asked to reset all the data on `/analyse` and show the last search instead.
+
+**What was there was a worked example presented as your property.** `INITIAL_DRAFT` filled the
+form with "Flat in Tai Koo", HK$8,000,000, HK$18,000 rent, 500 sqft and a HK$4,000,000
+mortgage. Three problems, and the third is the one that mattered: every figure was invented in
+fields labelled as the reader's own; `transactionDate` was hardcoded to a fixed day that had
+already gone stale, so the **stamp-duty rule set was chosen by a date nobody picked**; and a
+prefilled form produces a **complete, plausible report before anyone types anything** — a
+1.78% net yield for a flat that does not exist. Everywhere else this product refuses to show a
+number it cannot source; the landing state of its main tool was doing exactly that.
+
+**`EMPTY_DRAFT` blanks facts, keeps rate assumptions.** Blank: label, price, rent, area, loan
+and every cash cost — nobody can guess these, and a guess is the invented-figure problem again.
+Kept: 4% vacancy, 3% interest, 25-year term, owner pays rates, permanent resident. Those are
+not claims about *this* property, they are the conventions the engine needs to compute
+anything, they are all editable, and the report already names each one in "What to watch" —
+the "No vacancy assumed" finding exists precisely to flag one. **Zeroing them would be the
+opposite failure: a 0% vacancy rate is *wrong*, not empty.**
+
+**Zero means two different things in this form**, which is why blank-at-zero is opt-in rather
+than global. For money and area, `0` means "not entered" and the box renders empty (`Number("")`
+is 0, so clearing round-trips for free). For a *rate*, `0` can be a deliberate choice the engine
+raises a finding about, so those still show their value.
+
+`transactionDate` is filled with today's Hong Kong date **in a mount effect, not at module
+scope** — this is a client component that Next.js also server-renders, and a server in UTC
+against a browser in Hong Kong can disagree about what day it is. It only fills a blank field,
+so it can never overwrite a date from a saved property, an import or a restored search.
+
+**"Last search" is localStorage, and is a different thing from the saved-reports shelf.**
+`SavedReports` lists properties deliberately saved to a portfolio — account, database, an
+explicit click. This is the other half: the search someone ran and *didn't* save, which was
+simply lost on navigation. That is the common case, since the preview needs no account. It has
+to work without one (rules out `properties`) and survive a reload (rules out React state and
+`sessionStorage`). It never leaves the device, and the card says so.
+
+**Recorded when a report is *asked for*, not when one succeeds** — the first version did the
+latter, which quietly meant the feature only ever worked for someone already logged in: the
+report is gated, so an anonymous reader's submit redirects to `/login` and never reaches the
+success path. They are the reader who needs it most, having no portfolio either. The yield on
+the card is **recomputed** through the same `computeVerdict`, never stored beside the draft — a
+cached figure could disagree with what restoring actually produces, and rules are versioned by
+transaction date.
+
+**A bug the browser caught:** after a gated submit, returning to `/analyse` restores those
+figures from the OAuth stash — so the card offered "your last search" directly above a form
+already holding it, with a Restore button that would have done nothing visible. Suppressed when
+the stash key is present; the last-search effect is declared before the stash effect, so the key
+is still there to check.
+
+`property-finder.tsx` spread `INITIAL_DRAFT` and its comment claimed the two shared one
+assumption set. **Its yields did not move**, because `listingToDraft` sets every money field
+explicitly and only ever inherited the buyer booleans and the unused financing rates — but the
+comment was corrected rather than left asserting something no longer true.
+
+Verified in a browser across two tabs of one context: blank form with today's date and no
+phantom preview, gated submit records the search, a fresh tab offers it with a recomputed
+yield, Restore fills the form exactly, Discard clears storage, and the duplicate case is
+suppressed.
+
 ## Working conventions
 - Dates DD/MM/YYYY. Currency: **HKD** for Hong Kong, **VND** for Vietnam, **EUR** for
   France — always state which, never a bare number. Keep a single reporting currency

@@ -22,11 +22,18 @@ import { BuildingSearch } from "../../components/building-search";
 import { ImportedListingMap } from "../../components/imported-listing-map";
 import { ListingImporter } from "../../components/listing-importer";
 import { NeighbourhoodPanel } from "../../components/neighbourhood-panel";
+import {
+  forgetLastSearch,
+  LastSearchCard,
+  readLastSearch,
+  rememberLastSearch,
+  type LastSearch,
+} from "../../components/last-search";
 import { SavedReports } from "../../components/saved-reports";
 import {
   draftToApiInput,
   draftToCoreInput,
-  INITIAL_DRAFT,
+  EMPTY_DRAFT,
   PropertyForm,
   type Draft,
 } from "../../components/property-form";
@@ -76,7 +83,7 @@ const DRAFT_STASH_KEY = "veela:analyse-draft-stash";
  * whether the input was valid, which is exactly the distinction worth surfacing.
  */
 export default function AnalysePage(): React.JSX.Element {
-  const [draft, setDraft] = useState<Draft>(INITIAL_DRAFT);
+  const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
   const [verdict, setVerdict] = useState<Verdict | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -111,6 +118,50 @@ export default function AnalysePage(): React.JSX.Element {
    *  gate below renders instead of the report, and the auto-retry effect further down
    *  clears it and re-submits the moment `user` stops being `null`. */
   const [reportGated, setReportGated] = useState(false);
+
+  /** The previous analysis on this device, offered rather than applied. `undefined` until the
+   *  mount effect has looked; `null` once looked and there was nothing (or it was dismissed). */
+  const [lastSearch, setLastSearch] = useState<LastSearch | null | undefined>(undefined);
+
+  /**
+   * Today's date, set on mount rather than baked into `EMPTY_DRAFT`.
+   *
+   * The old default was a hardcoded day that had already gone stale, which quietly chose the
+   * stamp-duty rule set for the reader. It has to be filled client-side: this component is
+   * server-rendered too, and a server in UTC against a browser in Hong Kong can disagree about
+   * what day it is — a `new Date()` at module scope is a hydration mismatch waiting for
+   * midnight. Only fills a blank field, so it can never overwrite a date that arrived from a
+   * saved property, a listing import or a restored search.
+   */
+  useEffect(() => {
+    const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Hong_Kong" });
+    setDraft((d) => (d.transactionDate === "" ? { ...d, transactionDate: today } : d));
+  }, []);
+
+  /* Read once on mount. Deliberately not shown while a report is already on screen, and
+     suppressed entirely when the page was opened with figures of its own (?listing=,
+     ?property=, or a draft stashed across the OAuth round trip) — offering "your last search"
+     next to a form that has just been filled from somewhere else is noise. */
+  useEffect(() => {
+    if (autoLoadedRef.current) {
+      setLastSearch(null);
+      return;
+    }
+    /**
+     * Suppressed when a draft is waiting in the OAuth stash.
+     *
+     * Caught in a browser, not by reading: after a gated submit sends an anonymous reader to
+     * `/login`, coming back restores those same figures into the form — so the card offered
+     * "your last search" directly above a form already holding it, with a Restore button that
+     * would have done nothing visible. This effect is declared before the stash effect, so the
+     * key is still there to check; the stash effect clears it a moment later.
+     */
+    if (sessionStorage.getItem(DRAFT_STASH_KEY) !== null) {
+      setLastSearch(null);
+      return;
+    }
+    setLastSearch(readLastSearch());
+  }, []);
 
   /**
    * A link import is partial and unverified by construction — see
@@ -358,6 +409,18 @@ export default function AnalysePage(): React.JSX.Element {
     const submitted = overrideDraft ?? draft;
     setError(null);
 
+    /**
+     * Remembered here — when a report is *asked for* — not after one successfully returns.
+     *
+     * The first version recorded it on success, which quietly meant "last search" only ever
+     * worked for someone already logged in: the report is gated, so an anonymous reader's
+     * submit redirects to `/login` and never reaches the success path. They are the reader who
+     * needs this most, since they have no portfolio either. A valid price is the same bar
+     * `readLastSearch` applies and the same one the live preview uses, so anything recorded
+     * here is a real set of figures rather than a half-typed field.
+     */
+    if (submitted.price > 0) rememberLastSearch(submitted);
+
     if (authConfigured && user === null) {
       sessionStorage.setItem(DRAFT_STASH_KEY, JSON.stringify(submitted));
       window.location.assign("/login?next=/analyse");
@@ -477,6 +540,24 @@ export default function AnalysePage(): React.JSX.Element {
        * old line hid itself for the same reason. `/portfolio` is still where these are
        * managed.
        */}
+      {/* Offered above the saved-reports shelf: this is the more recent thing, and it is the
+          one that needs no account. Both hide once a report is on screen. */}
+      {verdict === null && lastSearch !== undefined && lastSearch !== null && (
+        <LastSearchCard
+          search={lastSearch}
+          onRestore={() => {
+            setDraft(lastSearch.draft);
+            setImported(null);
+            setFromFinder(false);
+            setLastSearch(null);
+          }}
+          onDismiss={() => {
+            forgetLastSearch();
+            setLastSearch(null);
+          }}
+        />
+      )}
+
       {verdict === null && (
         <SavedReports userId={user?.id ?? null} configured={authConfigured} />
       )}

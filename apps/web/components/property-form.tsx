@@ -39,22 +39,55 @@ export interface Draft {
   readonly termYears: number;
 }
 
-export const INITIAL_DRAFT: Draft = {
-  label: "Flat in Tai Koo",
-  price: 8_000_000,
-  monthlyRent: 18_000,
-  saleableAreaSqft: 500,
-  transactionDate: "2026-07-30",
+/**
+ * The form's starting state: **blank, not a worked example.**
+ *
+ * This used to be `INITIAL_DRAFT` — "Flat in Tai Koo", HK$8,000,000, HK$18,000 rent, 500 sqft,
+ * a HK$4,000,000 mortgage — and it was the first thing a reader saw on `/analyse`. Three
+ * problems with that, and the third is the one that matters:
+ *
+ *  1. Every figure was invented, sitting in fields labelled as *your* property's.
+ *  2. `transactionDate` was hardcoded to a fixed day and had already gone stale, so the
+ *     stamp-duty rule set was picked by a date nobody chose.
+ *  3. **A prefilled form produces a complete, plausible report before the reader has typed
+ *     anything** — a 1.78% net yield for a flat that does not exist. Everywhere else this
+ *     product refuses to show a number it cannot source; the landing state of its main tool
+ *     was doing exactly that.
+ *
+ * ## What is blank and what is not
+ *
+ * **Blank: facts about the property and the deal** — label, price, rent, area, the loan, and
+ * every cash cost. Nobody can guess these, and a guess here is the invented-figure problem
+ * again.
+ *
+ * **Kept: rate assumptions with defensible market defaults** — 4% vacancy, 3% interest, a
+ * 25-year term, owner pays rates, buyer is a permanent resident. These are not claims about
+ * *this* property; they are the conventions the engine needs to compute anything at all, they
+ * are all editable, and the report already names each one in "What to watch" (the
+ * "No vacancy assumed" finding exists precisely to flag one of them). Zeroing them would be
+ * the opposite failure: a 0% vacancy rate and a 0% interest rate are *wrong*, not empty.
+ *
+ * `transactionDate` is blank here and filled with today's date on mount — see the effect in
+ * `app/analyse/page.tsx`. Deliberately not `new Date()` at module scope: this is a client
+ * component that Next.js also renders on the server, and a server in UTC against a browser in
+ * Hong Kong can disagree about what day it is, which is a hydration mismatch.
+ */
+export const EMPTY_DRAFT: Draft = {
+  label: "",
+  price: 0,
+  monthlyRent: 0,
+  saleableAreaSqft: 0,
+  transactionDate: "",
   isPermanentResident: true,
   ownsOtherResidentialProperty: false,
   purchasingViaCompany: false,
-  monthlyManagementFee: 1_200,
-  annualOtherCosts: 10_000,
-  agencyFee: 80_000,
-  legalFees: 15_000,
+  monthlyManagementFee: 0,
+  annualOtherCosts: 0,
+  agencyFee: 0,
+  legalFees: 0,
   vacancyRate: 4,
   ownerPaysRates: true,
-  loanAmount: 4_000_000,
+  loanAmount: 0,
   annualInterestRate: 3,
   termYears: 25,
 };
@@ -174,6 +207,7 @@ export function PropertyForm({
           label="Saleable area"
           unit="sq ft"
           value={draft.saleableAreaSqft}
+          blankWhenZero
           onChange={(v) => onChange({ saleableAreaSqft: v })}
           hint="Saleable, not gross — the two differ by roughly a quarter."
         />
@@ -374,6 +408,7 @@ function Num({
   unit,
   step,
   hint,
+  blankWhenZero = false,
 }: {
   readonly label: string;
   readonly value: number;
@@ -381,12 +416,22 @@ function Num({
   readonly unit?: string;
   readonly step?: string;
   readonly hint?: string;
+  /**
+   * Show an empty box instead of `0`. **Opt-in, and not the default, because zero means two
+   * different things in this form.** For an area or a fee, `0` means "not entered" and a form
+   * that starts blank should look blank rather than making the reader clear a zero. For a
+   * *rate*, `0` can be a deliberate choice — a 0% vacancy assumption is a real input, and the
+   * engine raises a "No vacancy assumed" finding about it — so blanking it would hide a
+   * decision the reader actually made.
+   */
+  readonly blankWhenZero?: boolean;
 }): React.JSX.Element {
   return (
     <Shell label={label} unit={unit} hint={hint}>
       <input
         type="number"
-        value={value}
+        // `Number("")` is 0, so clearing the box round-trips back to zero without extra work.
+        value={blankWhenZero && value === 0 ? "" : value}
         step={step}
         onChange={(e) => onChange(Number(e.target.value))}
         className={`${INPUT} font-mono`}
@@ -415,7 +460,10 @@ function Money({
         </span>
         <input
           type="number"
-          value={value}
+          /* Money is always "not entered" at zero — no listing costs HK$0 and no rent is
+             HK$0 — so an empty box is the honest rendering of an unfilled form. Same
+             reasoning as `Num`'s `blankWhenZero`, which is opt-in because rates differ. */
+          value={value === 0 ? "" : value}
           onChange={(e) => onChange(Number(e.target.value))}
           className={`${INPUT} pl-12 font-mono`}
         />

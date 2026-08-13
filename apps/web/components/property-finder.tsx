@@ -20,7 +20,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 import { ListingsMap, type DistrictHeat, type FinderPin } from "./listings-map";
-import { draftToCoreInput, INITIAL_DRAFT, type Draft } from "./property-form";
+import { draftToCoreInput, EMPTY_DRAFT, type Draft } from "./property-form";
 
 /**
  * A Mashvisor-style "Property Finder" — screen units against price, size and yield
@@ -30,9 +30,15 @@ import { draftToCoreInput, INITIAL_DRAFT, type Draft } from "./property-form";
  * street, precisely so nothing on this page can be mistaken for a real address.
  *
  * **The screening metric is unlevered net yield**, computed by the real engine
- * (`computeVerdict`) against a fixed cash-purchase assumption set — the same one
- * `INITIAL_DRAFT` uses on `/analyse`. Clicking a card hands its figures to `/analyse`,
- * where the fabrication stops at the input, never at the arithmetic.
+ * (`computeVerdict`) against a fixed cash-purchase assumption set stated in
+ * `listingToDraft` below. Clicking a card hands its figures to `/analyse`, where the
+ * fabrication stops at the input, never at the arithmetic.
+ *
+ * It used to say this assumption set was "the same one `INITIAL_DRAFT` uses on `/analyse`".
+ * That stopped being true when `/analyse` was changed to start blank: `EMPTY_DRAFT` now
+ * contributes only the buyer booleans and the (unused, because `loanAmount` is 0) financing
+ * rates. Every money field is set explicitly here, which is why the yields on this page did
+ * not move when the form's defaults were emptied.
  *
  * `districtQuery` and `view` are controlled from `app/finder/page.tsx`, which also owns
  * `FinderShell`'s top bar — the search box and the Map/Table toggle live in that bar,
@@ -43,7 +49,7 @@ const TRANSACTION_DATE = "2026-08-01";
 
 export function listingToDraft(l: DemoListing, districtLabel: string): Draft {
   return {
-    ...INITIAL_DRAFT,
+    ...EMPTY_DRAFT,
     label: `${l.bedrooms}-bed sample flat — ${districtLabel}`,
     price: l.priceHkd,
     monthlyRent: l.monthlyRentHkd,
