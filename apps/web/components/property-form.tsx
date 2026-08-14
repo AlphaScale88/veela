@@ -1,6 +1,7 @@
 "use client";
 
 import { money, type PropertyInput } from "@veela/core";
+import { estimateMonthlyRent } from "@veela/fixtures";
 import type { CreatePropertyInput } from "@veela/types";
 import type { ReactNode } from "react";
 
@@ -169,6 +170,69 @@ interface Props {
   readonly onSubmit: () => void;
   readonly pending: boolean;
   readonly error: string | null;
+  /** Applying the RVD estimate goes through its own callback rather than `onChange`, so the
+   *  page can remember the rent was estimated and label it as such — and can clear that flag
+   *  the moment the reader types over it. */
+  readonly onUseRentEstimate: (monthlyRent: number) => void;
+}
+
+/**
+ * Offered only when there is a **price and an area but no rent** — the exact state a for-sale
+ * listing import leaves behind, since sale listings publish no rent and the report then shows
+ * a 0.00% yield that reads as a verdict rather than a gap.
+ *
+ * Shows its whole derivation on the face of it: the Class, the yield, the month. That is the
+ * condition this codebase attaches to every estimate — a number a reader can check and argue
+ * with, not one that appears from nowhere. It fills the field but never submits, and typing
+ * over it clears the estimated flag.
+ */
+function RentEstimateHint({
+  draft,
+  onUse,
+}: {
+  readonly draft: Draft;
+  readonly onUse: (monthlyRent: number) => void;
+}): React.JSX.Element | null {
+  if (draft.monthlyRent > 0 || draft.price <= 0) return null;
+
+  const estimate = estimateMonthlyRent(draft.price, draft.saleableAreaSqft);
+  if (estimate === null) {
+    // Price but no area: RVD's Classes are defined by area, so there is no defensible band to
+    // read a yield from. Say what is missing instead of guessing at the middle of the range.
+    return (
+      <p className="mt-1.5 text-xs leading-relaxed text-muted">
+        No rent yet — a yield needs one. Add the <strong className="text-mist">saleable area</strong>{" "}
+        and we can estimate it from the government&apos;s own market yields.
+      </p>
+    );
+  }
+
+  return (
+    <div className="mt-1.5 rounded-card border border-accent/30 bg-accent/[0.04] px-3 py-2.5">
+      <p className="text-xs leading-relaxed text-mist">
+        No rent on this listing. The Rating and Valuation Department&apos;s market yield for{" "}
+        <strong className="font-medium">{estimate.classLabel}</strong> is{" "}
+        <strong className="font-medium">{estimate.grossYieldPct}%</strong> ({estimate.period.slice(0, 7)}),
+        which implies about{" "}
+        <strong className="font-medium">
+          HK${estimate.monthlyRentHkd.toLocaleString("en-HK")}/month
+        </strong>
+        .
+      </p>
+      <button
+        type="button"
+        onClick={() => onUse(estimate.monthlyRentHkd)}
+        className="btn-secondary mt-2 !px-3 !py-1.5 !text-xs"
+      >
+        Use this estimate
+      </button>
+      <p className="mt-2 text-[11px] leading-relaxed text-muted">
+        A territory-wide figure for flats of this size, not a valuation of this one — RVD
+        publishes no per-district domestic series. Treat it as a starting point and replace it
+        with a real asking rent when you have one.
+      </p>
+    </div>
+  );
 }
 
 export function PropertyForm({
@@ -177,6 +241,7 @@ export function PropertyForm({
   onSubmit,
   pending,
   error,
+  onUseRentEstimate,
 }: Props): React.JSX.Element {
   return (
     <form
@@ -202,6 +267,7 @@ export function PropertyForm({
           label="Monthly rent"
           value={draft.monthlyRent}
           onChange={(v) => onChange({ monthlyRent: v })}
+          below={<RentEstimateHint draft={draft} onUse={onUseRentEstimate} />}
         />
         <Num
           label="Saleable area"
@@ -446,11 +512,14 @@ function Money({
   value,
   onChange,
   unit,
+  below,
 }: {
   readonly label: string;
   readonly value: number;
   readonly onChange: (v: number) => void;
   readonly unit?: string;
+  /** Rendered under the control — used by "Monthly rent" for the RVD estimate offer. */
+  readonly below?: ReactNode;
 }): React.JSX.Element {
   return (
     <Shell label={label} unit={unit}>
@@ -468,6 +537,7 @@ function Money({
           className={`${INPUT} pl-12 font-mono`}
         />
       </span>
+      {below}
     </Shell>
   );
 }

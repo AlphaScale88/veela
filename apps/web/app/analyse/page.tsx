@@ -124,6 +124,17 @@ export default function AnalysePage(): React.JSX.Element {
   const [lastSearch, setLastSearch] = useState<LastSearch | null | undefined>(undefined);
 
   /**
+   * True once the reader accepts the RVD-derived rent estimate, false again the moment they
+   * edit the rent, price or area.
+   *
+   * Kept in page state rather than on `Draft` deliberately: `Draft` is the API contract
+   * (`createPropertySchema` would reject an unknown field), and more importantly this is a
+   * fact about *where a number came from in this session*, not about the property. A saved
+   * property's stored figures are just figures.
+   */
+  const [rentEstimated, setRentEstimated] = useState(false);
+
+  /**
    * Today's date, set on mount rather than baked into `EMPTY_DRAFT`.
    *
    * The old default was a hardcoded day that had already gone stale, which quietly chose the
@@ -588,13 +599,28 @@ export default function AnalysePage(): React.JSX.Element {
       <div className="mt-10 grid gap-8 lg:grid-cols-[1.55fr_1fr] lg:items-start">
         <PropertyForm
           draft={draft}
-          onChange={(patch) => setDraft((d) => ({ ...d, ...patch }))}
+          onChange={(patch) => {
+            /* Typing over the rent — or changing the price or area the estimate was derived
+               from — makes the "estimated" label wrong, so it is dropped. */
+            if (
+              patch.monthlyRent !== undefined ||
+              patch.price !== undefined ||
+              patch.saleableAreaSqft !== undefined
+            ) {
+              setRentEstimated(false);
+            }
+            setDraft((d) => ({ ...d, ...patch }));
+          }}
           onSubmit={() => void submit()}
           pending={pending}
           error={error}
+          onUseRentEstimate={(monthlyRent) => {
+            setDraft((d) => ({ ...d, monthlyRent }));
+            setRentEstimated(true);
+          }}
         />
 
-        <Rail preview={preview} />
+        <Rail preview={preview} rentMissing={draft.monthlyRent <= 0} />
       </div>
 
       <div ref={reportRef} className="scroll-mt-20">
@@ -617,6 +643,20 @@ export default function AnalysePage(): React.JSX.Element {
                   onConsentDecided={(consentedAt) => setAggregateConsentAt(consentedAt)}
                 />
               </div>
+            )}
+
+            {/* Every yield below is only as real as the rent it came from. An estimated rent
+                must be visible *on the report*, not only next to the field it was applied in
+                — this is the screen someone acts on, and the engine has no idea the figure
+                was derived rather than observed. */}
+            {rentEstimated && (
+              <p className="mt-4 rounded-card border border-caution/40 bg-caution/10 px-4 py-3 text-sm leading-relaxed text-muted">
+                <strong className="text-mist">The rent in this report is an estimate.</strong>{" "}
+                It was derived from the Rating and Valuation Department&apos;s published market
+                yield for flats of this size, territory-wide — not from an asking rent for this
+                property, and not from comparable flats nearby. Every yield below moves with it.
+                Replace it with a real figure before acting on any of this.
+              </p>
             )}
 
             <div className="mt-6">
@@ -833,7 +873,24 @@ function ImportSummaryCard({ listing }: { readonly listing: ImportedListing }): 
  * this sticky context — it now renders separately, below the importer, so this owns its
  * own `lg:sticky` again.
  */
-function Rail({ preview }: { readonly preview: Verdict | null }): React.JSX.Element {
+function Rail({
+  preview,
+  rentMissing,
+}: {
+  readonly preview: Verdict | null;
+  /**
+   * True when there is a price but no rent — which is the normal state straight after
+   * importing a **for-sale** listing, since those publish no rent.
+   *
+   * `computeVerdict` returns a perfectly correct 0.00% for zero rent, and that is exactly the
+   * problem: on screen it reads as a *finding about the property* ("this yields nothing")
+   * rather than a missing input, in the same red the engine uses for a genuinely bad deal.
+   * The acquisition figures beside it — stamp duty, cash to acquire — are real and unaffected
+   * by the missing rent, so blanking the whole rail would throw away correct information.
+   * Only the rent-dependent numbers are suppressed.
+   */
+  readonly rentMissing: boolean;
+}): React.JSX.Element {
   if (preview === null) {
     return (
       <aside className="rounded-panel border border-line bg-surface p-5 text-sm text-muted shadow-card lg:sticky lg:top-24">
@@ -857,13 +914,17 @@ function Rail({ preview }: { readonly preview: Verdict | null }): React.JSX.Elem
           Net yield
         </div>
         <div
-          className="tnum mt-1 font-display text-[42px] font-semibold leading-none tracking-[-0.03em]"
-          style={{ color: standingColor[standing] }}
+          className={`tnum mt-1 font-display text-[42px] font-semibold leading-none tracking-[-0.03em] ${
+            rentMissing ? "text-muted" : ""
+          }`}
+          style={rentMissing ? undefined : { color: standingColor[standing] }}
         >
-          {formatPercent(preview.returns.netYield)}
+          {rentMissing ? "—" : formatPercent(preview.returns.netYield)}
         </div>
         <div className="mt-2 text-xs leading-snug text-muted">
-          After costs and tax, before financing
+          {rentMissing
+            ? "No monthly rent yet — a yield needs one. Enter it, or use the estimate offered under the rent field."
+            : "After costs and tax, before financing"}
         </div>
       </div>
 
@@ -878,9 +939,12 @@ function Rail({ preview }: { readonly preview: Verdict | null }): React.JSX.Elem
         />
         <RailStat
           label="Cash-on-cash"
-          value={formatPercent(preview.returns.cashOnCash)}
+          value={rentMissing ? "—" : formatPercent(preview.returns.cashOnCash)}
         />
-        <RailStat label="Payback" value={formatYears(preview.returns.paybackYears)} />
+        <RailStat
+          label="Payback"
+          value={rentMissing ? "—" : formatYears(preview.returns.paybackYears)}
+        />
       </dl>
 
       <div className="px-5 py-4">

@@ -1546,3 +1546,113 @@ export const RVD_SECONDARY_SALES_COUNT: readonly (number | null)[] = [5129,4189,
 /** Total consideration, HK$ millions. Index-aligned. */
 export const RVD_PRIMARY_SALES_VALUE_HKDM: readonly (number | null)[] = [8218,4305,4190,6516,5844,4840,1866,2313,7005,5032,3202,5757,5342,2001,6418,5710,3314,3975,6415,5755,5012,13907,7897,7302,8698,12848,14089,6884,4476,6199,6587,4941,6544,7923,11607,6967,6021,8060,5049,5404,19273,8073,7995,5619,2515,15974,8178,1047,545,604,3440,4334,5848,4238,2063,6054,13686,4455,4061,8397,4659,4820,4501,20854,13487,6745,7493,8677,7163,14913,21092,8066,8927,3614,11644,2702,3788,23532,5300,1208,3575,5135,907,6999,4134,1653,8845,8034,11478,14925,8574,12865,20575,7593,10592,9954,5433,4143,14432,19177,6042,5627,12103,21768,5980,15427,13974,5597,3597,5391,12647,9778,17200,14850,10980,13007,3586,6237,19900,13712,9707,6132,17546,9985,12894,9129,12177,9889,8505,21419,10780,2805,4895,12106,7981,6805,10341,1074,1872,4704,4749,4955,16483,19907,14007,9983,8051,11005,8544,11078,29291,16207,14776,23258,13459,16498,13003,13527,8483,16833,17805,14415,15720,9016,14094,10601,9026,18505,6188,3077,7496,15975,20981,13556,11828,14873,28211,24198,31158,9048,8164,17465,20632,38342,21342,27416,12133,14369,23434,15809,20623,20783,13976,17159,11253,26644,13200,29636,28775,18236,17926,21382,9776,11542,28401,17551,15211,27707,32682,15405,17937,12894,11873,16951,19775,11216,7468,9868,7555,8161,15015,21462,22184,11955,9601,9961,23413,23131,7269,17229,20210,16275,24951,28170,28567,11305,21261,19479,19014,17158,13699,6872,2533,3417,18262,16270,13451,12019,10466,5230,4763,2740,5072,9053,18872,25758,11807,12718,7438,8440,7663,4805,6318,9684,8336,5677,13764,42350,26255,12026,9687,11253,5698,16072,30838,11119,7692,8368,16272,13475,14759,34544,19835,17575,21621,23856,22731,20098,18654,26124,18261,28976,28177,28760];
 export const RVD_SECONDARY_SALES_VALUE_HKDM: readonly (number | null)[] = [9966,8070,6795,8739,11097,11289,8406,7554,5108,6626,5920,5594,6655,4405,5102,4810,4174,4994,6078,6448,6235,13823,9739,8068,9330,13463,18906,19840,15388,11527,9439,9201,12932,18662,23368,16917,17269,15427,21639,33258,26527,22555,16342,16396,15418,13933,11233,9626,11218,13015,16406,15910,17525,15194,11701,14982,15282,13697,15400,13973,16691,17312,20690,18588,24700,24935,21239,28083,16938,28916,49024,44445,47600,40151,25798,24862,22516,26899,19838,13766,15158,11143,8100,10663,11990,11969,16603,23546,27945,34788,34992,28122,35588,28741,27561,24771,30721,36635,33926,34105,36806,27369,40078,47456,35204,29520,44857,34306,29736,40217,39218,29218,32248,38006,20792,18788,19373,16226,15866,11950,12480,12900,41494,34692,34458,24941,19596,29846,31932,33426,31188,14355,23647,26589,19059,11909,13685,17625,19119,14862,14219,13410,13899,15047,13252,11096,12505,18112,23318,22799,27822,25828,27387,26446,21362,27333,30207,27324,23360,18066,22395,28828,28831,22049,19426,11919,11771,11317,9611,8692,9610,18519,19935,19047,17905,25764,27746,30306,30502,23815,19275,18995,29743,31240,32218,31723,21079,19282,21838,26079,33194,31172,35830,33735,27557,35180,38984,38387,36462,28529,19157,17189,16244,12534,16523,18529,30659,42394,45764,29925,26132,23689,15788,23737,28004,20046,17310,20539,24204,25572,37730,43333,37310,28252,33805,40092,34697,35615,32474,39705,49138,55275,51879,52703,50037,43192,34794,30201,32269,31350,29722,22601,24393,31741,39767,28888,20438,20473,18629,21949,21098,18300,20359,27602,39021,26610,24961,20903,19153,20205,15124,19693,13352,14640,19456,13419,16298,35106,27120,22465,25988,17218,15140,21203,26423,21444,19052,14646,22543,28722,23485,26517,26519,24633,25606,27217,28936,31129,30567,31474,36922,34697,37417,46848];
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Estimating a rent from a price
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * **A sale listing publishes no rent, and a yield product cannot work without one.**
+ *
+ * Importing a for-sale listing gave a price and an area but no rent, and the report duly
+ * showed a **0.00% net yield** — arithmetically true and completely misleading, because it
+ * reads as a finding about the property rather than a missing input. The honest options were
+ * to refuse to compute, or to estimate from something real and say so. This is the second.
+ *
+ * ## Why RVD's market yield, and not "similar homes nearby"
+ *
+ * The obvious approach — find comparable flats nearby and average their rents — needs a
+ * listings database Hong Kong does not give away. The Land Registry sells transactions one at
+ * a time at HK$10 with no bulk option and publishes **no rents at all**; Centaline and Midland
+ * hold the de-facto rental datasets and this project has repeatedly declined to scrape them
+ * (see "Hong Kong data landscape"). Building a comparables engine on data we do not have would
+ * mean inventing the comparables.
+ *
+ * **RVD publishes the answer directly.** The Rating and Valuation Department computes market
+ * *yields* for private domestic property monthly, by Class, from its own rental and price
+ * records — it is the valuer's own figure, free, official, and already ingested here as
+ * `RVD_YIELDS_BY_CLASS`. Yield relates rent to price, which is precisely the conversion
+ * needed:
+ *
+ *     monthly rent ≈ price × (gross yield ÷ 100) ÷ 12
+ *
+ * ## Class is decided by area, and that is why the area matters
+ *
+ * RVD's Classes are defined by **saleable area in square metres**, so an estimate needs the
+ * area as well as the price — a 400 sqft studio and a 1,600 sqft flat at the same price are
+ * different Classes with yields more than a point apart. Without an area there is no defensible
+ * Class and this returns `null` rather than guessing at the middle of the range.
+ *
+ * ## What this estimate is not
+ *
+ * It is a **territory-wide figure for a size band**, not a valuation of this flat. RVD
+ * publishes no per-district domestic series (checked against the department's full file list,
+ * not assumed — see the note on `RVD_YIELDS_BY_CLASS`), so "the average rent in *this area*"
+ * is not available at any price. A flat on the Peak and one in Tuen Mun of the same size share
+ * this number. Every caller must show it as an estimate, name the Class and the yield it came
+ * from, and let it be overwritten — which is what the UI does.
+ */
+export interface RentEstimate {
+  /** HK$ per month, rounded to the nearest hundred — the precision the input deserves. */
+  readonly monthlyRentHkd: number;
+  readonly classKey: RvdClassKey;
+  readonly classLabel: string;
+  /** The gross yield used, per cent, exactly as RVD published it. */
+  readonly grossYieldPct: number;
+  /** The month that yield is from, e.g. "2026-06-01". Recent months are provisional. */
+  readonly period: string;
+}
+
+const SQFT_PER_SQM = 10.7639;
+
+/** RVD's own Class boundaries, in square metres of saleable area. */
+export function rvdClassForAreaSqft(saleableAreaSqft: number): RvdClassKey | null {
+  if (!Number.isFinite(saleableAreaSqft) || saleableAreaSqft <= 0) return null;
+  const sqm = saleableAreaSqft / SQFT_PER_SQM;
+  if (sqm < 40) return "A";
+  if (sqm < 70) return "B";
+  if (sqm < 100) return "C";
+  if (sqm < 160) return "D";
+  return "E";
+}
+
+/**
+ * The most recent month RVD actually published a yield for this Class.
+ *
+ * Walks backwards rather than taking the last element: `RVD_YIELDS_BY_CLASS` stores `null`
+ * where RVD reported nothing that month (fewer than 20 transactions), and those holes are kept
+ * rather than interpolated. Class E in particular goes quiet for months at a time.
+ */
+function latestYield(classKey: RvdClassKey): { pct: number; period: string } | null {
+  const series = RVD_YIELDS_BY_CLASS[classKey];
+  for (let i = series.length - 1; i >= 0; i--) {
+    const pct = series[i];
+    const period = RVD_YIELD_PERIODS[i];
+    if (pct !== null && pct !== undefined && pct > 0 && period !== undefined) {
+      return { pct, period };
+    }
+  }
+  return null;
+}
+
+/** `null` when there is no price, no area, or no published yield for the Class — never a
+ *  guess. A caller with `null` should ask for the rent rather than invent one. */
+export function estimateMonthlyRent(
+  priceHkd: number,
+  saleableAreaSqft: number,
+): RentEstimate | null {
+  if (!Number.isFinite(priceHkd) || priceHkd <= 0) return null;
+  const classKey = rvdClassForAreaSqft(saleableAreaSqft);
+  if (classKey === null) return null;
+  const found = latestYield(classKey);
+  if (found === null) return null;
+
+  const annual = priceHkd * (found.pct / 100);
+  return {
+    monthlyRentHkd: Math.round(annual / 12 / 100) * 100,
+    classKey,
+    classLabel: RVD_CLASS_LABELS[classKey],
+    grossYieldPct: found.pct,
+    period: found.period,
+  };
+}

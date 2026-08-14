@@ -1434,6 +1434,62 @@ phantom preview, gated submit records the search, a fresh tab offers it with a r
 yield, Restore fills the form exactly, Discard clears storage, and the duplicate case is
 suppressed.
 
+## Estimating a rent when the listing has none (14/08/2026)
+
+Reported from a real Centaline import: a for-sale listing gives a price and an area but **no
+rent**, and the report showed a **0.00% net yield**. Arithmetically correct and completely
+misleading — in the same red the engine uses for a genuinely bad deal, it reads as a *finding
+about the property* rather than a missing input.
+
+**Two separate fixes, and the first one matters on its own.** The rail now shows **—** for net
+yield, cash-on-cash and payback whenever the rent is zero, with a line saying a yield needs a
+rent. Stamp duty and cash-to-acquire stay visible: they do not depend on rent, they were
+correct all along, and blanking the whole rail would throw away right answers to punish a
+missing one.
+
+### Where the estimate comes from, and why not "comparable flats nearby"
+
+The natural request — average the rents of similar homes in the area — needs a rental listings
+database Hong Kong does not give away. The Land Registry publishes **no rents at all** and
+sells transactions one at a time at HK$10 with no bulk option; Centaline and Midland hold the
+de-facto rental datasets, and this project has repeatedly declined to scrape them (see the
+listing-importer sections — that line held again here). Building comparables on data we do not
+have would mean inventing the comparables.
+
+**RVD publishes the answer directly, and it was already in the repo.** The Rating and Valuation
+Department computes market *yields* for private domestic property monthly, by Class, from its
+own rent and price records — ingested as `RVD_YIELDS_BY_CLASS` since 09/08/2026 and, until now,
+only ever drawn as a chart. Yield relates rent to price, which is exactly the conversion
+needed:
+
+    monthly rent ≈ price × (gross yield ÷ 100) ÷ 12
+
+`estimateMonthlyRent()` lives beside the data in `rvd-real.ts`. **The area is not optional**:
+RVD's Classes are size bands in square metres, and a 400 sqft studio and a 1,600 sqft flat at
+the same price sit in different Classes with yields more than a point apart. With no area it
+returns `null` and the UI asks for one rather than guessing at the middle of the range. It also
+walks the series **backwards** to the last month RVD actually published, because those arrays
+keep `null` holes where RVD reported nothing (fewer than 20 transactions) rather than
+interpolating — Class E goes quiet for months at a time.
+
+Verified against the reported listing: HK$12,980,000 / 692 sqft → 64.3 m² → **Class B, 3.0%
+(2026-06) → ≈ HK$32,500/month**, giving a 2.32% net yield in place of 0.00%.
+
+### The honesty conditions attached to it
+
+- **The offer shows its whole derivation** — Class, yield, month — so the number can be argued
+  with. Same condition the area score and the star rating live under.
+- **It fills the field, never submits**, and it is offered only when there is a price and an
+  area but no rent.
+- **The report says the rent is an estimate**, not just the field. That banner is on the screen
+  someone acts on, and the engine has no idea the figure was derived rather than observed.
+- **The flag is page state, not `Draft`** — `Draft` is the API contract and would reject an
+  unknown field, and more to the point this is a fact about where a number came from in this
+  session, not about the property. Editing the rent, price or area clears it.
+- **It is territory-wide for a size band, not a valuation.** RVD publishes no per-district
+  domestic series, so a flat on the Peak and one in Tuen Mun of the same size share this
+  number. Said in the UI, twice.
+
 ## Working conventions
 - Dates DD/MM/YYYY. Currency: **HKD** for Hong Kong, **VND** for Vietnam, **EUR** for
   France — always state which, never a bare number. Keep a single reporting currency
