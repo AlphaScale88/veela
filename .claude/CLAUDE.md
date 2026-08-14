@@ -1608,6 +1608,40 @@ price, rent and building location. `/privacy`'s PICS names classes of transferee
 before pointing this at real users' data.** Recorded in `ai.ts` and in `.env.example` so it
 cannot be switched on without meeting the warning.
 
+## A local model works — in dev (15/08/2026)
+
+Asked whether a local model could be used instead. **Yes, and the support was already there** —
+`AI_BASE_URL` accepts any OpenAI-compatible endpoint and is tried first. Ollama and LM Studio
+both serve that API, so it is a two-line configuration:
+
+    ollama serve && ollama pull llama3.1:8b
+    AI_BASE_URL=http://127.0.0.1:11434/v1
+    AI_MODEL=llama3.1:8b
+
+**It is the only option that sends nothing anywhere.** The property figures never leave the
+machine, which *answers* the training-on-inputs concern rather than managing it — no new PDPO
+transferee, nothing to add to `/privacy`. For a task deliberately scoped to "explain figures the
+engine already computed", a small local model is also a reasonable fit; it is not being asked to
+know anything.
+
+**Two things the question exposed, both now fixed.**
+
+1. **A keyless endpoint was silently skipped.** `keyFor()` required `AI_API_KEY` to be non-empty
+   before the custom provider was even considered — but local runtimes have no key at all, so
+   every local model was excluded by the one check meant to validate configuration. For a custom
+   endpoint the **URL** is what makes it configured; the key is optional, and the `Authorization`
+   header is now omitted entirely rather than sent as junk (Ollama ignores it, but LM Studio and
+   some proxies reject a malformed one).
+2. **`localhost` is unreachable from Vercel, and nothing said so.** Setting
+   `AI_BASE_URL=http://127.0.0.1:…` in production means the function tries to reach a laptop from
+   Vercel's servers, records `fetch failed`, and falls through to the next provider — correct
+   behaviour, completely mystifying without a warning. Now stated in `.env.example` and `ai.ts`:
+   **local dev only**, unless the model gets a public HTTPS address or the app is hosted where it
+   can see the model.
+
+Verified against a keyless mock on `11434` with **no `AI_API_KEY` set**: it streamed, sent no
+`Authorization` header, and honoured `AI_MODEL=llama3.1:8b`.
+
 ## Working conventions
 - Dates DD/MM/YYYY. Currency: **HKD** for Hong Kong, **VND** for Vietnam, **EUR** for
   France — always state which, never a bare number. Keep a single reporting currency
