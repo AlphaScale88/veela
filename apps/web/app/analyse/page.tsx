@@ -21,7 +21,8 @@ import { useAuth } from "../../components/auth-provider";
 import { BuildingSearch } from "../../components/building-search";
 import { ImportedListingMap } from "../../components/imported-listing-map";
 import { ListingImporter } from "../../components/listing-importer";
-import { NeighbourhoodPanel } from "../../components/neighbourhood-panel";
+import { MapPinIcon } from "../../components/icons";
+import { NeighbourhoodPanel, type NeighbourhoodData } from "../../components/neighbourhood-panel";
 import {
   forgetLastSearch,
   LastSearchCard,
@@ -29,6 +30,7 @@ import {
   rememberLastSearch,
   type LastSearch,
 } from "../../components/last-search";
+import { ReportBrief } from "../../components/report-brief";
 import { SavedReports } from "../../components/saved-reports";
 import {
   draftToApiInput,
@@ -63,6 +65,35 @@ function summariseForChat(label: string, verdict: Verdict): string {
   }
 
   return lines.join("\n");
+}
+
+/**
+ * The area data as plain lines for the AI brief.
+ *
+ * Prose for the same reason `summariseForChat` is prose: the endpoint takes text, so there is
+ * nothing structured for a model to recompute even if it tried. Counts plus the nearest few by
+ * name — enough to say "the station is 3 minutes away and there are no schools", which is the
+ * kind of thing a reader wants said out loud, and not enough to pretend it is a survey.
+ *
+ * The straight-line caveat travels with it. A model told "240 m" will otherwise write "a
+ * three-minute walk", which is a claim the data does not support.
+ */
+function summariseAreaForBrief(area: NeighbourhoodData): string {
+  const counts = Object.entries(area.counts)
+    .filter(([, n]) => n > 0)
+    .map(([kind, n]) => `${kind}: ${n}`)
+    .join(", ");
+  const nearest = area.items
+    .slice(0, 12)
+    .map((a) => `- ${a.name} (${a.subtype.replace(/_/g, " ")}, ${a.metres} m)`)
+    .join("\n");
+  return [
+    `Counts within walking distance — ${counts === "" ? "nothing mapped nearby" : counts}.`,
+    "Distances are straight-line, not walking distance; do not convert them into walking times.",
+    nearest === "" ? "" : `Closest places:\n${nearest}`,
+  ]
+    .filter((l) => l !== "")
+    .join("\n");
 }
 
 /** sessionStorage, not localStorage — this only needs to survive the few seconds of a
@@ -522,6 +553,65 @@ export default function AnalysePage(): React.JSX.Element {
   const placeLongitude = pickedPlace?.longitude ?? importedLongitude;
   const placeLabel = pickedPlace?.label ?? imported?.address ?? draft.label;
 
+  /**
+   * **Fetch the area data while the reader is still typing, not when they open the report.**
+   *
+   * A cold Overpass lookup is 4–35 seconds (see `neighbourhood.ts` on why the budget is that
+   * generous). Asked for on click, that is a section that arrives late in a report that was
+   * otherwise instant — which is exactly why it used to hide behind a *Check the area* button.
+   * But the location is usually known long before the report is asked for: a listing import
+   * carries coordinates, and the building search attaches them. So the work starts then, in
+   * the background, and the report gets a section that is already finished.
+   *
+   * **Keyed by rounded coordinates, and fired once per location.** The ref guards against
+   * React re-runs and against a reader nudging the same building twice; the 3-decimal key is
+   * the same ~110m rounding the server caches on, so two coordinates that would hit one cache
+   * row do not cost two requests. Overpass is donated infrastructure — prefetching is only
+   * defensible if it stays one request per place.
+   */
+  const [areaData, setAreaData] = useState<NeighbourhoodData | null>(null);
+  const [areaPrefetching, setAreaPrefetching] = useState(false);
+  /** Attempted and did not land — Overpass refuses a cold lookup often enough that this is a
+   *  normal state, not an exception. Tracked separately so the status line can say so instead
+   *  of promising data the report will actually ask for with a button. */
+  const [areaFailed, setAreaFailed] = useState(false);
+  const prefetchedKeyRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (placeLatitude === undefined || placeLongitude === undefined) return;
+    const key = `${placeLatitude.toFixed(3)},${placeLongitude.toFixed(3)}`;
+    if (prefetchedKeyRef.current === key) return;
+    prefetchedKeyRef.current = key;
+
+    let cancelled = false;
+    setAreaData(null);
+    setAreaFailed(false);
+    setAreaPrefetching(true);
+    (async () => {
+      try {
+        const res = await fetch(
+          `/api/neighbourhood?lat=${placeLatitude}&lng=${placeLongitude}`,
+        );
+        if (cancelled) return;
+        if (!res.ok) {
+          setAreaFailed(true);
+          return;
+        }
+        const json = (await res.json()) as NeighbourhoodData;
+        if (!cancelled) setAreaData(json);
+      } catch {
+        if (!cancelled) setAreaFailed(true);
+        /* Silent: the panel still offers its own button, so a failed prefetch costs the
+           reader nothing but the wait they would have had anyway. */
+      } finally {
+        if (!cancelled) setAreaPrefetching(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [placeLatitude, placeLongitude]);
+
   return (
     /* In `AppShell` since 10/08/2026 — this is the core action of the product and it sat
        behind a marketing header that reached three destinations, so from here you could
@@ -596,6 +686,68 @@ export default function AnalysePage(): React.JSX.Element {
         </div>
       )}
 
+      {/**
+       * Naming the building **before** the report, not inside it.
+       *
+       * The building search used to live only in the report, in the branch that ran when no
+       * coordinates were known — which meant the area data could not start loading until the
+       * report already existed, and the reader met a *Check the area* button after waiting for
+       * the report itself. Moving it up here is what makes the prefetch possible at all: attach
+       * a location while the figures are still being typed and the lookup runs in that time.
+       *
+       * Hidden once a location is known, whether from here or from a listing import — there is
+       * nothing left to ask.
+       */}
+      {placeLatitude === undefined && (
+        <section className="mt-6 rounded-panel border border-line bg-surfaceMuted px-4 py-4 shadow-card">
+          <h2 className="flex items-center gap-2 text-sm font-semibold">
+            <MapPinIcon className="h-4 w-4 shrink-0 text-muted" />
+            Which building?
+          </h2>
+          <p className="mt-1 max-w-prose text-xs leading-relaxed text-muted">
+            Optional, and worth it: naming the building adds the whole area profile to your
+            report — schools, transport, shops, green space and what&apos;s under construction —
+            and it starts loading now rather than when you open the report.
+          </p>
+          <div className="mt-3">
+            <BuildingSearch
+              onSelect={(m) =>
+                setPickedPlace({
+                  label: m.label,
+                  latitude: m.latitude,
+                  longitude: m.longitude,
+                })
+              }
+            />
+          </div>
+        </section>
+      )}
+
+      {placeLatitude !== undefined && placeLongitude !== undefined && (
+        <p className="mt-6 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
+          <MapPinIcon className="h-3.5 w-3.5 shrink-0" />
+          <span>
+            Area data for <strong className="font-medium text-mist">{placeLabel}</strong>{" "}
+            {areaPrefetching
+              ? "is loading now, ready with your report."
+              : areaData !== null
+                ? "is ready — it appears in the full report."
+                : areaFailed
+                  ? "couldn't be fetched just now — OpenStreetMap was busy. You can retry it from the report."
+                  : "will load with the report."}
+          </span>
+          {pickedPlace !== null && (
+            <button
+              type="button"
+              onClick={() => setPickedPlace(null)}
+              className="underline hover:text-mist"
+            >
+              change building
+            </button>
+          )}
+        </p>
+      )}
+
       <div className="mt-10 grid gap-8 lg:grid-cols-[1.55fr_1fr] lg:items-start">
         <PropertyForm
           draft={draft}
@@ -659,6 +811,17 @@ export default function AnalysePage(): React.JSX.Element {
               </p>
             )}
 
+            {/* Above the report, because it is a way in to the figures rather than a footnote
+                on them — but after the save button, so the primary action stays first. The
+                summary is the *same* `summariseForChat` output the assistant already gets, so
+                the brief and the chat panel cannot describe the property differently. */}
+            <div className="mt-6">
+              <ReportBrief
+                summary={summariseForChat(draft.label, verdict)}
+                area={areaData === null ? undefined : summariseAreaForBrief(areaData)}
+              />
+            </div>
+
             <div className="mt-6">
               <VerdictView verdict={verdict} />
             </div>
@@ -674,6 +837,8 @@ export default function AnalysePage(): React.JSX.Element {
                   latitude={placeLatitude}
                   longitude={placeLongitude}
                   label={placeLabel}
+                  initialData={areaData}
+                  prefetching={areaPrefetching}
                 />
               ) : (
                 /* Rather than silently omitting the section — which is what used to happen

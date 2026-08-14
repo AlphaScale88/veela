@@ -15,6 +15,7 @@ import {
 } from "@veela/db";
 import {
   chatRequestSchema,
+  reportBriefSchema,
   createPropertySchema,
   buildingSearchQuerySchema,
   importListingRequestSchema,
@@ -231,6 +232,101 @@ export const api = new Hono<Env>()
         // A mid-stream failure (rate limit, network) still leaves the reader with
         // whatever text arrived — better than losing a partial, useful answer.
         await stream.write("\n\n[The response was interrupted.]");
+      }
+    });
+  })
+
+  /**
+   * A written brief on a report that has **already been computed**.
+   *
+   * ## The line this route does not cross
+   *
+   * Asked to "use AI to compute all the financials". It does not, and that is deliberate
+   * rather than unfinished. The yield, the stamp duty and the tax come from `computeVerdict` —
+   * a deterministic engine with the AVD table transcribed verbatim from the IRD, rule sets
+   * versioned by transaction date, and 23 tests asserting continuity at every marginal-relief
+   * boundary. Substituting a language model for that would trade an auditable, reproducible,
+   * *sourced* figure for a plausible one, break the invariant this app leans on everywhere
+   * ("the rail and the report call the same function, so they cannot disagree"), and put an
+   * unsourceable number on the screen a reader acts on. This codebase treats an unsourced rate
+   * as a bug.
+   *
+   * So the division of labour is: **the engine computes, the model explains.** Everything in
+   * the prompt below is a figure the engine already produced or a count OSM already returned;
+   * the model's only job is to say what they mean together, which is judgement over public
+   * rules — exactly the use this project's own open question 2 identified as the natural fit.
+   *
+   * The request carries **prose, not the `Verdict` shape** — same reasoning as the chat
+   * endpoint's `context` field: coupling this contract to the engine's output type would make
+   * every `Verdict` change a break here too.
+   *
+   * Streamed as plain text, and a missing `ANTHROPIC_API_KEY` arrives as readable body text
+   * rather than a status code, for the same reason as `/chat`: headers are already committed.
+   */
+  .post("/report/brief", zValidator("json", reportBriefSchema), (c) => {
+    const { summary, area } = c.req.valid("json");
+
+    return honoStream(c, async (stream) => {
+      stream.onAbort(() => {
+        messageStream.abort();
+      });
+
+      const system = `You are writing a short brief for an investor on a Hong Kong \
+residential property, inside Veela's own report.
+
+**Every number you are given was computed by Veela's rules engine. Treat them as given and \
+never recompute, adjust or contradict them.** If a figure you would want is absent, say it is \
+not in the report rather than estimating it.
+
+Write 3 short paragraphs, no headings, no bullet lists:
+1. What the numbers say about this as an investment — lead with the net yield and what the \
+cash actually buys.
+2. The findings that matter most and what they would mean in practice.
+3. What is nearby, if area data is given, and what it implies for letting the flat.
+
+Rules:
+- Plain English, no jargon without explaining it, no filler, no restating the whole table.
+- Hong Kong mechanics only: ad valorem stamp duty, property tax at 15% on 80% of gross rent, \
+no capital gains tax on investment property (but frequent trading risks Profits Tax), and \
+Cap. 349's 28-day rule making unlicensed short lets a criminal offence.
+- Never invent a rate, a rent, a district figure or a comparable. You have no data beyond what \
+is below.
+- You are not a licensed adviser. Do not tell them to buy or not buy; give them what to weigh.
+- If the rent is described as estimated, say plainly that every yield rests on that estimate.`;
+
+      let messageStream: ReturnType<Anthropic["messages"]["stream"]>;
+      try {
+        messageStream = anthropic().messages.stream({
+          model: "claude-sonnet-5",
+          max_tokens: 900,
+          system,
+          messages: [
+            {
+              role: "user",
+              content:
+                area === undefined || area === ""
+                  ? `${summary}\n\nNo area data is available for this property.`
+                  : `${summary}\n\nWhat is nearby (OpenStreetMap, straight-line distances):\n${area}`,
+            },
+          ],
+        });
+      } catch (cause) {
+        const message =
+          cause instanceof HTTPException
+            ? cause.message
+            : "The written brief is unavailable.";
+        await stream.write(message);
+        return;
+      }
+
+      try {
+        for await (const event of messageStream) {
+          if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
+            await stream.write(event.delta.text);
+          }
+        }
+      } catch {
+        await stream.write("\n\n[The brief was interrupted.]");
       }
     });
   })

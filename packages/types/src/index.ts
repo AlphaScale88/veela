@@ -278,3 +278,22 @@ export const updateProfileSchema = z.object({
   favoriteDistricts: z.array(z.string()).optional(),
 });
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
+
+/**
+ * `POST /report/brief` — an AI-written commentary on a report the engine already computed.
+ *
+ * **Prose in, prose out, and no `Verdict` in sight.** Same reasoning as `chatRequestSchema`'s
+ * `context`: coupling this contract to the engine's output shape would make every change to
+ * `Verdict` a breaking change here. It also enforces the division of labour — the model is
+ * handed figures as *text*, so it has nothing to recompute even if it wanted to.
+ */
+export const reportBriefSchema = z.object({
+  /** The computed report, rendered as plain lines. Capped because this is a summary of one
+   *  property, not a document; a larger body means a caller is sending the wrong thing. */
+  summary: z.string().min(1).max(4_000),
+  /** Nearby amenity counts and the closest few, as text. Optional: a report with no location
+   *  attached has none, and the prompt is told to say so rather than invent a neighbourhood. */
+  area: z.string().max(4_000).optional(),
+});
+
+export type ReportBriefInput = z.infer<typeof reportBriefSchema>;

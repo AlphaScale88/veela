@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   BusIcon,
@@ -18,10 +18,18 @@ import { KIND_PIN, NeighbourhoodMap } from "./neighbourhood-map";
 /**
  * What's within walking distance — schools, stations, shops, health, green space.
  *
- * **Loads on demand, not with the report.** Overpass takes seconds (ten, in testing), and
- * the report itself is instant; blocking it on a community API would make the whole page
- * feel broken to buy a section most readers will not scroll to. So this renders a button
- * and fetches when asked.
+ * **Prefetched when it can be, on demand when it can't.**
+ *
+ * This used to say "loads on demand, not with the report" and render a *Check the area*
+ * button, because Overpass takes seconds and blocking the report on a community API made the
+ * whole page feel broken. That constraint is real and unchanged — what changed is *when* the
+ * work can start. `/analyse` now fires the lookup as soon as a location is known, while the
+ * reader is still filling in figures, and hands the result down as `initialData`. By the time
+ * the report is asked for, the section is simply there.
+ *
+ * The button is still the fallback for the case the prefetch cannot cover: no location known
+ * until the report exists, or a prefetch that failed. So the slow path is unchanged rather
+ * than replaced — it just stopped being the common one.
  *
  * ## Every count opens the list behind it
  *
@@ -64,7 +72,7 @@ interface Amenity {
   readonly longitude: number;
 }
 
-interface Data {
+export interface NeighbourhoodData {
   readonly counts: Readonly<Record<AmenityKind, number>>;
   /** Every match, nearest first — not a capped preview, because the counts are clickable
    *  and open exactly this list filtered by kind. See the header comment. */
@@ -260,10 +268,31 @@ interface Props {
   readonly longitude: number;
   /** Shown in the heading so it's clear which property the area belongs to. */
   readonly label?: string;
+  /**
+   * Already-fetched area data, handed down by `/analyse` when it prefetched while the reader
+   * was still filling the form.
+   *
+   * **This is what removes the "Check the area" button.** The button existed because Overpass
+   * takes seconds and blocking the report on it made the whole page feel broken — a real
+   * constraint, but the wrong fix once the work can start *before* the report is asked for. If
+   * the prefetch has landed, the section is simply there, complete, on arrival. If it hasn't
+   * (no location known, or the prefetch failed), the button is still the fallback, so nothing
+   * about the unprefetched path changed.
+   */
+  readonly initialData?: NeighbourhoodData | null;
+  /** Set while the page's prefetch is still in flight, so the section can say it is coming
+   *  instead of showing a button that would fire a second, duplicate request. */
+  readonly prefetching?: boolean;
 }
 
-export function NeighbourhoodPanel({ latitude, longitude, label }: Props): React.JSX.Element {
-  const [data, setData] = useState<Data | null>(null);
+export function NeighbourhoodPanel({
+  latitude,
+  longitude,
+  label,
+  initialData,
+  prefetching = false,
+}: Props): React.JSX.Element {
+  const [data, setData] = useState<NeighbourhoodData | null>(initialData ?? null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   /** Which category's list is expanded. One at a time — seven simultaneously open lists is
@@ -282,6 +311,13 @@ export function NeighbourhoodPanel({ latitude, longitude, label }: Props): React
   /** Hovered list row, so the matching pin can lift. Keyed exactly like the list's React
    *  key, so the two cannot drift apart. */
   const [hovered, setHovered] = useState<string | null>(null);
+
+  /* The prefetch usually resolves before this section mounts, but not always — a slow cold
+     Overpass call can land after the reader has already clicked through to the report. Adopt
+     it when it arrives, without clobbering a result this component fetched itself. */
+  useEffect(() => {
+    if (initialData !== undefined && initialData !== null) setData((d) => d ?? initialData);
+  }, [initialData]);
 
   /**
    * What the map draws: **the same rows the list is showing**, never a different slice.
@@ -321,7 +357,7 @@ export function NeighbourhoodPanel({ latitude, longitude, label }: Props): React
       const res = await fetch(`/api/neighbourhood?lat=${latitude}&lng=${longitude}`);
       const body = await res.text();
       if (!res.ok) throw new Error(body || `Request failed (${res.status})`);
-      setData(JSON.parse(body) as Data);
+      setData(JSON.parse(body) as NeighbourhoodData);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not load the neighbourhood.");
     } finally {
@@ -341,7 +377,7 @@ export function NeighbourhoodPanel({ latitude, longitude, label }: Props): React
             Schools, transport, shops, health and green space within walking distance.
           </p>
         </div>
-        {data === null && (
+        {data === null && !prefetching && (
           <button
             type="button"
             onClick={() => void load()}
@@ -363,6 +399,13 @@ export function NeighbourhoodPanel({ latitude, longitude, label }: Props): React
           Asking OpenStreetMap what&apos;s nearby. The first check of an area can take up to
           half a minute — it&apos;s a shared community service, and the answer is saved
           afterwards so this spot loads instantly next time.
+        </p>
+      )}
+
+      {prefetching && data === null && (
+        <p className="mt-3 text-xs leading-relaxed text-muted" aria-live="polite">
+          Gathering the area data — schools, transport, shops and the rest — so it is ready with
+          the report.
         </p>
       )}
 

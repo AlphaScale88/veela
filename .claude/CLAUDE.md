@@ -1490,6 +1490,72 @@ Verified against the reported listing: HK$12,980,000 / 692 sqft → 64.3 m² →
   domestic series, so a flat on the Peak and one in Tuen Mun of the same size share this
   number. Said in the UI, twice.
 
+## Prefetched area data, and an AI brief that does not do the maths (14/08/2026)
+
+Asked to preload area and building data before the report is opened, and to "use AI to compute
+all the financials and data gathering."
+
+### The preload
+
+A cold Overpass lookup is 4–35s, which is why the area section used to hide behind a *Check the
+area* button. That constraint never changed — what changed is **when the work can start.** The
+location is usually known long before the report is asked for, so `/analyse` now fires the
+lookup the moment it has coordinates and hands the result to the panel as `initialData`. By the
+time the report opens, the section is simply there.
+
+**The building search moved out of the report and onto the form**, which is what makes the
+prefetch possible at all: it used to live only in the report's no-coordinates branch, so nothing
+could load until the report already existed. There is now a "Which building?" card above the
+form, and once a location is known it collapses to a one-line status with a *change building*
+link.
+
+**One request per place, guarded twice.** A ref keyed on coordinates **rounded to 3 decimals** —
+the same ~110m rounding the server caches on — so React re-runs and a reader nudging the same
+building do not each cost a request. Prefetching a donated service is only defensible if it
+stays one fetch per location.
+
+**Three end states, and the browser caught the third.** Loading, ready, and *attempted and
+failed* — Overpass refuses cold lookups often enough that the last one is normal, not
+exceptional. The first version reported failure as "will load with the report", which was a
+promise the report does not keep (it shows the button instead). `areaFailed` is tracked
+separately so the line says OpenStreetMap was busy and points at the retry.
+
+Verified in a browser: picking a building fires exactly **one** `/api/neighbourhood` request
+with no report click, the card collapses, and the status line tracks all three states.
+
+### The AI part, and the line it does not cross
+
+**The model does not compute the financials, and that is a decision rather than an omission.**
+The yield, stamp duty and tax come from `computeVerdict` — the AVD table transcribed verbatim
+from the IRD, rule sets versioned by transaction date, 23 tests pinning every marginal-relief
+boundary. Substituting a language model there would trade a reproducible, *sourced* figure for a
+plausible one, break the invariant this app leans on everywhere ("the rail and the report call
+the same function, so they cannot disagree"), and put an unsourceable number on the screen a
+reader acts on. This codebase treats an unsourced rate as a bug.
+
+So the division is **the engine computes, the model explains** — which is precisely the use
+open question 2 identified as the natural fit ("explaining the verdict… judgement over public
+rules"), as against dynamic pricing and comp selection, which it deferred for needing data we
+do not have.
+
+`POST /report/brief` takes **prose, not a `Verdict`** — same reasoning as the chat endpoint's
+`context`, plus a second benefit: handed figures as text, the model has nothing structured to
+recompute. It receives what the engine produced and what OSM returned, and is told explicitly
+to treat every number as given, to say a figure is absent rather than estimate it, and **not to
+convert straight-line metres into walking times** (a claim the data cannot support, and the
+first thing a model reaches for).
+
+`ReportBrief` sits at the top of the report behind a button — it spends real tokens on a public
+endpoint, and most readers want the numbers rather than a summary of them. Model output is
+rendered as **plain paragraphs, never markdown**: interpreting it as markup would mean trusting
+model output as markup. Every brief carries a footer saying Claude wrote it from the figures and
+computed none of them, and that the numbers above win if the two ever read differently.
+
+**`ANTHROPIC_API_KEY` is still unset**, so today the honest outcome is the "not configured"
+sentence arriving as body text — verified, along with a 400 on an empty summary. Same
+zero-configuration rule as the Maps key and `DATABASE_URL`; nothing else on the report depends
+on it.
+
 ## Working conventions
 - Dates DD/MM/YYYY. Currency: **HKD** for Hong Kong, **VND** for Vietnam, **EUR** for
   France — always state which, never a bare number. Keep a single reporting currency
