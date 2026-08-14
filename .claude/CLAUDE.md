@@ -1556,6 +1556,58 @@ sentence arriving as body text — verified, along with a 400 on an empty summar
 zero-configuration rule as the Maps key and `DATABASE_URL`; nothing else on the report depends
 on it.
 
+## Free AI providers, with failover (15/08/2026)
+
+Asked to connect to free models and switch when a connection fails. `packages/api/src/ai.ts`
+is a provider chain — the same shape as the Overpass mirror problem, several interchangeable
+upstreams none of which is reliable alone.
+
+**Order is free-first, paid last**: a configurable OpenAI-compatible endpoint (`AI_BASE_URL`,
+for Ollama/LM Studio/a gateway — an explicit choice should beat any default), then Groq,
+Gemini, Cerebras, Mistral, OpenRouter, then Anthropic. The paid key sits last because the
+normal failure mode of a free tier is a rate limit, and that is exactly when something has to
+answer. Anthropic's default dropped from Sonnet to **Haiku**: three paragraphs over figures
+that are already computed do not need the larger model, and a fallback should be cheap.
+
+**One adapter, one special case.** Almost every provider speaks the OpenAI `/chat/completions`
+wire format, so this is a `fetch` + SSE parser plus the existing Anthropic SDK — not six SDKs.
+
+**It fails over before the first token and never after, and that distinction is the whole
+design.** The Overpass hedging races mirrors and discards losers because a JSON body is atomic.
+**A token stream is not.** Once text has reached the reader, switching providers would splice
+two different answers into one paragraph — worse than any error. So a provider is abandoned
+only while nothing has been emitted; after that a failure is reported as an interruption and the
+partial answer kept. Also **sequential, not raced**, unlike Overpass: these are accounts, not
+public mirrors, and firing five in parallel would burn five rate-limit budgets per request —
+scarcest exactly on the free tiers this was built for.
+
+**Model ids are overridable** (`GROQ_MODEL`, …) because third-party ids drift far faster than
+this file gets edited. A retired id returns a 404, which the chain treats as a failure and steps
+past — a stale default degrades to "one fewer provider", not an outage. Upstream error bodies
+are kept in the failure message, which is what makes that diagnosable rather than mysterious.
+
+**Verified, four paths, against the running app:**
+
+| Case | Result |
+|---|---|
+| Nothing configured | Names every key, including which are free tiers |
+| Two bad keys | Both tried in listed order, each with the upstream's own message |
+| Working provider (mock SSE server on `AI_BASE_URL`) | Streamed in order, paragraph breaks intact, `AI_MODEL` honoured |
+| Refused connection + two bad keys | Walks all three, distinguishing `fetch failed` from HTTP errors |
+
+The success path was testable at all *because* the custom provider's base URL is configurable —
+a mock SSE server on localhost is a valid provider. No real free-tier key was needed.
+
+**The brief's footer names no vendor.** The server picks whichever provider answers, so naming
+one in the client would be a claim it cannot check. It says an AI model wrote it and computed
+none of the figures, which is always true.
+
+**Still the deciding factor, and it is not price.** A brief is well under a cent even paid. Free
+tiers generally reserve the right to train on inputs, and these requests carry a real person's
+price, rent and building location. `/privacy`'s PICS names classes of transferees — **update it
+before pointing this at real users' data.** Recorded in `ai.ts` and in `.env.example` so it
+cannot be switched on without meeting the warning.
+
 ## Working conventions
 - Dates DD/MM/YYYY. Currency: **HKD** for Hong Kong, **VND** for Vietnam, **EUR** for
   France — always state which, never a bare number. Keep a single reporting currency

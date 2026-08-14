@@ -1,4 +1,3 @@
-import Anthropic from "@anthropic-ai/sdk";
 import { zValidator } from "@hono/zod-validator";
 import { computeVerdict, minor, type PropertyInput } from "@veela/core";
 import { HK_RULE_SETS } from "@veela/core";
@@ -33,6 +32,7 @@ import { HTTPException } from "hono/http-exception";
 import { stream as honoStream } from "hono/streaming";
 
 import { ADDRESS_LOOKUP_SOURCE, searchAddresses, type AddressMatch } from "./address-lookup.js";
+import { streamCompletion, unavailableMessage } from "./ai.js";
 import { fetchNeighbourhood, NEIGHBOURHOOD_PAYLOAD_VERSION } from "./neighbourhood.js";
 import { extractListing } from "./listing-extract.js";
 import { fetchSpaciousHtmlStealthily } from "./spacious-stealth-fetch.js";
@@ -131,28 +131,10 @@ function rulesFor(jurisdiction: keyof typeof RULE_SETS | string) {
   return set;
 }
 
-/**
- * Created on first *use*, not at module scope — same reason `realDb()` in the web app's
- * route handler is lazy: `next build` imports this module to collect route metadata,
- * and a machine with no `ANTHROPIC_API_KEY` configured has no business failing to
- * *compile* over a chat feature nobody has clicked yet.
- */
-let anthropicClient: Anthropic | undefined;
-
-function anthropic(): Anthropic {
-  if (anthropicClient === undefined) {
-    const apiKey = process.env["ANTHROPIC_API_KEY"];
-    if (apiKey === undefined || apiKey === "") {
-      throw new HTTPException(503, {
-        message:
-          "The assistant isn't configured on this deployment yet — ANTHROPIC_API_KEY " +
-          "is unset. Everything else (the verdict engine, the map) works without it.",
-      });
-    }
-    anthropicClient = new Anthropic({ apiKey });
-  }
-  return anthropicClient;
-}
+/* The lazy single-provider Anthropic client that used to live here is gone: `ai.ts` owns
+   provider selection now, reads its keys per request (so a key added in the dashboard takes
+   effect without a redeploy), and keeps the same "never construct a client at module scope"
+   property that let `next build` succeed on a machine with nothing configured. */
 
 /**
  * Grounded in what the product itself claims, not a generic "helpful real-estate
@@ -192,49 +174,37 @@ export const api = new Hono<Env>()
     return c.json({ verdict });
   })
 
-  // ── The assistant — Claude, streamed, nothing stored ─────────────────────
+  // ── The assistant — streamed, nothing stored ─────────────────────────────
   // No auth: the same "try it before you sign up" reasoning as /verdict/preview. The
   // conversation lives entirely in the request body; the server holds no history.
+  //
+  // Provider selection, failover and the "nothing configured" sentence all live in `ai.ts`;
+  // this route only supplies the prompt. An unavailable model still arrives as readable body
+  // text rather than a status code, because headers are committed the moment a stream opens —
+  // the client already knows how to render that as a chat bubble.
   .post("/chat", zValidator("json", chatRequestSchema), (c) => {
     const { messages, context } = c.req.valid("json");
 
     return honoStream(c, async (stream) => {
-      stream.onAbort(() => {
-        messageStream.abort();
-      });
-
-      let messageStream: ReturnType<Anthropic["messages"]["stream"]>;
-      try {
-        messageStream = anthropic().messages.stream({
-          model: "claude-sonnet-5",
-          max_tokens: 1_024,
+      const result = await streamCompletion(
+        {
           system: systemPrompt(context),
           messages: messages.map((m) => ({ role: m.role, content: m.content })),
-        });
-      } catch (cause) {
-        // The 503 from anthropic() lands here, not in Hono's own error handler — once
-        // headers are committed to a streamed response there is no re-negotiating the
-        // status code, so the "not configured" message has to travel as body text the
-        // client already knows how to show as a chat bubble.
-        const message =
-          cause instanceof HTTPException ? cause.message : "The assistant is unavailable.";
-        await stream.write(message);
-        return;
-      }
+          maxTokens: 1_024,
+        },
+        async (text) => {
+          await stream.write(text);
+        },
+      );
 
-      try {
-        for await (const event of messageStream) {
-          if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
-            await stream.write(event.delta.text);
-          }
-        }
-      } catch {
-        // A mid-stream failure (rate limit, network) still leaves the reader with
-        // whatever text arrived — better than losing a partial, useful answer.
-        await stream.write("\n\n[The response was interrupted.]");
+      if (result.provider === null) {
+        await stream.write(unavailableMessage(result.failures));
+      } else if (result.failures.length > 0) {
+        console.warn(`[chat] answered by ${result.provider} after: ${result.failures.join("; ")}`);
       }
     });
   })
+
 
   /**
    * A written brief on a report that has **already been computed**.
@@ -267,10 +237,6 @@ export const api = new Hono<Env>()
     const { summary, area } = c.req.valid("json");
 
     return honoStream(c, async (stream) => {
-      stream.onAbort(() => {
-        messageStream.abort();
-      });
-
       const system = `You are writing a short brief for an investor on a Hong Kong \
 residential property, inside Veela's own report.
 
@@ -294,39 +260,36 @@ is below.
 - You are not a licensed adviser. Do not tell them to buy or not buy; give them what to weigh.
 - If the rent is described as estimated, say plainly that every yield rests on that estimate.`;
 
-      let messageStream: ReturnType<Anthropic["messages"]["stream"]>;
-      try {
-        messageStream = anthropic().messages.stream({
-          model: "claude-sonnet-5",
-          max_tokens: 900,
+      const result = await streamCompletion(
+        {
           system,
           messages: [
             {
               role: "user",
               content:
                 area === undefined || area === ""
-                  ? `${summary}\n\nNo area data is available for this property.`
-                  : `${summary}\n\nWhat is nearby (OpenStreetMap, straight-line distances):\n${area}`,
+                  ? `${summary}
+
+No area data is available for this property.`
+                  : `${summary}
+
+What is nearby (OpenStreetMap, straight-line distances):
+${area}`,
             },
           ],
-        });
-      } catch (cause) {
-        const message =
-          cause instanceof HTTPException
-            ? cause.message
-            : "The written brief is unavailable.";
-        await stream.write(message);
+          maxTokens: 900,
+        },
+        async (text) => {
+          await stream.write(text);
+        },
+      );
+
+      if (result.provider === null) {
+        await stream.write(unavailableMessage(result.failures));
         return;
       }
-
-      try {
-        for await (const event of messageStream) {
-          if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
-            await stream.write(event.delta.text);
-          }
-        }
-      } catch {
-        await stream.write("\n\n[The brief was interrupted.]");
+      if (result.failures.length > 0) {
+        console.warn(`[brief] answered by ${result.provider} after: ${result.failures.join("; ")}`);
       }
     });
   })

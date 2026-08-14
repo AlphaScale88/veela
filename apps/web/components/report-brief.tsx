@@ -116,7 +116,12 @@ export function ReportBrief({ summary, area }: Props): React.JSX.Element {
           </div>
           {done && (
             <p className="mt-3 border-t border-line pt-2.5 text-[11px] leading-relaxed text-muted">
-              Written by Claude from the figures in this report — it did not compute any of
+              {/* Deliberately no vendor name: the server picks whichever provider answers
+                  first from a configurable chain (see `packages/api/src/ai.ts`), so naming one
+                  here would be a claim this component cannot check. What matters to the reader
+                  is not *which* model wrote it but that a model wrote it and computed none of
+                  the figures — and that part is always true. */}
+              Written by an AI model from the figures in this report — it did not compute any of
               them. The yield, stamp duty and tax all come from Veela&apos;s rules engine, and
               the numbers above are the authoritative ones if the two ever read differently.
               Not financial or legal advice.

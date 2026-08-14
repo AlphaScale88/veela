@@ -25,3 +25,7 @@ desktop.ini
 
 .vercel
 .env*
+# ...but the template is the one env file that must be committed: it is the only place a new
+# clone learns which keys exist. `.env*` was swallowing it, so the repo had no env template at
+# all and every key had to be discovered from source.
+!.env.example
