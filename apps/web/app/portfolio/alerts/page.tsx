@@ -1,5 +1,6 @@
 "use client";
 
+import type { Alert } from "@veela/api/alerts";
 import type { Property } from "@veela/db";
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -8,21 +9,28 @@ import { AppShell } from "../../../components/app-shell";
 import { useAuth } from "../../../components/auth-provider";
 
 /**
- * Property Alerts — scoped honestly to what actually exists. Mashvisor's version
- * watches live market data and pushes a notification when something changes. Veela
- * has neither piece yet: no ingestion job (`.claude/CLAUDE.md`'s "Deliberately not
- * built yet" list) and no notification pipeline — that's Tier 4 (an always-on
- * service), which the workspace's own boilerplate taxonomy says not to scaffold until
- * a live feed actually forces it.
+ * Property Alerts — **now a working alert feed, not a toggle recording intent.**
  *
- * What's real: `properties.monitored` already exists as a column (`true once the user
- * asks us to track it against the market`). This page is the toggle for that intent,
- * said plainly rather than dressed up as a working alert feed.
+ * This page used to say: *"Tracking is real; the alert itself isn't wired up yet. There's no
+ * live market feed to compare a tracked property against."* That was true when written and
+ * **quietly stopped being true**, because the repo has since ingested RVD's monthly rent and
+ * price indices and gained stamp duty rule sets versioned by effective date. Those are exactly
+ * the two things a saved snapshot goes stale against: the market moved, or the rules moved.
+ * Neither needs a listings feed or a data licence.
+ *
+ * The engine is `packages/api/src/alerts.ts` and it runs server-side, so the same alerts can
+ * be emailed as a digest later without rewriting any of this.
+ *
+ * **Every alert shows its own evidence** — the series, the two dates, the two values — the same
+ * condition the area score and the star rating live under. And **no alerts is the good
+ * outcome**, said as such, rather than a reassurance card that would make "nothing changed"
+ * look identical to "not working".
  */
 export default function AlertsPage(): React.JSX.Element {
   const { user, loading, configured } = useAuth();
   const [properties, setProperties] = useState<Property[] | null>(null);
   const [updating, setUpdating] = useState<string | null>(null);
+  const [alerts, setAlerts] = useState<Alert[] | null>(null);
 
   useEffect(() => {
     if (user === null) return;
@@ -32,6 +40,24 @@ export default function AlertsPage(): React.JSX.Element {
         if (json !== null) setProperties(json.properties);
       });
   }, [user]);
+
+  /* Re-read whenever tracking changes, so turning a property on produces its alerts
+     immediately rather than on the next visit. */
+  const trackedKey = (properties ?? []).filter((p) => p.monitored).map((p) => p.id).join(",");
+  useEffect(() => {
+    if (user === null) return;
+    let cancelled = false;
+    setAlerts(null);
+    fetch("/api/alerts")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json: { alerts: Alert[] } | null) => {
+        if (json !== null && !cancelled) setAlerts(json.alerts);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [user, trackedKey]);
 
   async function setMonitored(id: string, monitored: boolean): Promise<void> {
     setUpdating(id);
@@ -91,22 +117,21 @@ export default function AlertsPage(): React.JSX.Element {
           Property Alerts
         </h1>
         <p className="mt-3 text-sm leading-relaxed text-muted">
-          Tracking is real; the alert itself isn't wired up yet. There's no live market
-          feed to compare a tracked property against — see Market Performance and
-          Market Regulations for what's already real. This is where that connects once
-          the ingestion job exists.
+          A saved report is a dated snapshot. These are the ways one goes out of date: the
+          market moved, or the rules did. Checked against the Rating and Valuation
+          Department&apos;s published monthly indices and the stamp duty rule set that applies
+          to each property&apos;s transaction date.
         </p>
       </header>
 
-      <div className="mt-6 max-w-prose rounded-panel border border-caution/40 bg-caution/10 px-4 py-3 shadow-card">
-        <p className="text-xs leading-relaxed text-muted">
-          <strong className="text-mist">
-            {trackedCount} {trackedCount === 1 ? "property" : "properties"} tracked.
-          </strong>{" "}
-          No notification will be sent — toggling this records intent, not a working
-          alert.
-        </p>
-      </div>
+      <AlertFeed alerts={alerts} trackedCount={trackedCount} />
+
+      <h2 className="mt-10 font-display text-[18px] font-semibold tracking-[-0.02em] text-mist">
+        What&apos;s being tracked
+      </h2>
+      <p className="mt-1 max-w-prose text-sm text-muted">
+        Only tracked properties are checked. Untrack anything you have stopped caring about.
+      </p>
 
       {properties !== null && properties.length === 0 && (
         <p className="card mt-8 max-w-prose text-sm text-muted">
@@ -146,3 +171,88 @@ export default function AlertsPage(): React.JSX.Element {
     </AppShell>
   );
 }
+
+/**
+ * The feed.
+ *
+ * Four states, and the distinction between the last two is the point: **"nothing has changed"
+ * and "nothing is being watched" are different answers**, and a page that renders the same
+ * empty box for both teaches the reader to distrust it.
+ */
+function AlertFeed({
+  alerts,
+  trackedCount,
+}: {
+  readonly alerts: readonly Alert[] | null;
+  readonly trackedCount: number;
+}): React.JSX.Element {
+  if (trackedCount === 0) {
+    return (
+      <p className="card mt-6 max-w-prose text-sm leading-relaxed text-muted">
+        Nothing is being tracked yet. Turn on tracking for a saved property below and it will be
+        checked against the market indices and the stamp duty rules from then on.
+      </p>
+    );
+  }
+
+  if (alerts === null) {
+    return (
+      <p className="mt-6 text-sm text-muted">
+        Checking {trackedCount} {trackedCount === 1 ? "property" : "properties"} against the
+        latest published figures…
+      </p>
+    );
+  }
+
+  if (alerts.length === 0) {
+    return (
+      <div className="card mt-6 max-w-prose">
+        <p className="text-sm font-semibold text-mist">Nothing has moved enough to flag.</p>
+        <p className="mt-1.5 text-sm leading-relaxed text-muted">
+          {trackedCount} {trackedCount === 1 ? "property is" : "properties are"} being watched.
+          An alert fires when market rents move 3%, prices move 5%, the stamp duty rules change,
+          or a snapshot passes six months old — measured from the day each report was computed.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <ul className="mt-6 space-y-3">
+      {alerts.map((a) => {
+        const attention = a.severity === "attention";
+        return (
+          <li
+            key={a.id}
+            className="card border-l-[3px]"
+            style={{ borderLeftColor: attention ? tokensCaution : tokensLine }}
+          >
+            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+              <h3 className="text-[15px] font-medium text-mist">{a.title}</h3>
+              <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-muted">
+                {a.propertyLabel}
+              </span>
+            </div>
+            <p className="mt-2 text-sm leading-relaxed text-muted">{a.detail}</p>
+            {/* The working, always. A reader who cannot check the claim cannot trust the next
+                one either. */}
+            <p className="mt-2.5 border-t border-line pt-2 font-mono text-[10px] leading-relaxed text-muted">
+              {a.evidence}
+            </p>
+            <Link
+              href={`/analyse?property=${a.propertyId}`}
+              className="btn-secondary mt-3 inline-flex !px-4 !py-1.5 !text-xs"
+            >
+              Re-run this report
+            </Link>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+/* Read straight off the design tokens rather than a Tailwind class, because the border colour
+   is set inline to vary per severity — the same approach `verdict-view.tsx` uses for findings. */
+const tokensCaution = "#B26B00";
+const tokensLine = "#E2E6EE";

@@ -13,6 +13,10 @@
     "./plans": {
       "types": "./dist/plans.d.ts",
       "default": "./dist/plans.js"
+    },
+    "./alerts": {
+      "types": "./dist/alerts.d.ts",
+      "default": "./dist/alerts.js"
     }
   },
   "scripts": {

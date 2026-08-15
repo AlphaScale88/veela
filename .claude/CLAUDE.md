@@ -1717,6 +1717,74 @@ has been reviewed by a Hong Kong solicitor, and section 4 of the terms — the C
 that selling software is not practising estate agency — is doing real work and deserves that
 review.
 
+## Property Alerts became real, and Resources got the numbers (15/08/2026)
+
+Asked to finish My Workspace and Resources for real users. Compare and Favorites were already
+complete. **Alerts was the gap — and its stated reason for not existing had quietly expired.**
+
+### The blocker had already been removed by other work
+
+The page carried this since it was built: *"Tracking is real; the alert itself isn't wired up
+yet. There's no live market feed to compare a tracked property against."* True when written.
+**False for weeks**, because the repo had since gained `RVD_RENT_INDEX` and `RVD_PRICE_INDEX`
+(monthly, official, back to 1993) and `HK_RULE_SETS` versioned by effective date. Those are
+exactly the two ways a saved snapshot goes stale: **the market moved, or the rules moved.**
+Neither needs a listings feed, a scraper or a data licence — the thing that was blocking this
+was an assumption nobody had rechecked.
+
+`packages/api/src/alerts.ts` fires on four conditions, thresholds stated in the file: market
+rents ±3%, prices ±5%, a stamp duty rule set that no longer matches the one a snapshot cites,
+and a snapshot past six months. Thresholds are set so an alert means *a figure you rely on has
+probably moved* rather than *an index twitched* — the actual failure mode of alerting products
+is training the reader to ignore them.
+
+**The rules check recomputes through the same engine with the same inputs**, so a difference can
+only come from the rule set. It is not an estimate of drift; it is the drift.
+
+**Every alert carries its own evidence** — series, both dates, both values — the same condition
+the area score and star rating live under. And **no alerts is the good outcome, said as such**:
+the feed distinguishes "nothing has moved" from "nothing is being watched", because rendering
+one empty box for both teaches a reader to distrust the page.
+
+Server-side on purpose, so the same alerts can be emailed as a digest later without rewriting
+the UI. Computed on read rather than stored: the inputs change monthly at most and are the same
+for everyone, so a materialised alert table would be a cache that goes stale in the one place
+staleness is the entire subject.
+
+**Verified against real database rows**, not just unit-style calls: a seeded tracked property
+with a January 2025 snapshot produced *rents +6.7%*, *prices +12.5%* and *19 months old*, each
+citing the RVD series and both dates. A property saved yesterday produced none. Test row deleted
+afterwards.
+
+**A latent bug this surfaced.** `toEngineInput` was extracted from `index.ts` so the alert engine
+could recompute without a cycle — and immediately threw. It guarded optional fields with
+`!== undefined`, which was right when it was only ever fed Zod-validated wire bodies, but it is
+now also fed **rows straight out of Postgres, where absent means `null`**. `null` sailed past the
+check and then dereferenced. Now `!= null`. It would have hit any saved property without a
+mortgage.
+
+### Resources: it explained the terms but never showed the numbers
+
+Nine glossary entries and five links. Now twenty entries — adding the Hong Kong-specific ones
+that cost people money when misread (**saleable vs gross area**, which scale you fall under,
+rateable value vs Government rent, marginal relief, the provisional/formal agreement sequence) —
+and twelve sources including the EAA licence check and the Law Society list.
+
+**The stamp duty scales are now on the page, read from `HK_RULE_SETS` rather than retyped.**
+That is the same discipline `/research/market-regulations` already follows: a hand-copied duty
+table is a second source of truth that goes wrong at the next Budget and nobody notices. The
+page says outright that if it and a report ever disagree, the report is right and this is a bug.
+Bands render by kind — flat, percentage, marginal relief — rather than being flattened into one
+"rate" column that would misdescribe two of the three.
+
+### Worth knowing
+
+**`HK_RULE_SETS` currently holds one rule set, effective 2026-02-26.** So the rules-changed
+alert is correct code that cannot fire yet, and any property with an earlier transaction date
+cannot be computed at all (`No rule set covers transaction date …`). The alert path catches that
+and skips rather than turning the page into an error console. Both resolve when the next Budget
+adds a second dated set — but a user importing a 2023 purchase hits it today.
+
 ## Working conventions
 - Dates DD/MM/YYYY. Currency: **HKD** for Hong Kong, **VND** for Vietnam, **EUR** for
   France — always state which, never a bare number. Keep a single reporting currency

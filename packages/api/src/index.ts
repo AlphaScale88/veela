@@ -33,10 +33,12 @@ import { HTTPException } from "hono/http-exception";
 import { stream as honoStream } from "hono/streaming";
 
 import { ADDRESS_LOOKUP_SOURCE, searchAddresses, type AddressMatch } from "./address-lookup.js";
+import { alertsForAll, type MonitoredProperty } from "./alerts.js";
 import { streamCompletion, unavailableMessage } from "./ai.js";
 import { createKey, listKeys, meter, revokeKey, verifyKey, type KeyRecord } from "./api-keys.js";
 import { AI_RATE_PER_MINUTE, ANONYMOUS_RATE_PER_MINUTE, PLANS } from "./plans.js";
 import { callerIp, consume } from "./rate-limit.js";
+import { toEngineInput } from "./engine-input.js";
 import { fetchNeighbourhood, NEIGHBOURHOOD_PAYLOAD_VERSION } from "./neighbourhood.js";
 import { extractListing } from "./listing-extract.js";
 import { fetchSpaciousHtmlStealthily } from "./spacious-stealth-fetch.js";
@@ -77,55 +79,6 @@ function requireUser(userId: string | null): string {
   }
   return userId;
 }
-
-/**
- * Map the wire shape (flat minor units) onto the engine's Money shape.
- *
- * `exactOptionalPropertyTypes` is on, so an optional field must be *absent* rather than
- * set to undefined. Building the object incrementally is clearer than a wall of
- * conditional spreads, and avoids non-null assertions entirely.
- */
-function toEngineInput(row: CreatePropertyInput): PropertyInput {
-  const cur = row.currency;
-
-  const costs: Mutable<PropertyInput["costs"]> = {
-    ownerPaysRates: row.costs.ownerPaysRates,
-  };
-  const c = row.costs;
-  if (c.monthlyManagementFeeMinor !== undefined) {
-    costs.monthlyManagementFee = minor(c.monthlyManagementFeeMinor, cur);
-  }
-  if (c.rateableValueMinor !== undefined) {
-    costs.rateableValue = minor(c.rateableValueMinor, cur);
-  }
-  if (c.annualOtherCostsMinor !== undefined) {
-    costs.annualOtherCosts = minor(c.annualOtherCostsMinor, cur);
-  }
-  if (c.agencyFeeMinor !== undefined) costs.agencyFee = minor(c.agencyFeeMinor, cur);
-  if (c.legalFeesMinor !== undefined) costs.legalFees = minor(c.legalFeesMinor, cur);
-  if (c.vacancyRate !== undefined) costs.vacancyRate = c.vacancyRate;
-
-  const input: Mutable<PropertyInput> = {
-    currency: cur,
-    price: minor(row.priceMinor, cur),
-    monthlyRent: minor(row.monthlyRentMinor, cur),
-    transactionDate: row.transactionDate,
-    buyer: row.buyer,
-    costs,
-  };
-  if (row.saleableAreaSqft !== undefined) input.saleableAreaSqft = row.saleableAreaSqft;
-  if (row.financing !== undefined) {
-    input.financing = {
-      loanAmount: minor(row.financing.loanAmountMinor, cur),
-      annualInterestRate: row.financing.annualInterestRate,
-      termYears: row.financing.termYears,
-    };
-  }
-  return input;
-}
-
-/** Drop `readonly` one level deep so an object can be assembled before freezing. */
-type Mutable<T> = { -readonly [K in keyof T]: T[K] };
 
 function rulesFor(jurisdiction: keyof typeof RULE_SETS | string) {
   const set = RULE_SETS[jurisdiction as keyof typeof RULE_SETS];
@@ -523,6 +476,61 @@ ${area}`,
 
     if (updated === null) throw new HTTPException(404, { message: "Profile not found" });
     return c.json({ profile: updated });
+  })
+
+  /**
+   * Live alerts across every property the reader has asked us to track.
+   *
+   * Computed on read rather than stored. The inputs — RVD's published indices and the dated
+   * rule sets — are the same for everyone and change monthly at most, so a materialised alert
+   * table would be a cache that can go stale in the one place staleness is the entire subject.
+   * At portfolio scale (single digits of saved properties) recomputing costs nothing.
+   */
+  .get("/alerts", async (c) => {
+    const userId = requireUser(c.get("userId"));
+    const db = c.get("db");
+
+    const rows = await withUser(db, userId, (tx) =>
+      tx
+        .select()
+        .from(properties)
+        .where(and(eq(properties.ownerId, userId), eq(properties.monitored, true))),
+    );
+
+    // The latest snapshot per property, so an alert compares against what the reader last saw
+    // rather than the first thing they ever saved.
+    const monitored: MonitoredProperty[] = [];
+    for (const row of rows) {
+      const [latest] = await withUser(db, userId, (tx) =>
+        tx
+          .select()
+          .from(verdicts)
+          .where(eq(verdicts.propertyId, row.id))
+          .orderBy(desc(verdicts.computedAt))
+          .limit(1),
+      );
+      monitored.push({
+        id: row.id,
+        label: row.label,
+        jurisdiction: row.jurisdiction,
+        currency: row.currency,
+        priceMinor: row.priceMinor,
+        monthlyRentMinor: row.monthlyRentMinor,
+        saleableAreaSqft: row.saleableAreaSqft,
+        transactionDate: row.transactionDate,
+        buyer: row.buyer,
+        costs: row.costs,
+        financing: row.financing,
+        verdict: latest === undefined ? null : (latest.payload as never),
+        verdictComputedAt:
+          latest === undefined ? null : new Date(latest.computedAt).toISOString().slice(0, 10),
+      });
+    }
+
+    return c.json({
+      alerts: alertsForAll(monitored),
+      trackedCount: monitored.length,
+    });
   })
 
   // ── Properties ───────────────────────────────────────────────────────────
