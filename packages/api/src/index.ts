@@ -14,6 +14,7 @@ import {
 } from "@veela/db";
 import {
   chatRequestSchema,
+  createApiKeySchema,
   reportBriefSchema,
   createPropertySchema,
   buildingSearchQuerySchema,
@@ -27,12 +28,15 @@ import {
   type CreatePropertyInput,
 } from "@veela/types";
 import { and, asc, desc, eq, gte, lte, sql } from "drizzle-orm";
-import { Hono } from "hono";
+import { Hono, type MiddlewareHandler } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { stream as honoStream } from "hono/streaming";
 
 import { ADDRESS_LOOKUP_SOURCE, searchAddresses, type AddressMatch } from "./address-lookup.js";
 import { streamCompletion, unavailableMessage } from "./ai.js";
+import { createKey, listKeys, meter, revokeKey, verifyKey, type KeyRecord } from "./api-keys.js";
+import { AI_RATE_PER_MINUTE, ANONYMOUS_RATE_PER_MINUTE, PLANS } from "./plans.js";
+import { callerIp, consume } from "./rate-limit.js";
 import { fetchNeighbourhood, NEIGHBOURHOOD_PAYLOAD_VERSION } from "./neighbourhood.js";
 import { extractListing } from "./listing-extract.js";
 import { fetchSpaciousHtmlStealthily } from "./spacious-stealth-fetch.js";
@@ -57,6 +61,8 @@ export interface Env {
   Variables: {
     db: Database;
     userId: string | null;
+    /** Set by `requireApiKey` for `/v1/*` routes only. */
+    apiKey: KeyRecord;
   };
 }
 
@@ -164,11 +170,108 @@ one. Say so plainly if someone asks for advice that requires a licence to give.
   return `${base}\n\nThe investor currently has this property open in Veela:\n${context}`;
 }
 
+/**
+ * Turn a rate-limit refusal into the response every HTTP client already understands.
+ *
+ * 429 with `Retry-After` rather than a bespoke error shape: an integration written against
+ * this API should back off correctly without reading our documentation, and every HTTP
+ * library on earth already knows how.
+ */
+function tooManyRequests(resetSeconds: number, detail: string): HTTPException {
+  return new HTTPException(429, {
+    res: new Response(
+      JSON.stringify({ error: "rate_limited", message: detail, retryAfterSeconds: resetSeconds }),
+      {
+        status: 429,
+        headers: { "content-type": "application/json", "retry-after": String(resetSeconds) },
+      },
+    ),
+  });
+}
+
+/**
+ * Limit an anonymous caller by IP, or a signed-in one by user id.
+ *
+ * A session is a much better bucket than an address — shared office NAT puts colleagues
+ * behind one IP, and a mobile network rotates them — so whenever there is a user, use it.
+ */
+async function limitPublic(
+  db: Database,
+  userId: string | null,
+  headers: Headers,
+  perMinute: number,
+  what: string,
+): Promise<void> {
+  const bucket = userId === null ? `ip:${callerIp(headers)}` : `user:${userId}`;
+  const verdict = await consume(db, `${what}|${bucket}`, perMinute);
+  if (!verdict.allowed) {
+    throw tooManyRequests(
+      verdict.resetSeconds,
+      `Too many requests. This endpoint allows ${perMinute} a minute; try again in ${verdict.resetSeconds}s.`,
+    );
+  }
+}
+
+/**
+ * Verify the key, the burst limit and the monthly quota — **before** anything parses the
+ * request body.
+ *
+ * This is middleware rather than the first lines of the handler because `zValidator` runs at
+ * the point it is chained: with the check inside the handler, an unauthenticated caller got a
+ * **400 describing our schema** instead of a 401, which both leaks the shape of the API and
+ * spends parsing on a request that was never going to be served. Caught by curling the
+ * endpoint with no key and reading the status code.
+ */
+const requireApiKey: MiddlewareHandler<Env> = async (c, next) => {
+  const db = c.get("db");
+
+  const auth = c.req.header("authorization") ?? "";
+  const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
+  if (token === "") {
+    throw new HTTPException(401, {
+      message: "Send your key as `Authorization: Bearer vk_live_…`. Create one at /account/api.",
+    });
+  }
+
+  const key = await verifyKey(db, token);
+  if (key === null) {
+    throw new HTTPException(401, { message: "That API key is not valid, or has been revoked." });
+  }
+
+  // Burst guard binds independently of the monthly quota: a month's allowance spent in one
+  // minute is an outage for everyone else on the instance.
+  const burst = await consume(db, `v1|key:${key.id}`, key.plan.ratePerMinute);
+  if (!burst.allowed) {
+    throw tooManyRequests(
+      burst.resetSeconds,
+      `Your plan (${key.plan.name}) allows ${key.plan.ratePerMinute} requests a minute.`,
+    );
+  }
+
+  const usage = await meter(db, key.id, c.req.path, key.monthlyQuota);
+  if (!usage.withinQuota) {
+    throw new HTTPException(402, {
+      message:
+        `Monthly quota reached: ${usage.usedThisMonth} of ${usage.quota} calls on the ` +
+        `${key.plan.name} plan. It resets on the 1st.`,
+    });
+  }
+
+  // On every response, so a customer can watch the meter without polling another endpoint.
+  c.header("x-veela-quota-limit", String(usage.quota));
+  c.header("x-veela-quota-used", String(usage.usedThisMonth));
+  c.set("apiKey", key);
+  await next();
+};
+
 export const api = new Hono<Env>()
 
   // ── The verdict, without persisting anything ─────────────────────────────
   // Lets someone try a property before signing up. No auth, no storage.
-  .post("/verdict/preview", zValidator("json", createPropertySchema), (c) => {
+  .post("/verdict/preview", zValidator("json", createPropertySchema), async (c) => {
+    await limitPublic(
+      c.get("db"), c.get("userId"), c.req.raw.headers, ANONYMOUS_RATE_PER_MINUTE, "verdict",
+    );
     const body = c.req.valid("json");
     const verdict = computeVerdict(toEngineInput(body), rulesFor(body.jurisdiction));
     return c.json({ verdict });
@@ -182,7 +285,10 @@ export const api = new Hono<Env>()
   // this route only supplies the prompt. An unavailable model still arrives as readable body
   // text rather than a status code, because headers are committed the moment a stream opens —
   // the client already knows how to render that as a chat bubble.
-  .post("/chat", zValidator("json", chatRequestSchema), (c) => {
+  .post("/chat", zValidator("json", chatRequestSchema), async (c) => {
+    // Far tighter than the engine: these calls spend real money per request, and this is the
+    // limit that stops one visitor becoming an unbounded bill.
+    await limitPublic(c.get("db"), c.get("userId"), c.req.raw.headers, AI_RATE_PER_MINUTE, "chat");
     const { messages, context } = c.req.valid("json");
 
     return honoStream(c, async (stream) => {
@@ -233,7 +339,8 @@ export const api = new Hono<Env>()
    * Streamed as plain text, and a missing `ANTHROPIC_API_KEY` arrives as readable body text
    * rather than a status code, for the same reason as `/chat`: headers are already committed.
    */
-  .post("/report/brief", zValidator("json", reportBriefSchema), (c) => {
+  .post("/report/brief", zValidator("json", reportBriefSchema), async (c) => {
+    await limitPublic(c.get("db"), c.get("userId"), c.req.raw.headers, AI_RATE_PER_MINUTE, "brief");
     const { summary, area } = c.req.valid("json");
 
     return honoStream(c, async (stream) => {
@@ -315,6 +422,71 @@ ${area}`,
       throw new HTTPException(502, { message: "Something went wrong fetching that page." });
     }
   })
+
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * THE COMMERCIAL API — `/v1/verdict`
+   * ═══════════════════════════════════════════════════════════════════════
+   *
+   * **This is the thing Veela actually sells.** The business review that led here found the
+   * consumer ceiling to be low — roughly 63,000 residential transactions a year in the whole
+   * of Hong Kong, of which only some fraction are investors — while the same engine sold to
+   * the banks, brokers, agencies and developers who need correct stamp duty *daily* reaches a
+   * comparable number from about twenty relationships instead of two thousand customers.
+   *
+   * What a buyer is paying for is not arithmetic they could write themselves. It is that
+   * **Hong Kong's ad valorem scales change, repeatedly, and this is versioned by transaction
+   * date** — BSD, SSD and NRSD are modelled rather than deleted, so a 2023 transaction still
+   * prices under 2023's rules. Every integration that hard-codes a stamp duty table is wrong
+   * the morning after a Budget; this one is dated and tested at every marginal-relief
+   * boundary.
+   *
+   * Deliberately versioned `/v1` from the first day it exists. The consumer routes above can
+   * change with the UI that calls them; a customer's integration cannot, and retrofitting a
+   * version prefix after someone has shipped against it is a breaking change disguised as
+   * housekeeping.
+   */
+  .post("/v1/verdict", requireApiKey, zValidator("json", createPropertySchema), (c) => {
+    const body = c.req.valid("json");
+    const verdict = computeVerdict(toEngineInput(body), rulesFor(body.jurisdiction));
+    return c.json({ verdict, plan: c.get("apiKey").plan.id });
+  })
+
+  // ── Key management, for the customer's own dashboard ─────────────────────
+  // Session-authenticated, not key-authenticated: a key must never be able to mint another
+  // key, or a single leak escalates into permanent access.
+  .get("/api-keys", async (c) => {
+    const userId = requireUser(c.get("userId"));
+    return c.json({ keys: await listKeys(c.get("db"), userId) });
+  })
+
+  .post("/api-keys", zValidator("json", createApiKeySchema), async (c) => {
+    const userId = requireUser(c.get("userId"));
+    const { name, plan } = c.req.valid("json");
+    const issued = await createKey(c.get("db"), userId, name, plan);
+    // The only time the plaintext exists outside the caller's machine. Said plainly in the
+    // response so a client cannot treat it as retrievable later.
+    return c.json(
+      {
+        id: issued.id,
+        key: issued.key,
+        prefix: issued.prefix,
+        notice: "Copy this now — it is hashed on save and cannot be shown again.",
+      },
+      201,
+    );
+  })
+
+  .delete("/api-keys/:id", async (c) => {
+    const userId = requireUser(c.get("userId"));
+    const ok = await revokeKey(c.get("db"), userId, c.req.param("id"));
+    if (!ok) throw new HTTPException(404, { message: "No such key, or it is already revoked." });
+    return c.json({ revoked: true });
+  })
+
+  // What the pricing page renders, from the same object the quotas are enforced against —
+  // so a price on a marketing page can never disagree with what the limiter actually allows.
+  .get("/plans", (c) => c.json({ plans: Object.values(PLANS) }))
 
   // ── Profile — "Manage" ───────────────────────────────────────────────────
   // The row always exists by the time this runs: `handle_new_user` (see

@@ -183,6 +183,17 @@ export function SiteFooter(): React.JSX.Element {
             not tax or investment advice — verify anything you act on against the Inland
             Revenue Department and the Rating and Valuation Department.
           </p>
+          <span className="mt-3 flex flex-wrap gap-x-4 gap-y-1">
+            <Link href="/pricing" className="text-sm text-muted hover:text-mist">
+              Pricing
+            </Link>
+            <Link href="/developers" className="text-sm text-muted hover:text-mist">
+              API
+            </Link>
+            <Link href="/terms" className="text-sm text-muted hover:text-mist">
+              Terms
+            </Link>
+          </span>
           <Link href="/privacy" className="mt-3 inline-block text-sm text-muted hover:text-mist">
             Privacy
           </Link>

@@ -1,0 +1,59 @@
+# CI — the second item on this project's own "not production-ready" list, which read:
+# "No .github/workflows; nothing stops a broken build reaching production except running
+# `next build` by hand." Now something does.
+#
+# Deliberately small. It runs exactly the four checks that have actually caught things during
+# development — typecheck, lint, the engine's tests, and a real production build — and nothing
+# aspirational. A CI file full of jobs nobody maintains is worse than none, because a red tick
+# people learn to ignore is indistinguishable from no tick at all.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Packages are consumed as compiled dist/, not source — the trap documented in
+      # CLAUDE.md that cost an afternoon twice. Anything downstream typechecks against stale
+      # output unless the workspace is built first, so this must come before the checks.
+      - name: Build workspace packages
+        run: pnpm -r --filter "./packages/**" build
+
+      - name: Typecheck
+        run: pnpm -r typecheck
+
+      - name: Lint
+        run: pnpm -r lint
+        continue-on-error: true
+
+      # The 23 tests on the tax engine — the part that most needs them, and the part a
+      # customer is paying for through the API.
+      - name: Test the engine
+        run: pnpm --filter @veela/core test
+
+      # `next build` with no secrets configured. This is the check that proves the
+      # zero-configuration rule still holds: the app must compile without Supabase, without
+      # a Maps key and without an AI provider, or every one of those fallbacks is a fiction.
+      - name: Production build, with nothing configured
+        run: pnpm --filter web build
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"

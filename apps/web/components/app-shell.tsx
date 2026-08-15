@@ -129,9 +129,26 @@ const WORKSPACE_LINKS: readonly NavLink[] = [
 ];
 
 const TAIL_LINKS: readonly NavLink[] = [
+  { href: "/pricing", label: "Pricing", icon: TagIcon },
   { href: "/account", label: "Settings", icon: GearIcon },
   { href: "/resources", label: "Resources", icon: BookIcon },
 ];
+
+/** Pricing. Its own glyph rather than reusing one — a price tag is the one thing in this nav
+ *  a visitor scans for deliberately. */
+function TagIcon({ className }: { readonly className?: string }): React.JSX.Element {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+      <path
+        d="M4 11.5V5a1 1 0 0 1 1-1h6.5L20 12.5 12.5 20 4 11.5Z"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinejoin="round"
+      />
+      <circle cx="8.5" cy="8.5" r="1.4" stroke="currentColor" strokeWidth="1.7" />
+    </svg>
+  );
+}
 
 function Sidebar({
   collapsed,

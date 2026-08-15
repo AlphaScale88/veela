@@ -1642,6 +1642,81 @@ know anything.
 Verified against a keyless mock on `11434` with **no `AI_API_KEY` set**: it streamed, sent no
 `Authorization` header, and honoured `AI_MODEL=llama3.1:8b`.
 
+## The commercial layer — making the business concrete (15/08/2026)
+
+A business review grounded in this repo's own RVD/Land Registry series produced three findings,
+and the build that followed acts on all three.
+
+**The findings.** Hong Kong residential net yields run **1.5–2.5%**, so Veela's honest answer
+is usually "this barely beats cash" — which makes it a **risk-reduction purchase at the moment
+of transaction**, not a subscription anyone renews to be told no. The consumer ceiling is
+therefore low: ~63,000 residential transactions a year in the *entire* market, average deal
+HK$8.27M, giving low single-digit millions HKD even optimistically. **The same engine sold as
+an API reaches comparable revenue from ~20 relationships instead of ~2,000 customers** — and
+the engine is the one asset a competitor cannot scrape.
+
+**`plans.ts` is the single source of truth for what Veela sells.** The pricing page renders
+from the same object the rate limiter enforces against, so a price on a marketing page cannot
+drift from the quota a customer actually gets — the "one function, not two guesses" rule
+applied to commercial terms.
+
+**Rate limiting (blocker #1, now closed).** Postgres-backed fixed windows, not Redis: a second
+stateful dependency would break the zero-configuration rule for a counter table that is nowhere
+near being the bottleneck at Hong Kong's transaction volumes. The count is returned by the
+`insert … on conflict do update … returning` that wrote it, so there is **no read-then-write
+race between serverless invocations** — which is exactly what an in-memory counter cannot
+avoid, since every lambda would keep its own tally and the real limit would be `N × instances`.
+**Verified under 90 concurrent requests against a 60/min plan: exactly 60 allowed, 30 refused.**
+It **fails open** if the database blips — a limiter that takes the product down when its own
+storage hiccups has caused more damage than the abuse it guards against.
+
+**API keys.** Only a sha256 hash is stored; the plaintext is shown once and is unrecoverable.
+**sha256 rather than bcrypt on purpose**: a password is low-entropy and needs a slow hash, but
+an API key is 32 bytes from a CSPRNG — there is nothing to guess, and a slow KDF on every call
+would be a self-inflicted latency tax on the hot path of the thing being sold.
+
+**A real flaw the testing caught: auth ran *after* body validation.** With the check inside the
+handler, `zValidator` fired first and an unauthenticated caller got a **400 describing our
+schema** instead of a 401 — leaking the API's shape and spending parsing on a request that was
+never going to be served. Auth is now middleware, so it runs before anything reads the body.
+Found by curling with no key and reading the status code.
+
+**`/v1` is versioned from the first day it exists.** Consumer routes can change with the UI
+that calls them; a customer's integration cannot, and retrofitting a version prefix after
+someone has shipped against it is a breaking change disguised as housekeeping.
+
+**Keys are issued by hand, deliberately.** A self-serve dashboard is real work for a market the
+review put at ~20 relationships. The schema, auth, quotas and metering are all live and tested;
+only the sign-up button is a conversation instead of a form.
+
+**CI (blocker #2, now closed).** Four checks that have actually caught things — typecheck,
+lint, the 23 engine tests, and a production build **with no secrets set at all**, which is the
+check that proves the zero-configuration rule still holds rather than being folklore. Verified
+locally: 23/23 tests pass and the build completes clean with `DATABASE_URL` and both Supabase
+keys unset. Packages build before checks run, because they are consumed as `dist/` — the trap
+that cost an afternoon twice.
+
+**Honesty about what cannot be bought yet.** No payment processor is configured, so the report
+tier renders **"Not on sale yet"** with an inert button and a line saying the price is real and
+the checkout is not. A "Buy" button that leads nowhere is the same failure as a fabricated
+figure, and the pricing page says outright that these prices are a considered guess until
+somebody pays one.
+
+**`/terms` written, `/privacy` transferees enumerated** — Supabase, Vercel, the AI provider
+(**including that a free tier may train on inputs**), a payment processor, and the Land
+Registry. Maps and market data are lookups *we* make about a place, with no personal data
+attached, and that distinction is now stated.
+
+### The blocker only the founder can clear
+
+**`/terms` and `/privacy` name no operator entity.** A contract needs a counterparty and a Hong
+Kong payment processor will ask for the same details, so **Veela cannot lawfully take money
+until an invoicing entity exists and is named in both.** This was already the outstanding item
+in the open questions; it now blocks revenue rather than compliance tidiness. Neither document
+has been reviewed by a Hong Kong solicitor, and section 4 of the terms — the Cap. 511 position
+that selling software is not practising estate agency — is doing real work and deserves that
+review.
+
 ## Working conventions
 - Dates DD/MM/YYYY. Currency: **HKD** for Hong Kong, **VND** for Vietnam, **EUR** for
   France — always state which, never a bare number. Keep a single reporting currency

@@ -132,10 +132,45 @@ export default function PrivacyPage(): React.JSX.Element {
             Who it&apos;s shared with
           </h2>
           <p className="mt-2 text-sm leading-relaxed text-muted">
-            Supabase (authentication and database hosting) and, only for chat replies,
-            Anthropic — see above for exactly what each receives. We don&apos;t sell data,
-            and we don&apos;t share it with property agents, lenders or anyone else without
-            asking you first.
+            We don&apos;t sell data, and we don&apos;t share it with property agents, lenders
+            or anyone else without asking you first. The classes of transferee are:
+          </p>
+          <ul className="mt-3 space-y-2 text-sm leading-relaxed text-muted">
+            <li>
+              <strong className="text-mist">Supabase</strong> — authentication and database
+              hosting. Holds your email and everything you save.
+            </li>
+            <li>
+              <strong className="text-mist">Vercel</strong> — application hosting. Sees request
+              metadata, including your IP address, which is also what our rate limiting counts.
+            </li>
+            <li>
+              <strong className="text-mist">An AI provider</strong> — only when you ask for a
+              chat reply or a written report summary, and only the figures on screen at that
+              moment. Veela can be configured to use several; the one in use on this deployment
+              is named in <Link href="/terms" className="text-accent hover:underline">the terms</Link>.
+              {" "}
+              <strong className="text-mist">
+                If a free tier is in use, that provider may train on what is sent.
+              </strong>{" "}
+              If you would rather nothing left the service, don&apos;t use the chat or the
+              written brief — every figure in the report is computed without them.
+            </li>
+            <li>
+              <strong className="text-mist">A payment processor</strong> — if and when you buy
+              a report or an API plan. It receives your payment details directly; we never see
+              or store a card number.
+            </li>
+            <li>
+              <strong className="text-mist">The Land Registry</strong> — if you buy a verified
+              report, we search the property you asked about. The search is about a property,
+              not about you.
+            </li>
+          </ul>
+          <p className="mt-3 text-sm leading-relaxed text-muted">
+            Maps, area data and market statistics come from Google, OpenStreetMap and Hong Kong
+            government sources. Those are lookups <em className="not-italic">we</em> make about a
+            place — no personal data of yours is sent with them.
           </p>
         </div>
 
