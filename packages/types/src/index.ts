@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+export * from "./legal.js";
+
 /**
  * The shared contract. Web, mobile and the API all import these schemas, so a change
  * to the shape is a compile error on every surface rather than a runtime surprise.
@@ -305,3 +307,13 @@ export const createApiKeySchema = z.object({
   plan: z.enum(["free", "starter", "pro"]),
 });
 export type CreateApiKeyInput = z.infer<typeof createApiKeySchema>;
+
+/** Recording acceptance. The client says which documents it presented and at which version;
+ *  the server refuses anything that is not the version currently in force, so a stale cached
+ *  page cannot record consent to wording nobody is being shown. */
+export const recordConsentSchema = z.object({
+  documents: z
+    .array(z.object({ document: z.enum(["terms", "privacy"]), version: z.string().min(1) }))
+    .min(1),
+});
+export type RecordConsentInput = z.infer<typeof recordConsentSchema>;

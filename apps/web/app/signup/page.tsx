@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+
+import { AcceptLegal, recordConsent } from "../../components/consent";
 import { useEffect, useState } from "react";
 
 import { useAuth } from "../../components/auth-provider";
@@ -32,6 +34,14 @@ export default function SignupPage(): React.JSX.Element {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmSent, setConfirmSent] = useState(false);
+  /**
+   * Acceptance is **required and unticked by default**.
+   *
+   * A pre-ticked box is not consent under any reading of DPP1 — the user has to do the
+   * accepting. It also gates the button rather than being a line of small print under it,
+   * because "by continuing you agree" claims agreement from someone who may never have looked.
+   */
+  const [acceptedLegal, setAcceptedLegal] = useState(false);
   const [next, setNext] = useState("/dashboard");
 
   useEffect(() => {
@@ -48,17 +58,25 @@ export default function SignupPage(): React.JSX.Element {
 
   const emailLooksValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
   const passwordLongEnough = password.length >= MIN_PASSWORD;
-  const canSubmit = emailLooksValid && passwordLongEnough && !pending;
+  const canSubmit = emailLooksValid && passwordLongEnough && acceptedLegal && !pending;
 
   async function submit(): Promise<void> {
     setTouched(true);
-    if (!emailLooksValid || !passwordLongEnough) return;
+    if (!emailLooksValid || !passwordLongEnough || !acceptedLegal) return;
     setPending(true);
     setError(null);
     try {
       const message = await signUpWithPassword(email.trim(), password);
-      if (message !== null) setError(message);
-      else setConfirmSent(true);
+      if (message !== null) {
+        setError(message);
+        return;
+      }
+      setConfirmSent(true);
+      /* Recorded here if the session already exists (email confirmation disabled). When
+         confirmation *is* required there is no session yet and this call 401s — which is why
+         the consent gate in `AppShell` exists rather than this being the only path. The user
+         accepted; the record is written the moment they are actually signed in. */
+      await recordConsent();
     } finally {
       setPending(false);
     }
@@ -215,6 +233,17 @@ export default function SignupPage(): React.JSX.Element {
                       } needed.`}
               </span>
             </label>
+
+            <AcceptLegal
+              checked={acceptedLegal}
+              onChange={setAcceptedLegal}
+              invalid={touched && !acceptedLegal}
+            />
+            {touched && !acceptedLegal && (
+              <p role="alert" className="text-xs text-negative">
+                Please accept the terms and privacy statement to create an account.
+              </p>
+            )}
 
             {error !== null && (
               <p role="alert" className="text-xs text-negative">

@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { LEGAL_VERSIONS } from "@veela/types";
+
 import { AppShell } from "../../components/app-shell";
 
 export const metadata: Metadata = {
@@ -32,7 +34,12 @@ export const metadata: Metadata = {
 /** TODO(founder): the invoicing entity, once decided. Blocks payments. */
 const OPERATOR = "[operator entity to be confirmed]";
 const CONTACT_EMAIL = "[contact address to be confirmed]";
-const UPDATED = "15 August 2026";
+
+/** The version shown here is **the one users accept**, read from `LEGAL_VERSIONS` rather than
+ *  typed again. A page dated differently from the version recorded against a signature is the
+ *  exact drift the consent record exists to make impossible — and it was already happening: a
+ *  hardcoded "15 August 2026" sat beside a recorded version of 2026-08-16. */
+const UPDATED = LEGAL_VERSIONS.terms;
 
 export default function TermsPage(): React.JSX.Element {
   return (
@@ -43,7 +50,7 @@ export default function TermsPage(): React.JSX.Element {
           Terms of service
         </h1>
         <p className="mt-2 font-mono text-[11px] uppercase tracking-[0.08em] text-muted">
-          Last updated {UPDATED}
+          Version {UPDATED}
         </p>
 
         <div className="mt-6 rounded-panel border border-caution/40 bg-caution/10 px-4 py-3 text-sm leading-relaxed text-muted">
@@ -94,17 +101,21 @@ export default function TermsPage(): React.JSX.Element {
         </Section>
 
         <Section n="6" title="Paid products">
-          A verified report is a one-off purchase for a single property and includes a Land
-          Registry search where stated; the Land Registry&apos;s own fee is included in the
-          price. API plans are billed monthly in advance and may be cancelled at any time,
-          effective at the end of the paid month. Quotas reset on the first of each month and do
-          not roll over.
+          Subscriptions are billed monthly in advance and may be cancelled at any time, taking
+          effect at the end of the paid month — we do not lock you into a term. Included
+          allowances, such as Land Registry searches and API calls, reset on the first of each
+          month and do not roll over. The Land Registry&apos;s own fee for an included search is
+          covered by the subscription.
           <br />
           <br />
-          Because a report is delivered immediately and cannot be un-read,{" "}
-          <strong className="text-mist">refunds are at our discretion</strong> — but if Veela
+          Cancelling stops future billing; we do not refund part-months by default, since the
+          service was available for the period paid for. <strong className="text-mist">If Veela
           produced a figure that was wrong because of a defect on our side, tell us and we will
-          refund it.
+          refund it</strong> — that is not discretionary.
+          <br />
+          <br />
+          Reports you saved remain yours to read and export after a subscription ends. We do not
+          hold your own figures hostage to a renewal.
         </Section>
 
         <Section n="7" title="Third parties">

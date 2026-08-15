@@ -1785,6 +1785,74 @@ cannot be computed at all (`No rule set covers transaction date …`). The alert
 and skips rather than turning the page into an error console. Both resolve when the next Budget
 adds a second dated set — but a user importing a 2023 purchase hits it today.
 
+## Consent at signup, pricing on the landing page, and a monthly tier (16/08/2026)
+
+### Terms and privacy are now accepted and recorded
+
+Signup previously *linked* to `/privacy` in passing. Nothing was presented for acceptance and
+nothing was recorded, so there was no answer to "what did this user agree to" beyond "whatever
+the page said that day" — the exact gap DPP1 addresses, and one this file has warned since the
+beginning is impossible to retrofit.
+
+**Versioned by date** (`packages/types/src/legal.ts`). A semantic version implies a judgement
+about whether a change was breaking; for a legal document the only question anyone asks is
+*which wording did they see*, and a date answers that and sorts correctly. Both `/terms` and
+`/privacy` now render their version **from that constant rather than a hardcoded string** — which
+was already drifting: the terms page said "15 August" beside a recorded version of 2026-08-16.
+
+**`consent_records` is append-only**, one row per (user, document, version), unique so a refresh
+or double-submit cannot manufacture a second record of one event. Never updated: the question is
+historical, and a row overwritten when the terms change destroys the evidence it exists to hold.
+Writes bypass RLS via the service connection — a client that could write its own consent record
+could forge one, and this is evidence rather than a preference.
+
+**Deliberately no IP address or user agent.** Both are conventionally stored as "consent
+evidence". `user_id + document + version + timestamp` already identifies the person, the exact
+wording and the moment; an IP adds marginal evidentiary value while being personal data itself,
+so collecting it creates a new disclosure obligation on the very page whose acceptance is being
+recorded. DPP1's minimisation principle points the other way.
+
+**The checkbox is unticked and gates the button.** A pre-ticked box is not consent, and "by
+continuing you agree" claims agreement from someone who may never have looked. Verified in a
+browser: with a valid email and password but the box unticked, the button stays disabled.
+
+**A gate in `AppShell` catches everyone the form cannot** — existing accounts, Google sign-ups
+(which never touch the signup form), and anyone who accepted superseded wording. All three are
+one condition, *the current versions are not on record*, so they get one mechanism rather than
+three special cases. A banner rather than a trapping modal, because the reader has to be able to
+open the documents they are being asked to accept.
+
+**The server checks the version rather than trusting the client**, and 409s a stale one — a tab
+left open across a deploy would otherwise record agreement to wording nobody is being shown.
+
+### Pricing moved to the landing page, and the consumer tier became monthly
+
+Pricing now appears on `/` as a **summary rendered from the same `PLANS` object**, not a copy —
+price, one-line pitch, link. Placed last, before the closing call to action: a visitor who has
+seen what the product does can judge a price; one who meets it first is being asked to value
+something they have not seen.
+
+**The consumer tier changed from a one-off HK$680 report to HK$188/month, on request — and the
+original argument for one-off is genuinely weaker than when it was made.** That reasoning said a
+thin-yield market makes Veela a risk-reduction purchase at the moment of transaction, and nobody
+renews a subscription to be told no. What changed has nothing to do with the request: **Property
+Alerts became real earlier the same day.** There was previously nothing to keep paying for
+between purchases; there now is.
+
+It also moves which half of the audience the paid tier serves. A one-off report sells to someone
+**buying once**; a subscription sells to someone **holding a portfolio** — roughly 63,000 flats
+change hands in a year against well over a million owned.
+
+**What did not change:** the free tier stays genuinely useful. The line is *decide on one
+property* (free) versus *keep watching what you own* (paid), not a paywall dropped in front of
+what already worked. The API is still the real revenue line.
+
+Knock-on corrections, each of which would have shipped a false statement: the terms' billing
+clause described a one-off purchase and discretionary refunds (now monthly billing, cancel any
+time, no part-month refunds, but **defect refunds are not discretionary**, and saved reports stay
+readable after cancellation); and `/pricing`'s **metadata description still advertised HK$680**,
+which is what a search result or a shared link would have shown.
+
 ## Working conventions
 - Dates DD/MM/YYYY. Currency: **HKD** for Hong Kong, **VND** for Vietnam, **EUR** for
   France — always state which, never a bare number. Keep a single reporting currency

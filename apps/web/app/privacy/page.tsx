@@ -1,3 +1,4 @@
+import { LEGAL_VERSIONS } from "@veela/types";
 import Link from "next/link";
 
 import { AppShell } from "../../components/app-shell";
@@ -18,7 +19,9 @@ import { AppShell } from "../../components/app-shell";
  */
 const CONTACT_EMAIL = "[to be confirmed — see the note in this file's own source]";
 const OPERATOR_NAME = "[the entity operating Veela — to be confirmed]";
-const LAST_UPDATED = "09/08/2026";
+/** Read from `LEGAL_VERSIONS`, not typed again — this is the version users accept, and a page
+ *  dated differently from the recorded signature defeats the record. */
+const LAST_UPDATED = LEGAL_VERSIONS.privacy;
 
 export default function PrivacyPage(): React.JSX.Element {
   return (
@@ -29,7 +32,7 @@ export default function PrivacyPage(): React.JSX.Element {
         </h1>
         <p className="mt-3 text-sm leading-relaxed text-muted">
           What Veela collects, why, and what you can do about it — written for Hong
-          Kong&apos;s Personal Data (Privacy) Ordinance (PDPO). Last updated {LAST_UPDATED}.
+          Kong&apos;s Personal Data (Privacy) Ordinance (PDPO). Version {LAST_UPDATED}.
         </p>
       </header>
 

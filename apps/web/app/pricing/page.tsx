@@ -7,7 +7,7 @@ import { PLANS, formatPlanPrice, type Plan } from "@veela/api/plans";
 export const metadata: Metadata = {
   title: "Pricing — Veela",
   description:
-    "Free to check a property. HK$680 for a verified report on the one you are buying. An API for teams that need Hong Kong stamp duty right every day.",
+    "Free to decide on one property. HK$188 a month to keep watching a portfolio against the market and the stamp duty rules. An API for teams that need Hong Kong stamp duty right every day.",
 };
 
 /**
@@ -36,7 +36,7 @@ export const metadata: Metadata = {
  */
 
 export default function PricingPage(): React.JSX.Element {
-  const consumer = [PLANS.free, PLANS.report];
+  const consumer = [PLANS.free, PLANS.investor];
   const api = [PLANS.starter, PLANS.pro];
 
   /**
@@ -63,10 +63,9 @@ export default function PricingPage(): React.JSX.Element {
           Free to look. Paid when it matters.
         </h1>
         <p className="mt-3 text-[15px] leading-relaxed text-muted">
-          Checking whether a flat stacks up should cost nothing — that is most of what Veela
-          does, and it stays free. You pay at the two moments money is genuinely on the line:
-          the property you are actually buying, and the API a team runs its own numbers
-          through.
+          Deciding on one property should cost nothing — that is most of what Veela does, and
+          it stays free. You pay to keep watching what you own: a portfolio checked against the
+          market and the rules month after month. Teams pay for the tax engine directly.
         </p>
       </header>
 
@@ -83,13 +82,13 @@ export default function PricingPage(): React.JSX.Element {
                 p.id === "free"
                   ? "Analyse a property"
                   : paymentsLive
-                    ? "Buy a report"
+                    ? "Subscribe"
                     : "Not on sale yet"
               }
-              disabled={p.id === "report" && !paymentsLive}
+              disabled={p.id === "investor" && !paymentsLive}
               note={
-                p.id === "report" && !paymentsLive
-                  ? "Checkout isn't built yet. The price is real and the report exists — tell us if you'd pay it and you'll be first in line."
+                p.id === "investor" && !paymentsLive
+                  ? "Billing isn't built yet. The price is real and everything it unlocks already works — tell us if you'd pay it and you'll be first in line."
                   : undefined
               }
               href="/analyse"
@@ -127,11 +126,11 @@ export default function PricingPage(): React.JSX.Element {
         <h2 className="text-[15px] font-semibold">If these numbers are wrong, say so</h2>
         <p className="mt-2 text-sm leading-relaxed text-muted">
           Veela is early, and these prices are a considered guess rather than a tested one.
-          HK$680 is about 0.008% of a median Hong Kong flat and roughly a tenth of a
-          surveyor&apos;s fee, which is the argument for it — but the only evidence that counts
-          is somebody paying. If the API is priced wrong for your team, tell us what it is
-          worth and we will talk. Early customers get that conversation, and the price it
-          lands on.
+          HK$188 a month is roughly what a single hour of professional advice costs, for
+          something that watches a portfolio all year — that is the argument for it, not
+          evidence. The only evidence that counts is somebody paying. If it is priced wrong for
+          you or for your team, tell us what it is worth and we will talk. Early customers get
+          that conversation, and the price it lands on.
         </p>
       </section>
 
@@ -169,7 +168,7 @@ function PlanCard({
   readonly disabled?: boolean;
   readonly note?: string | undefined;
 }): React.JSX.Element {
-  const highlighted = plan.id === "report" || plan.id === "starter";
+  const highlighted = plan.id === "investor" || plan.id === "starter";
   return (
     <article
       className={`card flex h-full flex-col ${highlighted ? "border-accent/40 shadow-lift" : ""}`}
@@ -178,9 +177,6 @@ function PlanCard({
         <h3 className="text-[15px] font-semibold">{plan.name}</h3>
         <span className="tnum font-display text-[24px] font-semibold tracking-[-0.02em]">
           {formatPlanPrice(plan)}
-          {plan.interval === "once" && (
-            <span className="ml-1.5 text-xs font-normal text-muted">per report</span>
-          )}
         </span>
       </div>
       <p className="mt-1.5 text-sm text-muted">{plan.blurb}</p>

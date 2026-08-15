@@ -1,3 +1,4 @@
+import { PLANS, formatPlanPrice } from "@veela/api/plans";
 import { HK_RULES_2026 } from "@veela/core";
 import Image from "next/image";
 import Link from "next/link";
@@ -26,6 +27,7 @@ export default function HomePage(): React.JSX.Element {
       <Answers />
       <HowItWorks />
       <ShortLetLaw />
+      <Pricing />
       <ClosingCta />
     </>
   );
@@ -383,6 +385,68 @@ function MapTeaser(): React.JSX.Element {
           the map ships with fixtures and says so on the page. Inventing plausible numbers
           would be the fastest way to lose an investor&apos;s trust.
         </p>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * Pricing on the landing page, immediately before the closing call to action.
+ *
+ * **A summary, not a copy of `/pricing`.** It renders from the same `PLANS` object, so the
+ * numbers cannot drift from the pricing page or from the quotas the rate limiter actually
+ * enforces — but it shows the price, the one-line pitch and a link, rather than every feature
+ * bullet. Duplicating the full table would mean two pages to keep in step and a landing page
+ * that reads like a spreadsheet.
+ *
+ * Placed last on purpose: a visitor who has just been shown what the product does is in a
+ * position to judge a price. One who meets it first is being asked to value something they
+ * have not seen.
+ */
+function Pricing(): React.JSX.Element {
+  const plans = [PLANS.free, PLANS.investor, PLANS.starter];
+  return (
+    <section className="band">
+      <div className="col">
+        <h2 className="max-w-display font-display text-display-2 font-semibold">
+          Free to look. Paid when it matters.
+        </h2>
+        <p className="mt-5 max-w-prose text-[16px] leading-relaxed text-muted">
+          Deciding on one property costs nothing, and that is most of what Veela does. You pay
+          to keep watching what you own — a portfolio checked against the market and the stamp
+          duty rules, month after month. Teams pay for the tax engine directly.
+        </p>
+
+        <div className="mt-10 grid gap-5 md:grid-cols-3">
+          {plans.map((plan) => (
+            <div key={plan.id} className="card flex h-full flex-col">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <h3 className="text-[15px] font-semibold">{plan.name}</h3>
+                <span className="tnum font-display text-[22px] font-semibold tracking-[-0.02em]">
+                  {formatPlanPrice(plan)}
+                </span>
+              </div>
+              <p className="mt-2 flex-1 text-sm leading-relaxed text-muted">{plan.blurb}</p>
+              {plan.monthlyQuota > 0 && (
+                <p className="mt-3 font-mono text-[10px] uppercase tracking-[0.08em] text-muted">
+                  {plan.monthlyQuota.toLocaleString("en-HK")} API calls a month
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-2">
+          <Link href="/pricing" className="btn-secondary">
+            See what each plan includes
+          </Link>
+          <Link
+            href="/developers"
+            className="text-sm font-medium underline decoration-line underline-offset-4 hover:text-mist"
+          >
+            Or read the API docs
+          </Link>
+        </div>
       </div>
     </section>
   );

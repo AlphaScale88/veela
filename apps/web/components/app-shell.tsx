@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { useAuth } from "./auth-provider";
+import { ConsentGate } from "./consent";
 
 /**
  * The dashboard-style shell for every "app" page — Finder, Dashboard, the Assistant,
@@ -86,7 +87,13 @@ export function AppShell({ children, breadcrumb, toolbar }: Props): React.JSX.El
           {breadcrumb}
         </div>
 
-        <main className="flex-1 overflow-y-auto bg-ink px-4 py-6 sm:px-6">{children}</main>
+        <main className="flex-1 overflow-y-auto bg-ink px-4 py-6 sm:px-6">
+          {/* Above every page in the app shell, because the question it asks applies to the
+              whole account rather than to one screen — and because a user who only ever visits
+              one page must still be asked. Renders nothing when there is nothing outstanding. */}
+          <ConsentGate />
+          {children}
+        </main>
       </div>
     </div>
   );

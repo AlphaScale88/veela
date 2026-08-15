@@ -14,6 +14,9 @@ import {
 } from "@veela/db";
 import {
   chatRequestSchema,
+  recordConsentSchema,
+  LEGAL_VERSIONS,
+  LEGAL_DOCUMENTS,
   createApiKeySchema,
   reportBriefSchema,
   createPropertySchema,
@@ -440,6 +443,79 @@ ${area}`,
   // What the pricing page renders, from the same object the quotas are enforced against —
   // so a price on a marketing page can never disagree with what the limiter actually allows.
   .get("/plans", (c) => c.json({ plans: Object.values(PLANS) }))
+
+  /**
+   * ═══════════════════════════════════════════════════════════════════════
+   * CONSENT — what the user agreed to, and when
+   * ═══════════════════════════════════════════════════════════════════════
+   *
+   * `GET` answers the only question the UI needs: **is anything outstanding?** That covers two
+   * cases with one mechanism — a brand-new account that has accepted nothing, and an existing
+   * account created before this existed or before the wording changed. Both show up as an
+   * `outstanding` list, so there is no separate "legacy user" path to get wrong.
+   */
+  .get("/consent", async (c) => {
+    const userId = requireUser(c.get("userId"));
+    const db = c.get("db");
+
+    const rows = (await db.execute(sql`
+      select document, version, accepted_at
+      from consent_records
+      where user_id = ${userId}
+      order by accepted_at desc
+    `)) as unknown as { document: string; version: string; accepted_at: string }[];
+
+    const accepted = rows.map((r) => ({
+      document: r.document,
+      version: r.version,
+      acceptedAt: r.accepted_at,
+    }));
+
+    const outstanding = LEGAL_DOCUMENTS.filter(
+      (doc) => !accepted.some((a) => a.document === doc && a.version === LEGAL_VERSIONS[doc]),
+    );
+
+    return c.json({ current: LEGAL_VERSIONS, accepted, outstanding });
+  })
+
+  /**
+   * `POST` records acceptance.
+   *
+   * **The version is checked against the one in force, not trusted from the client.** A tab
+   * left open across a deployment would otherwise record agreement to wording that is no longer
+   * being shown to anyone — the precise failure this table exists to make impossible. A stale
+   * submission is rejected with a 409 so the client can reload and present the current text.
+   *
+   * Idempotent by the table's unique constraint: a double-submit or a refresh cannot
+   * manufacture a second record of one event, and re-accepting the same version is a no-op
+   * rather than an error.
+   */
+  .post("/consent", zValidator("json", recordConsentSchema), async (c) => {
+    const userId = requireUser(c.get("userId"));
+    const db = c.get("db");
+    const { documents } = c.req.valid("json");
+
+    for (const d of documents) {
+      const inForce = LEGAL_VERSIONS[d.document];
+      if (d.version !== inForce) {
+        throw new HTTPException(409, {
+          message:
+            `The ${d.document} document has changed since this page loaded ` +
+            `(you sent ${d.version}, current is ${inForce}). Reload and read the current version.`,
+        });
+      }
+    }
+
+    for (const d of documents) {
+      await db.execute(sql`
+        insert into consent_records (user_id, document, version)
+        values (${userId}, ${d.document}, ${d.version})
+        on conflict (user_id, document, version) do nothing
+      `);
+    }
+
+    return c.json({ recorded: documents.length, current: LEGAL_VERSIONS }, 201);
+  })
 
   // ── Profile — "Manage" ───────────────────────────────────────────────────
   // The row always exists by the time this runs: `handle_new_user` (see
