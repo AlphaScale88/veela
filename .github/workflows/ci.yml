@@ -19,13 +19,19 @@ jobs:
     timeout-minutes: 15
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 9
+      # No `version:` here on purpose. The root package.json already declares
+      # `packageManager: pnpm@9.12.0`, and specifying both makes this action fail
+      # outright — "Multiple versions of pnpm specified" — rather than picking one.
+      # Letting it read `packageManager` keeps the version in a single place, which
+      # is also what the local dev scripts and Vercel resolve against.
+      - uses: pnpm/action-setup@v6
 
-      - uses: actions/setup-node@v4
+      # v7 across the board: the v4 actions were being forced onto Node 24 with a
+      # deprecation warning on every run, because Node 20 is end-of-life on GitHub
+      # runners. A warning nobody can act on trains people to ignore warnings.
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
