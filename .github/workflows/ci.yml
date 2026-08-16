@@ -44,8 +44,14 @@ jobs:
       - name: Build workspace packages
         run: pnpm -r --filter "./packages/**" build
 
+      # Everything except `web`. Next generates `next-env.d.ts` — which is what types a
+      # `.jpg` import — during a build, and that file is gitignored, so on a clean checkout
+      # `tsc --noEmit` in apps/web cannot resolve the hero image and fails. Rather than
+      # commit a generated file or build before typechecking, web is covered by the
+      # production build below: `next build` runs full TypeScript checking and this config
+      # sets no `ignoreBuildErrors`, so a type error there still fails CI.
       - name: Typecheck
-        run: pnpm -r typecheck
+        run: pnpm -r --filter "!web" typecheck
 
       - name: Lint
         run: pnpm -r lint
