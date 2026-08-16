@@ -2011,6 +2011,8 @@ no such fields and generating them would mean inventing renovation states for fi
 properties that do not exist — deepening the fabrication this page already discloses rather
 than adding a criterion. **A filter that invents the thing it filters on is worse than a missing
 filter**, and the panel says so on screen rather than leaving a reader to hunt for it.
+*(**That last argument was wrong and was withdrawn the same day — see "Twelve criteria in three
+tabs" below.** The paragraph is kept as written because the correction is the point.)*
 
 Age is computed from a `CURRENT_YEAR` fixed at module load, not per render: a result set that
 changed halfway through a session because the clock passed midnight would be baffling.
@@ -2071,6 +2073,93 @@ redirects — these URLs did not move, only their chrome.
 
 Verified at 1400px and 390px: both render with the marketing header and footer, **zero product
 sidebars**, no horizontal overflow, no console errors.
+
+## Twelve criteria in three tabs — and an argument of ours that did not hold (16/08/2026)
+
+Sent a screenshot of Spacious's **More Filters** panel and asked for more criteria like it.
+That panel is three tabs — *Listing Features, Building Features, Other Features* — of radio
+groups, closing with **Reset** and **Show 15,511 listings**. All of that is adopted. `/finder`
+now carries twelve extra criteria against four.
+
+### The reasoning that had to be withdrawn first
+
+The previous pass added four filters and recorded, on the page and in this file, that
+**Renovation and Furniture were deliberately excluded**: `DemoListing` had no such fields, and
+generating them would deepen the fabrication the page discloses. *"A filter that invents the
+thing it filters on is worse than a missing filter."*
+
+**That argument does not survive being applied consistently, and it was ours, not a constraint.**
+`floor`, `yearBuilt` and `monthlyManagementFeeHkd` are every bit as generated as a renovation
+state — and the same commit that wrote the sentence shipped filters on all three. There was
+never a principled line between an invented number and an invented category; the line only
+looked principled because numbers feel like measurements. What actually makes any of this
+defensible is `LISTINGS_NOTICE`, which discloses the whole dataset and covers eight new fields
+exactly as it covered the prices. The old paragraph is left standing in the section above with
+a pointer here, because a withdrawn argument is more useful than a quietly deleted one.
+
+**What has *not* changed is the rule underneath it**: no listing gets a building name, a street
+or a unit number, and no photo shows an identifiable Hong Kong building. Those refuse to make a
+false claim about a *real* property, which is a different thing from generating an attribute of
+an admittedly invented one.
+
+### The generated attributes, and two things that made them non-trivial
+
+Renovation, furnishing, outdoor space, view, car park, facilities, pets and tenancy. Odds lean
+on the figures already drawn rather than being uniform — rooftops only above floor 30 and
+gardens only at the bottom, sea views weighted by region and height, facilities and refurbishment
+likelier in newer stock. Not realism for its own sake: a screening tool that returns a
+ground-floor flat for "sea view, high floor", or a building with a pool and no clubhouse, looks
+broken to anyone who knows the market, and judging the screening tool is the only reason this
+data exists. Facilities are drawn as a **tier**, not three coin flips, for the same reason.
+
+**A bug caught by measuring rather than reasoning.** The new draws were appended after the
+existing ones, with a comment claiming that left every prior figure byte-identical. It did not:
+mulberry32 is one sequence shared by all three listings in a district, so the extra draws shifted
+listings 2 and 3 everywhere — **"under 500 sq ft" moved from 10 to 13**, and the filter counts
+this page had been verified against silently stopped matching. Fixed with a **second independent
+PRNG stream** (`attrRand`, `d.seed + 90000`); the documented chain is 54 → 10 → 3 → 2 again, and
+either group can gain a field later without disturbing the other.
+
+**Every new criterion is visible on the result.** A filter you cannot see the effect of gives a
+reader no way to tell a working one from a broken one — the same reasoning that made every
+neighbourhood count open the list behind it. Cards and list rows carry up to three feature chips
+(capped: uneven card heights in a grid read as a layout bug), the table carries all of them
+uncapped, and the CSV gains **one column per criterion** rather than a joined blob, because a CSV
+is opened to be sorted and filtered again.
+
+### Choices inside the panel
+
+**Radio groups, not selects.** A `<select>` hides its options until clicked, so eight of them
+would show a reader nothing about what can actually be filtered on. Native `<input type="radio">`
+rather than styled `role="radio"` buttons: arrow-key roving, group announcement and exclusivity
+all come free. The main bar keeps its selects, where compactness beats discoverability.
+
+**Facilities is the one multi-select, and it means AND.** Ticking Gym and Pool asks for a building
+with both — verified, since it is the one place an OR would look plausible and be wrong. It counts
+as **one** active criterion in the badge however many boxes are ticked, because the badge answers
+"how many things am I filtering on".
+
+**"Show N listings" makes the panel a preview of its own effect** — a filter combination that
+leaves nothing is visible before it is applied rather than after.
+
+**Not copied: the reference's floor-plan / video-tour / virtual-staging checkboxes.** Those
+describe the *advertisement*, and there is no advertisement here to describe. **Tenancy earns its
+place for the opposite reason** — vacant possession versus buying with a tenant in place changes
+what is being bought, not how it is marketed, and the panel says so: you inherit the rent and the
+term and cannot vary either until it expires, while the report treats the rent you enter as the
+rent you get.
+
+**Spacious itself could not be read.** It 403s a plain fetch behind Cloudflare. The stealth
+browser built for the listing importer would have got through, and was not used: that bypass
+exists for a listing a user pasted, and pointing it at a competitor's app to study their UI is a
+different purpose than the one it was authorised for. Worked from the screenshot instead.
+
+Verified in the table view, where every row is countable, at 1400px and 390px — counts checked
+against the fixture data computed independently, not just read off the screen: 54 → renovation
+refined **17** → also tenanted **10** → also has a gym **6** → also has a pool **2**; badge
+reached 3, the footer read "Show 6 listings", Reset all restored 54. No horizontal overflow on
+the body, the panel or the tab strip at either width; no console errors; 36 engine tests still
+pass.
 
 ## Working conventions
 - Dates DD/MM/YYYY. Currency: **HKD** for Hong Kong, **VND** for Vietnam, **EUR** for

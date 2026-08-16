@@ -47,6 +47,57 @@ import { draftToCoreInput, EMPTY_DRAFT, type Draft } from "./property-form";
 
 const TRANSACTION_DATE = "2026-08-01";
 
+/**
+ * Short labels for the qualitative attributes, and the priority they are shown in.
+ *
+ * **A criterion you can filter on has to be visible on the result**, or the reader has no way
+ * to tell a working filter from a broken one — the same reasoning that made every neighbourhood
+ * count open the list behind it. Tenancy leads because it is the one attribute that changes
+ * what is being bought rather than shading it; the rest follow in roughly the order a buyer
+ * asks about them.
+ */
+function featureChips(l: DemoListing): readonly string[] {
+  const chips: string[] = [];
+  if (l.tenancy === "tenanted") chips.push("Tenanted");
+  if (l.view !== "none") {
+    chips.push(
+      { sea: "Sea view", mountain: "Mountain view", city: "City view", open: "Open outlook" }[l.view],
+    );
+  }
+  if (l.outdoor !== "none") {
+    chips.push({ balcony: "Balcony", rooftop: "Rooftop", garden: "Garden" }[l.outdoor]);
+  }
+  if (l.carPark === "included") chips.push("Car park");
+  if (l.renovation !== "none") {
+    chips.push(l.renovation === "refined" ? "Refined" : "Simple reno");
+  }
+  if (l.furnishing !== "unfurnished") {
+    chips.push(l.furnishing === "full" ? "Furnished" : "Part furnished");
+  }
+  if (l.facilities.length > 0) chips.push(`${l.facilities.length} facilities`);
+  if (l.petsAllowed) chips.push("Pets OK");
+  return chips;
+}
+
+/** Capped at three on cards and rows, uncapped in the table. Uneven card heights in a grid
+ *  read as a layout bug; the table is the view built to carry everything. */
+function FeatureChips({ listing, max }: { readonly listing: DemoListing; readonly max: number }): React.JSX.Element | null {
+  const all = featureChips(listing);
+  if (all.length === 0) return null;
+  const shown = all.slice(0, max);
+  const rest = all.length - shown.length;
+  return (
+    <p className="mt-1 flex flex-wrap gap-1" title={all.join(" · ")}>
+      {shown.map((c) => (
+        <span key={c} className="rounded-full bg-surfaceMuted px-1.5 py-0.5 text-[10px] text-muted">
+          {c}
+        </span>
+      ))}
+      {rest > 0 && <span className="px-1 py-0.5 text-[10px] text-muted">+{rest}</span>}
+    </p>
+  );
+}
+
 export function listingToDraft(l: DemoListing, districtLabel: string): Draft {
   return {
     ...EMPTY_DRAFT,
@@ -106,16 +157,28 @@ const YIELD_FLOORS = [
 const BEDROOM_OPTIONS = ["any", "1", "2", "3", "4"] as const;
 
 /**
- * The extra criteria, behind a "More filters" disclosure like the reference's.
+ * The extra criteria, behind a "More filters" disclosure, now grouped into the three tabs the
+ * reference uses: **Listing features, Building features, Other features.**
  *
- * **Every one filters a field the generated listings genuinely carry** — `saleableAreaSqft`,
- * `floor`, `yearBuilt`, `monthlyManagementFeeHkd`. That constraint decided the list.
+ * The tabs are not decoration. Twelve criteria in one grid is a form; split by *what the
+ * criterion is about* — the flat, the building it sits in, everything else — a reader looking
+ * for "does it come with a car park" has one place to look rather than twelve to scan. Grouping
+ * by subject also survives adding more later, which an arbitrary two-column split does not.
  *
- * The reference's own More Filters panel offers *Renovation* (Any / Simple / Refined / None)
- * and *Furniture*. **Neither is here, deliberately.** `DemoListing` has no such fields, and
- * adding them would mean generating renovation states for fifty-four properties that do not
- * exist — deepening the fabrication this page already discloses rather than adding a filter.
- * A filter that invents the thing it filters on is worse than a missing filter.
+ * **Radio groups rather than dropdowns**, again following the reference. A `<select>` hides its
+ * options until clicked, so a panel of eight selects shows a reader nothing about what they can
+ * actually filter on; the whole vocabulary is visible at once here. The main bar keeps its
+ * selects, where compactness matters more than discoverability.
+ *
+ * ## What changed about renovation and furnishing
+ *
+ * This comment used to say those two were **deliberately absent**, because `DemoListing` had no
+ * such fields and generating them would deepen the fabrication the page discloses. **That
+ * reasoning was inconsistent and has been withdrawn** — `floor`, `yearBuilt` and
+ * `monthlyManagementFeeHkd` were every bit as generated, and all three were already being
+ * filtered on right here. There was never a principled line between an invented number and an
+ * invented category; what makes any of it defensible is `LISTINGS_NOTICE`, which covers the new
+ * fields exactly as it covered the prices. See `packages/fixtures/src/listings.ts`.
  */
 const AREA_BANDS = [
   { id: "any", label: "Any size", min: 0, max: Infinity },
@@ -150,6 +213,70 @@ const FEE_CEILINGS = [
   { id: "2000", label: "Under HK$2,000/mo", max: 2_000 },
   { id: "3500", label: "Under HK$3,500/mo", max: 3_500 },
   { id: "5000", label: "Under HK$5,000/mo", max: 5_000 },
+] as const;
+
+/* The qualitative criteria. Each `id` is either `"any"` or a literal from the matching union
+   in `@veela/fixtures`, so filtering is an equality check and a typo is a type error rather
+   than a filter that silently matches nothing. */
+
+const RENOVATION_OPTIONS = [
+  { id: "any", label: "Any" },
+  { id: "refined", label: "Refined" },
+  { id: "simple", label: "Simple" },
+  { id: "none", label: "Unrenovated" },
+] as const;
+
+const FURNISHING_OPTIONS = [
+  { id: "any", label: "Any" },
+  { id: "full", label: "Fully furnished" },
+  { id: "partly", label: "Partly furnished" },
+  { id: "unfurnished", label: "Unfurnished" },
+] as const;
+
+const OUTDOOR_OPTIONS = [
+  { id: "any", label: "Any" },
+  { id: "balcony", label: "Balcony" },
+  { id: "rooftop", label: "Rooftop" },
+  { id: "garden", label: "Garden" },
+  { id: "none", label: "None" },
+] as const;
+
+const VIEW_OPTIONS = [
+  { id: "any", label: "Any" },
+  { id: "sea", label: "Sea view" },
+  { id: "mountain", label: "Mountain" },
+  { id: "city", label: "City" },
+  { id: "open", label: "Open outlook" },
+  { id: "none", label: "No open view" },
+] as const;
+
+/** "Available to rent" is a real third state in Hong Kong, not padding: a space in the
+ *  building you can lease is worth something, but it is a monthly cost rather than an asset
+ *  included in the price — and only the first of those changes the stamp duty. */
+const CAR_PARK_OPTIONS = [
+  { id: "any", label: "Any" },
+  { id: "included", label: "Included in price" },
+  { id: "rentable", label: "Available to rent" },
+  { id: "none", label: "None" },
+] as const;
+
+const TENANCY_OPTIONS = [
+  { id: "any", label: "Any" },
+  { id: "vacant", label: "Vacant possession" },
+  { id: "tenanted", label: "Sold with a tenant" },
+] as const;
+
+const FACILITY_OPTIONS = [
+  { id: "clubhouse", label: "Clubhouse" },
+  { id: "gym", label: "Gym" },
+  { id: "pool", label: "Pool" },
+] as const;
+
+/** Grouped by *what the criterion is about* — the flat, the building, everything else. */
+const MORE_TABS = [
+  { id: "listing", label: "Listing features" },
+  { id: "building", label: "Building features" },
+  { id: "other", label: "Other features" },
 ] as const;
 
 const SORTS = [
@@ -187,7 +314,19 @@ export function PropertyFinder({ districtQuery, view }: Props): React.JSX.Elemen
   const [floorBandId, setFloorBandId] = useState<(typeof FLOOR_BANDS)[number]["id"]>("any");
   const [ageBandId, setAgeBandId] = useState<(typeof AGE_BANDS)[number]["id"]>("any");
   const [feeCeilingId, setFeeCeilingId] = useState<(typeof FEE_CEILINGS)[number]["id"]>("any");
+  const [renovationId, setRenovationId] = useState<(typeof RENOVATION_OPTIONS)[number]["id"]>("any");
+  const [furnishingId, setFurnishingId] = useState<(typeof FURNISHING_OPTIONS)[number]["id"]>("any");
+  const [outdoorId, setOutdoorId] = useState<(typeof OUTDOOR_OPTIONS)[number]["id"]>("any");
+  const [viewId, setViewId] = useState<(typeof VIEW_OPTIONS)[number]["id"]>("any");
+  const [carParkId, setCarParkId] = useState<(typeof CAR_PARK_OPTIONS)[number]["id"]>("any");
+  const [tenancyId, setTenancyId] = useState<(typeof TENANCY_OPTIONS)[number]["id"]>("any");
+  /* Facilities is the one multi-select, because they are cumulative rather than exclusive —
+     "clubhouse and a gym" is an ordinary thing to want, where "refined and simple" is not.
+     Ticking two means *both*, which is the reading a reader expects from a checkbox list. */
+  const [facilityIds, setFacilityIds] = useState<readonly string[]>([]);
+  const [petsOnly, setPetsOnly] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [moreTab, setMoreTab] = useState<(typeof MORE_TABS)[number]["id"]>("listing");
   const [sort, setSort] = useState<SortId>("yield-desc");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [heatMetric, setHeatMetric] = useState<HeatMetricId>("yield");
@@ -206,9 +345,24 @@ export function PropertyFinder({ districtQuery, view }: Props): React.JSX.Elemen
     [],
   );
 
-  const extraFilterCount = [areaBandId, floorBandId, ageBandId, feeCeilingId].filter(
-    (v) => v !== "any",
-  ).length;
+  const extraFilterCount =
+    [
+      areaBandId,
+      floorBandId,
+      ageBandId,
+      feeCeilingId,
+      renovationId,
+      furnishingId,
+      outdoorId,
+      viewId,
+      carParkId,
+      tenancyId,
+    ].filter((v) => v !== "any").length +
+    /* Facilities counts as **one** active criterion however many boxes are ticked: the badge
+       answers "how many things am I filtering on", and three ticks in one group is still one
+       question the reader asked. */
+    (facilityIds.length > 0 ? 1 : 0) +
+    (petsOnly ? 1 : 0);
   const activeFilterCount =
     extraFilterCount +
     [bedrooms, priceBandId, yieldFloorId].filter((v) => v !== "any").length;
@@ -221,6 +375,18 @@ export function PropertyFinder({ districtQuery, view }: Props): React.JSX.Elemen
     setFloorBandId("any");
     setAgeBandId("any");
     setFeeCeilingId("any");
+    setRenovationId("any");
+    setFurnishingId("any");
+    setOutdoorId("any");
+    setViewId("any");
+    setCarParkId("any");
+    setTenancyId("any");
+    setFacilityIds([]);
+    setPetsOnly(false);
+  }
+
+  function toggleFacility(id: string): void {
+    setFacilityIds((prev) => (prev.includes(id) ? prev.filter((f) => f !== id) : [...prev, id]));
   }
 
   const priceBand = PRICE_BANDS.find((b) => b.id === priceBandId) ?? PRICE_BANDS[0];
@@ -247,6 +413,17 @@ export function PropertyFinder({ districtQuery, view }: Props): React.JSX.Elemen
       if (CURRENT_YEAR - r.listing.yearBuilt > ageBand.maxAge) return false;
       if (r.listing.monthlyManagementFeeHkd > feeCeiling.max) return false;
 
+      if (renovationId !== "any" && r.listing.renovation !== renovationId) return false;
+      if (furnishingId !== "any" && r.listing.furnishing !== furnishingId) return false;
+      if (outdoorId !== "any" && r.listing.outdoor !== outdoorId) return false;
+      if (viewId !== "any" && r.listing.view !== viewId) return false;
+      if (carParkId !== "any" && r.listing.carPark !== carParkId) return false;
+      if (tenancyId !== "any" && r.listing.tenancy !== tenancyId) return false;
+      if (petsOnly && !r.listing.petsAllowed) return false;
+      // `every`, not `some`: ticking Gym *and* Pool asks for a building that has both.
+      const has: readonly string[] = r.listing.facilities;
+      if (!facilityIds.every((f) => has.includes(f))) return false;
+
       const netYield = r.verdict.returns.netYield;
       if (netYield === null || netYield < yieldFloor.min) return false;
       return true;
@@ -267,7 +444,26 @@ export function PropertyFinder({ districtQuery, view }: Props): React.JSX.Elemen
       }
     });
     return sorted;
-  }, [rows, matchedDistrict, bedrooms, priceBand, yieldFloor, sort, areaBandId, floorBandId, ageBandId, feeCeilingId]);
+  }, [
+    rows,
+    matchedDistrict,
+    bedrooms,
+    priceBand,
+    yieldFloor,
+    sort,
+    areaBandId,
+    floorBandId,
+    ageBandId,
+    feeCeilingId,
+    renovationId,
+    furnishingId,
+    outdoorId,
+    viewId,
+    carParkId,
+    tenancyId,
+    facilityIds,
+    petsOnly,
+  ]);
 
   // A filter change (or switching views) can strand the reader on a page number
   // that no longer exists — back to page 1 whenever the result set could differ.
@@ -333,7 +529,26 @@ export function PropertyFinder({ districtQuery, view }: Props): React.JSX.Elemen
   }, [visible, heatMetric]);
 
   function exportCsv(): void {
-    const header = ["District", "Bedrooms", "Sqft", "Price (HKD)", "Net yield", "Floor"];
+    // One column per criterion rather than a joined "features" blob: a CSV is opened in a
+    // spreadsheet to be sorted and filtered again, and a blob cannot be.
+    const header = [
+      "District",
+      "Bedrooms",
+      "Sqft",
+      "Price (HKD)",
+      "Net yield",
+      "Floor",
+      "Year built",
+      "Management fee (HKD/mo)",
+      "Renovation",
+      "Furnishing",
+      "Outdoor",
+      "View",
+      "Car park",
+      "Facilities",
+      "Pets allowed",
+      "Tenancy",
+    ];
     const lines = visible.map((r) =>
       [
         districtName(r.listing.districtId),
@@ -342,6 +557,17 @@ export function PropertyFinder({ districtQuery, view }: Props): React.JSX.Elemen
         r.listing.priceHkd,
         r.verdict.returns.netYield === null ? "" : (r.verdict.returns.netYield * 100).toFixed(2),
         r.listing.floor,
+        r.listing.yearBuilt,
+        r.listing.monthlyManagementFeeHkd,
+        r.listing.renovation,
+        r.listing.furnishing,
+        r.listing.outdoor,
+        r.listing.view,
+        r.listing.carPark,
+        // Semicolons, not commas — this field is a list inside a comma-separated file.
+        r.listing.facilities.join(";"),
+        r.listing.petsAllowed ? "yes" : "no",
+        r.listing.tenancy,
       ].join(","),
     );
     const csv = [header.join(","), ...lines].join("\n");
@@ -435,38 +661,171 @@ export function PropertyFinder({ districtQuery, view }: Props): React.JSX.Elemen
       </div>
 
       {moreOpen && (
-        <div id="finder-more-filters" className="card grid gap-4 py-4 sm:grid-cols-2 lg:grid-cols-4">
-          <FilterSelect
-            label="Saleable area"
-            value={areaBandId}
-            onChange={(v) => setAreaBandId(v as typeof areaBandId)}
-            options={AREA_BANDS.map((b) => ({ value: b.id, label: b.label }))}
-          />
-          <FilterSelect
-            label="Floor"
-            value={floorBandId}
-            onChange={(v) => setFloorBandId(v as typeof floorBandId)}
-            options={FLOOR_BANDS.map((b) => ({ value: b.id, label: b.label }))}
-          />
-          <FilterSelect
-            label="Building age"
-            value={ageBandId}
-            onChange={(v) => setAgeBandId(v as typeof ageBandId)}
-            options={AGE_BANDS.map((b) => ({ value: b.id, label: b.label }))}
-          />
-          <FilterSelect
-            label="Management fee"
-            value={feeCeilingId}
-            onChange={(v) => setFeeCeilingId(v as typeof feeCeilingId)}
-            options={FEE_CEILINGS.map((b) => ({ value: b.id, label: b.label }))}
-          />
-          {/* Said here rather than left to be discovered by a reader hunting for a filter that
-              does not exist. The absence is a data limit, not an oversight. */}
-          <p className="text-xs leading-relaxed text-muted sm:col-span-2 lg:col-span-4">
-            No renovation or furnishing filter: these sample listings carry no such data, and
-            generating it would deepen the fabrication this page already discloses rather than
-            add a real criterion. Every filter here reads a field the listings actually have.
-          </p>
+        <div id="finder-more-filters" className="card !p-0">
+          <div role="tablist" aria-label="Filter groups" className="flex gap-1 border-b border-line px-3 pt-2">
+            {MORE_TABS.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                role="tab"
+                id={`finder-tab-${t.id}`}
+                aria-selected={moreTab === t.id}
+                aria-controls={`finder-tabpanel-${t.id}`}
+                onClick={() => setMoreTab(t.id)}
+                className={`-mb-px border-b-2 px-3 py-2.5 text-sm transition-colors ${
+                  moreTab === t.id
+                    ? "border-accent font-semibold text-mist"
+                    : "border-transparent text-muted hover:text-mist"
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          <div
+            role="tabpanel"
+            id={`finder-tabpanel-${moreTab}`}
+            aria-labelledby={`finder-tab-${moreTab}`}
+            className="grid gap-x-8 gap-y-5 px-4 py-5 sm:grid-cols-2"
+          >
+            {moreTab === "listing" && (
+              <>
+                <RadioGroup
+                  legend="Saleable area"
+                  name="area"
+                  value={areaBandId}
+                  options={AREA_BANDS}
+                  onChange={(v) => setAreaBandId(v as typeof areaBandId)}
+                />
+                <RadioGroup
+                  legend="Floor"
+                  name="floor"
+                  value={floorBandId}
+                  options={FLOOR_BANDS}
+                  onChange={(v) => setFloorBandId(v as typeof floorBandId)}
+                />
+                <RadioGroup
+                  legend="Renovation"
+                  name="renovation"
+                  value={renovationId}
+                  options={RENOVATION_OPTIONS}
+                  onChange={(v) => setRenovationId(v as typeof renovationId)}
+                />
+                <RadioGroup
+                  legend="Furniture"
+                  name="furnishing"
+                  value={furnishingId}
+                  options={FURNISHING_OPTIONS}
+                  onChange={(v) => setFurnishingId(v as typeof furnishingId)}
+                />
+                <RadioGroup
+                  legend="Outdoor space"
+                  name="outdoor"
+                  value={outdoorId}
+                  options={OUTDOOR_OPTIONS}
+                  onChange={(v) => setOutdoorId(v as typeof outdoorId)}
+                />
+              </>
+            )}
+
+            {moreTab === "building" && (
+              <>
+                <RadioGroup
+                  legend="Building age"
+                  name="age"
+                  value={ageBandId}
+                  options={AGE_BANDS}
+                  onChange={(v) => setAgeBandId(v as typeof ageBandId)}
+                />
+                <RadioGroup
+                  legend="Management fee"
+                  name="fee"
+                  value={feeCeilingId}
+                  options={FEE_CEILINGS}
+                  onChange={(v) => setFeeCeilingId(v as typeof feeCeilingId)}
+                />
+                <RadioGroup
+                  legend="Car park"
+                  name="carpark"
+                  value={carParkId}
+                  options={CAR_PARK_OPTIONS}
+                  onChange={(v) => setCarParkId(v as typeof carParkId)}
+                />
+                <fieldset>
+                  <legend className="text-[13px] font-semibold text-mist">Facilities</legend>
+                  <p className="mt-0.5 text-[11px] text-muted">Tick more than one to require all of them.</p>
+                  <div className="mt-2 flex flex-wrap gap-x-6 gap-y-2">
+                    {FACILITY_OPTIONS.map((f) => (
+                      <CheckRow
+                        key={f.id}
+                        label={f.label}
+                        checked={facilityIds.includes(f.id)}
+                        onChange={() => toggleFacility(f.id)}
+                      />
+                    ))}
+                  </div>
+                </fieldset>
+              </>
+            )}
+
+            {moreTab === "other" && (
+              <>
+                <RadioGroup
+                  legend="View"
+                  name="view"
+                  value={viewId}
+                  options={VIEW_OPTIONS}
+                  onChange={(v) => setViewId(v as typeof viewId)}
+                />
+                <RadioGroup
+                  legend="Tenancy"
+                  name="tenancy"
+                  value={tenancyId}
+                  options={TENANCY_OPTIONS}
+                  onChange={(v) => setTenancyId(v as typeof tenancyId)}
+                />
+                <fieldset>
+                  <legend className="text-[13px] font-semibold text-mist">Pets</legend>
+                  <div className="mt-2">
+                    <CheckRow
+                      label="Pets allowed"
+                      checked={petsOnly}
+                      onChange={() => setPetsOnly((v) => !v)}
+                    />
+                  </div>
+                </fieldset>
+                {/* The reference's Other Features tab also lists things a *listing agent* fills
+                    in — floor plan available, video tour, virtual staging. Those describe the
+                    advertisement rather than the property, and there is no advertisement here
+                    to describe. Tenancy earns its place for the opposite reason: it changes
+                    what you are actually buying. */}
+                <p className="text-[11px] leading-relaxed text-muted sm:col-span-2">
+                  A tenanted flat comes with the existing agreement attached — you inherit the
+                  rent and the term, and cannot vary either until it expires. The report treats
+                  the rent you enter as the rent you get, so check the agreement before relying
+                  on the yield.
+                </p>
+              </>
+            )}
+          </div>
+
+          {/* The reference closes its panel with Reset and "Show N listings", and both earn
+              their place: the count turns the panel into a preview of its own effect, so a
+              filter that leaves nothing is visible before it is applied rather than after. */}
+          <div className="flex items-center justify-between gap-3 border-t border-line px-4 py-3">
+            <button
+              type="button"
+              onClick={resetFilters}
+              disabled={activeFilterCount === 0}
+              className="text-sm text-muted underline underline-offset-4 hover:text-mist disabled:pointer-events-none disabled:opacity-40"
+            >
+              Reset all
+            </button>
+            <button type="button" onClick={() => setMoreOpen(false)} className="btn-primary !px-5 !py-2 !text-sm">
+              Show {visible.length} listing{visible.length === 1 ? "" : "s"}
+            </button>
+          </div>
         </div>
       )}
 
@@ -582,6 +941,7 @@ function ListingsTable({ rows }: { readonly rows: readonly Row[] }): React.JSX.E
             <th scope="col" className="px-4 py-2 font-medium">Sqft</th>
             <th scope="col" className="px-4 py-2 text-right font-medium">Price</th>
             <th scope="col" className="px-4 py-2 text-right font-medium">Net yield</th>
+            <th scope="col" className="px-4 py-2 font-medium">Features</th>
             <th scope="col" className="px-4 py-2 font-medium"></th>
           </tr>
         </thead>
@@ -601,6 +961,12 @@ function ListingsTable({ rows }: { readonly rows: readonly Row[] }): React.JSX.E
                 style={{ color: standingColor[r.standing] }}
               >
                 {formatPercent(r.verdict.returns.netYield)}
+              </td>
+              {/* Uncapped here: the table is the view that already scrolls sideways and is
+                  built to carry everything, which is what makes it the one place to check a
+                  filter actually did what it said. */}
+              <td className="px-4 py-2.5 text-xs text-muted">
+                {featureChips(r.listing).join(" · ") || "—"}
               </td>
               <td className="px-4 py-2.5 text-right">
                 <Link
@@ -666,6 +1032,7 @@ function PropertyCard({
         <p className="mt-0.5 font-mono text-[10px] uppercase tracking-[0.06em] text-muted">
           Rent {formatCompactMoney(money(listing.monthlyRentHkd, "HKD"))}/mo, assumed
         </p>
+        <FeatureChips listing={listing} max={3} />
 
         <Link
           href={`/analyse?listing=${listing.id}`}
@@ -711,6 +1078,7 @@ function ListingRow({
           {districtName(listing.districtId)} · {listing.saleableAreaSqft} sq ft · floor{" "}
           {listing.floor} · rent {formatCompactMoney(money(listing.monthlyRentHkd, "HKD"))}/mo
         </p>
+        <FeatureChips listing={listing} max={3} />
       </div>
 
       <div className="shrink-0 text-right">
@@ -871,6 +1239,71 @@ function FilterSelect({
           </option>
         ))}
       </select>
+    </label>
+  );
+}
+
+/**
+ * A radio group, as `<fieldset>` + `<legend>` + real `<input type="radio">`.
+ *
+ * Native radios rather than styled buttons with `role="radio"`: arrow-key roving between
+ * options, the group announcing itself as "Renovation, 1 of 4", and form semantics all come
+ * for free and are fiddly to reproduce. `name` scopes each group so the browser's own
+ * exclusivity does the work `useState` would otherwise have to police.
+ */
+function RadioGroup({
+  legend,
+  name,
+  value,
+  options,
+  onChange,
+}: {
+  readonly legend: string;
+  readonly name: string;
+  readonly value: string;
+  readonly options: readonly { readonly id: string; readonly label: string }[];
+  readonly onChange: (v: string) => void;
+}): React.JSX.Element {
+  return (
+    <fieldset>
+      <legend className="text-[13px] font-semibold text-mist">{legend}</legend>
+      <div className="mt-2 grid gap-y-2 sm:grid-cols-2">
+        {options.map((o) => (
+          <label key={o.id} className="flex cursor-pointer items-center gap-2 text-[13px] text-muted">
+            <input
+              type="radio"
+              name={`finder-${name}`}
+              value={o.id}
+              checked={value === o.id}
+              onChange={() => onChange(o.id)}
+              className="size-4 shrink-0 accent-accent"
+            />
+            <span className={value === o.id ? "text-mist" : ""}>{o.label}</span>
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
+function CheckRow({
+  label,
+  checked,
+  onChange,
+}: {
+  readonly label: string;
+  readonly checked: boolean;
+  readonly onChange: () => void;
+}): React.JSX.Element {
+  return (
+    <label className="flex cursor-pointer items-center gap-2 text-[13px] text-muted">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={onChange}
+        className="size-4 shrink-0 accent-accent"
+      />
+      <span className={checked ? "text-mist" : ""}>{label}</span>
     </label>
   );
 }
