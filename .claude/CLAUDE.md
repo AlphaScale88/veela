@@ -1992,6 +1992,34 @@ and findable by in-page search, none of which a hand-rolled version gives for fr
 Verified at 1400px and 390px: all four render, five FAQ items each, **no horizontal overflow
 anywhere**, no console errors. 36 engine tests still pass.
 
+## Pricing in the nav, and more finder criteria (16/08/2026)
+
+**Pricing was missing from the header entirely.** The landing page reached it only through the
+mid-page section's button and the footer — never from the nav, which is the first place anyone
+looks. Added to the marketing header and the mobile drawer.
+
+**Four more search criteria on `/finder`**, behind a "More filters" disclosure like the
+reference's: saleable area, floor band, building age and a management-fee ceiling. Behind a
+disclosure rather than widening the bar because four controls are scannable and eight are a
+form; the button carries a badge counting active extras, so a reader who has forgotten why the
+list is short can see something is on without opening it. A Reset appears once anything is set.
+
+**Every filter reads a field the listings genuinely carry** — `saleableAreaSqft`, `floor`,
+`yearBuilt`, `monthlyManagementFeeHkd`. That constraint decided the list. The reference's own
+panel also offers **Renovation** and **Furniture**; neither is here, because `DemoListing` has
+no such fields and generating them would mean inventing renovation states for fifty-four
+properties that do not exist — deepening the fabrication this page already discloses rather
+than adding a criterion. **A filter that invents the thing it filters on is worse than a missing
+filter**, and the panel says so on screen rather than leaving a reader to hunt for it.
+
+Age is computed from a `CURRENT_YEAR` fixed at module load, not per render: a result set that
+changed halfway through a session because the clock passed midnight would be baffling.
+
+Verified in the table view, where every row is countable: 54 listings → 10 under 500 sq ft → 3
+also above floor 26 → 2 also under 20 years old; the badge reached 4; Reset restored 54. Card
+view alone would have hidden this — page size is 6, so page one looks identical whether a
+filter narrowed 54 to 50 or not.
+
 ## Working conventions
 - Dates DD/MM/YYYY. Currency: **HKD** for Hong Kong, **VND** for Vietnam, **EUR** for
   France — always state which, never a bare number. Keep a single reporting currency

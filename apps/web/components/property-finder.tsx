@@ -105,6 +105,53 @@ const YIELD_FLOORS = [
 
 const BEDROOM_OPTIONS = ["any", "1", "2", "3", "4"] as const;
 
+/**
+ * The extra criteria, behind a "More filters" disclosure like the reference's.
+ *
+ * **Every one filters a field the generated listings genuinely carry** — `saleableAreaSqft`,
+ * `floor`, `yearBuilt`, `monthlyManagementFeeHkd`. That constraint decided the list.
+ *
+ * The reference's own More Filters panel offers *Renovation* (Any / Simple / Refined / None)
+ * and *Furniture*. **Neither is here, deliberately.** `DemoListing` has no such fields, and
+ * adding them would mean generating renovation states for fifty-four properties that do not
+ * exist — deepening the fabrication this page already discloses rather than adding a filter.
+ * A filter that invents the thing it filters on is worse than a missing filter.
+ */
+const AREA_BANDS = [
+  { id: "any", label: "Any size", min: 0, max: Infinity },
+  { id: "s", label: "Under 500 sq ft", min: 0, max: 500 },
+  { id: "m", label: "500–800 sq ft", min: 500, max: 800 },
+  { id: "l", label: "800–1,200 sq ft", min: 800, max: 1_200 },
+  { id: "xl", label: "1,200 sq ft and up", min: 1_200, max: Infinity },
+] as const;
+
+/** Floor bands rather than a number box: nobody searches for "floor 23", they search for a
+ *  view or for not climbing stairs. */
+const FLOOR_BANDS = [
+  { id: "any", label: "Any floor", min: 0, max: Infinity },
+  { id: "low", label: "Low (1–10)", min: 1, max: 10 },
+  { id: "mid", label: "Mid (11–25)", min: 11, max: 25 },
+  { id: "high", label: "High (26+)", min: 26, max: Infinity },
+] as const;
+
+/** Age, not year built — an investor thinks "how old is it", and the answer moves every
+ *  January if it is stored as a year and displayed as one. */
+const AGE_BANDS = [
+  { id: "any", label: "Any age", maxAge: Infinity },
+  { id: "10", label: "Under 10 years", maxAge: 10 },
+  { id: "20", label: "Under 20 years", maxAge: 20 },
+  { id: "30", label: "Under 30 years", maxAge: 30 },
+] as const;
+
+/** Management fee ceilings. Worth filtering because it comes straight off the yield — a high
+ *  fee on a small flat is the quiet killer of a Hong Kong return. */
+const FEE_CEILINGS = [
+  { id: "any", label: "Any fee", max: Infinity },
+  { id: "2000", label: "Under HK$2,000/mo", max: 2_000 },
+  { id: "3500", label: "Under HK$3,500/mo", max: 3_500 },
+  { id: "5000", label: "Under HK$5,000/mo", max: 5_000 },
+] as const;
+
 const SORTS = [
   { id: "yield-desc", label: "Net yield: high to low" },
   { id: "price-asc", label: "Price: low to high" },
@@ -121,6 +168,10 @@ type HeatMetricId = (typeof HEAT_METRICS)[number]["id"];
 
 /** Cards and list rows only — `ListingsTable` already reads compactly at any length,
  *  so paginating it too would just add clicks to a view built to scroll. */
+/** Fixed once per module load rather than per render: a filter result that changed halfway
+ *  through a session because the clock ticked over midnight would be baffling. */
+const CURRENT_YEAR = new Date().getFullYear();
+
 const PAGE_SIZE = 6;
 
 interface Props {
@@ -132,6 +183,11 @@ export function PropertyFinder({ districtQuery, view }: Props): React.JSX.Elemen
   const [bedrooms, setBedrooms] = useState<(typeof BEDROOM_OPTIONS)[number]>("any");
   const [priceBandId, setPriceBandId] = useState<(typeof PRICE_BANDS)[number]["id"]>("any");
   const [yieldFloorId, setYieldFloorId] = useState<(typeof YIELD_FLOORS)[number]["id"]>("any");
+  const [areaBandId, setAreaBandId] = useState<(typeof AREA_BANDS)[number]["id"]>("any");
+  const [floorBandId, setFloorBandId] = useState<(typeof FLOOR_BANDS)[number]["id"]>("any");
+  const [ageBandId, setAgeBandId] = useState<(typeof AGE_BANDS)[number]["id"]>("any");
+  const [feeCeilingId, setFeeCeilingId] = useState<(typeof FEE_CEILINGS)[number]["id"]>("any");
+  const [moreOpen, setMoreOpen] = useState(false);
   const [sort, setSort] = useState<SortId>("yield-desc");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [heatMetric, setHeatMetric] = useState<HeatMetricId>("yield");
@@ -150,16 +206,47 @@ export function PropertyFinder({ districtQuery, view }: Props): React.JSX.Elemen
     [],
   );
 
+  const extraFilterCount = [areaBandId, floorBandId, ageBandId, feeCeilingId].filter(
+    (v) => v !== "any",
+  ).length;
+  const activeFilterCount =
+    extraFilterCount +
+    [bedrooms, priceBandId, yieldFloorId].filter((v) => v !== "any").length;
+
+  function resetFilters(): void {
+    setBedrooms("any");
+    setPriceBandId("any");
+    setYieldFloorId("any");
+    setAreaBandId("any");
+    setFloorBandId("any");
+    setAgeBandId("any");
+    setFeeCeilingId("any");
+  }
+
   const priceBand = PRICE_BANDS.find((b) => b.id === priceBandId) ?? PRICE_BANDS[0];
   const yieldFloor = YIELD_FLOORS.find((y) => y.id === yieldFloorId) ?? YIELD_FLOORS[0];
 
   const visible = useMemo(() => {
+    const areaBand = AREA_BANDS.find((b) => b.id === areaBandId) ?? AREA_BANDS[0];
+    const floorBand = FLOOR_BANDS.find((b) => b.id === floorBandId) ?? FLOOR_BANDS[0];
+    const ageBand = AGE_BANDS.find((b) => b.id === ageBandId) ?? AGE_BANDS[0];
+    const feeCeiling = FEE_CEILINGS.find((b) => b.id === feeCeilingId) ?? FEE_CEILINGS[0];
+
     const filtered = rows.filter((r) => {
       if (matchedDistrict !== undefined && r.listing.districtId !== matchedDistrict.id) {
         return false;
       }
       if (bedrooms !== "any" && String(r.listing.bedrooms) !== bedrooms) return false;
       if (r.listing.priceHkd < priceBand.min || r.listing.priceHkd > priceBand.max) return false;
+
+      const sqft = r.listing.saleableAreaSqft;
+      if (sqft < areaBand.min || sqft > areaBand.max) return false;
+      if (r.listing.floor < floorBand.min || r.listing.floor > floorBand.max) return false;
+      /* Age from the current year rather than a stored age, so it does not silently drift
+         every January. */
+      if (CURRENT_YEAR - r.listing.yearBuilt > ageBand.maxAge) return false;
+      if (r.listing.monthlyManagementFeeHkd > feeCeiling.max) return false;
+
       const netYield = r.verdict.returns.netYield;
       if (netYield === null || netYield < yieldFloor.min) return false;
       return true;
@@ -180,13 +267,13 @@ export function PropertyFinder({ districtQuery, view }: Props): React.JSX.Elemen
       }
     });
     return sorted;
-  }, [rows, matchedDistrict, bedrooms, priceBand, yieldFloor, sort]);
+  }, [rows, matchedDistrict, bedrooms, priceBand, yieldFloor, sort, areaBandId, floorBandId, ageBandId, feeCeilingId]);
 
   // A filter change (or switching views) can strand the reader on a page number
   // that no longer exists — back to page 1 whenever the result set could differ.
   useEffect(() => {
     setPage(1);
-  }, [matchedDistrict, bedrooms, priceBandId, yieldFloorId, sort, view]);
+  }, [matchedDistrict, bedrooms, priceBandId, yieldFloorId, sort, view, areaBandId, floorBandId, ageBandId, feeCeilingId]);
 
   const pageCount = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
   const currentPage = Math.min(page, pageCount);
@@ -293,6 +380,39 @@ export function PropertyFinder({ districtQuery, view }: Props): React.JSX.Elemen
           onChange={(v) => setYieldFloorId(v as typeof yieldFloorId)}
           options={YIELD_FLOORS.map((y) => ({ value: y.id, label: y.label }))}
         />
+        {/* The reference puts its extra criteria behind a "More Filters" disclosure rather than
+            widening the bar, and it is right to: four controls are scannable, eight are a form.
+            The badge shows how many are active, so a reader who has forgotten why the list is
+            short can see that something is on without opening it. */}
+        <div className="ml-auto flex items-end gap-3">
+          <button
+            type="button"
+            onClick={() => setMoreOpen((v) => !v)}
+            aria-expanded={moreOpen}
+            aria-controls="finder-more-filters"
+            className={`rounded-card border px-4 py-2 text-sm transition-colors ${
+              moreOpen || extraFilterCount > 0
+                ? "border-accent bg-accent/5 text-mist"
+                : "border-line text-muted hover:text-mist"
+            }`}
+          >
+            More filters
+            {extraFilterCount > 0 && (
+              <span className="ml-2 rounded-full bg-accent px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                {extraFilterCount}
+              </span>
+            )}
+          </button>
+          {activeFilterCount > 0 && (
+            <button
+              type="button"
+              onClick={resetFilters}
+              className="pb-2 text-sm text-muted underline underline-offset-4 hover:text-mist"
+            >
+              Reset
+            </button>
+          )}
+        </div>
         <FilterSelect
           label="Sort"
           value={sort}
@@ -313,6 +433,43 @@ export function PropertyFinder({ districtQuery, view }: Props): React.JSX.Elemen
           <DownloadIcon className="h-3.5 w-3.5" /> Export
         </button>
       </div>
+
+      {moreOpen && (
+        <div id="finder-more-filters" className="card grid gap-4 py-4 sm:grid-cols-2 lg:grid-cols-4">
+          <FilterSelect
+            label="Saleable area"
+            value={areaBandId}
+            onChange={(v) => setAreaBandId(v as typeof areaBandId)}
+            options={AREA_BANDS.map((b) => ({ value: b.id, label: b.label }))}
+          />
+          <FilterSelect
+            label="Floor"
+            value={floorBandId}
+            onChange={(v) => setFloorBandId(v as typeof floorBandId)}
+            options={FLOOR_BANDS.map((b) => ({ value: b.id, label: b.label }))}
+          />
+          <FilterSelect
+            label="Building age"
+            value={ageBandId}
+            onChange={(v) => setAgeBandId(v as typeof ageBandId)}
+            options={AGE_BANDS.map((b) => ({ value: b.id, label: b.label }))}
+          />
+          <FilterSelect
+            label="Management fee"
+            value={feeCeilingId}
+            onChange={(v) => setFeeCeilingId(v as typeof feeCeilingId)}
+            options={FEE_CEILINGS.map((b) => ({ value: b.id, label: b.label }))}
+          />
+          {/* Said here rather than left to be discovered by a reader hunting for a filter that
+              does not exist. The absence is a data limit, not an oversight. */}
+          <p className="text-xs leading-relaxed text-muted sm:col-span-2 lg:col-span-4">
+            No renovation or furnishing filter: these sample listings carry no such data, and
+            generating it would deepen the fabrication this page already discloses rather than
+            add a real criterion. Every filter here reads a field the listings actually have.
+          </p>
+        </div>
+      )}
+
 
       {view === "table" && <ListingsTable rows={visible} />}
 

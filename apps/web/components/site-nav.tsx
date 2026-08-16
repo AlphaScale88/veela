@@ -76,6 +76,14 @@ export function SiteHeader(): React.JSX.Element {
           >
             Analyse a property
           </Link>
+          {/* Pricing was reachable from the landing page only via the mid-page section and the
+              footer — never from the nav, which is the first place anyone looks for it. */}
+          <Link
+            href="/pricing"
+            className="hidden text-muted transition-colors hover:text-mist sm:inline"
+          >
+            Pricing
+          </Link>
 
           {configured && (
             <>
@@ -125,6 +133,9 @@ export function SiteHeader(): React.JSX.Element {
           <div className="col flex flex-col py-3 text-[15px]">
             <Link href="/finder" className="py-2.5 text-muted hover:text-mist">
               Finder
+            </Link>
+            <Link href="/pricing" className="py-2.5 text-muted hover:text-mist">
+              Pricing
             </Link>
             <Link href="/map" className="py-2.5 text-muted hover:text-mist">
               Market Explorer
