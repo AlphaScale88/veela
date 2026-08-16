@@ -17,7 +17,7 @@ import {
   type Standing,
 } from "@veela/ui";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { ListingsMap, type DistrictHeat, type FinderPin } from "./listings-map";
 import { draftToCoreInput, EMPTY_DRAFT, type Draft } from "./property-form";
@@ -74,7 +74,9 @@ function featureChips(l: DemoListing): readonly string[] {
   if (l.furnishing !== "unfurnished") {
     chips.push(l.furnishing === "full" ? "Furnished" : "Part furnished");
   }
-  if (l.facilities.length > 0) chips.push(`${l.facilities.length} facilities`);
+  if (l.facilities.length > 0) {
+    chips.push(`${l.facilities.length} facilit${l.facilities.length === 1 ? "y" : "ies"}`);
+  }
   if (l.petsAllowed) chips.push("Pets OK");
   return chips;
 }
@@ -389,6 +391,32 @@ export function PropertyFinder({ districtQuery, view }: Props): React.JSX.Elemen
     setFacilityIds((prev) => (prev.includes(id) ? prev.filter((f) => f !== id) : [...prev, id]));
   }
 
+  /**
+   * The panel floats over the results rather than pushing them down, so it needs the two
+   * dismissals every popover needs: clicking away, and Escape. A pointer user expects the
+   * first; a keyboard user has no "away" to click. Listeners are bound only while it is open.
+   *
+   * `mousedown`, not `click` — a `click` listener fires after React has already re-rendered
+   * from whatever was pressed, which makes a control inside the panel that removes its own
+   * element (the Reset button when it disables itself) look like an outside click.
+   */
+  const moreRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!moreOpen) return;
+    const onDown = (e: MouseEvent): void => {
+      if (!moreRef.current?.contains(e.target as Node)) setMoreOpen(false);
+    };
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === "Escape") setMoreOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [moreOpen]);
+
   const priceBand = PRICE_BANDS.find((b) => b.id === priceBandId) ?? PRICE_BANDS[0];
   const yieldFloor = YIELD_FLOORS.find((y) => y.id === yieldFloorId) ?? YIELD_FLOORS[0];
 
@@ -584,6 +612,10 @@ export function PropertyFinder({ districtQuery, view }: Props): React.JSX.Elemen
     <div className="space-y-6">
       <DemoBanner />
 
+      {/* `relative` so the More filters popover can anchor to the bar, and the wrapper is the
+          click-outside boundary — pressing the button itself must not count as "outside",
+          or opening it would immediately close it again. */}
+      <div ref={moreRef} className="relative">
       <div className="card flex flex-wrap items-end gap-4 py-4">
         <FilterSelect
           label="Bedrooms"
@@ -661,7 +693,23 @@ export function PropertyFinder({ districtQuery, view }: Props): React.JSX.Elemen
       </div>
 
       {moreOpen && (
-        <div id="finder-more-filters" className="card !p-0">
+        /**
+         * A floating panel over the results, not a card wedged between the bar and the list.
+         *
+         * As a block in the flow it was ~700px tall and pushed every listing off the screen, so
+         * the reader could not see what the filter they were setting did to the thing it
+         * filtered — the reference floats it for exactly that reason. Now: anchored under the
+         * bar, a fixed 40rem rather than the full page width (twelve criteria in a 1400px row
+         * is mostly whitespace), its body capped at 60vh and scrolling internally so the tabs
+         * and the footer stay put however long a tab is.
+         *
+         * Right-aligned on desktop so it cannot run off the viewport, full-width below `sm`
+         * where 40rem would not fit anyway.
+         */
+        <div
+          id="finder-more-filters"
+          className="absolute left-0 right-0 top-full z-40 mt-2 overflow-hidden rounded-panel border border-line bg-surface shadow-lift sm:left-auto sm:w-[40rem] sm:max-w-[calc(100vw-2rem)]"
+        >
           <div role="tablist" aria-label="Filter groups" className="flex gap-1 border-b border-line px-3 pt-2">
             {MORE_TABS.map((t) => (
               <button
@@ -687,7 +735,7 @@ export function PropertyFinder({ districtQuery, view }: Props): React.JSX.Elemen
             role="tabpanel"
             id={`finder-tabpanel-${moreTab}`}
             aria-labelledby={`finder-tab-${moreTab}`}
-            className="grid gap-x-8 gap-y-5 px-4 py-5 sm:grid-cols-2"
+            className="grid max-h-[60vh] gap-x-6 gap-y-5 overflow-y-auto px-4 py-4 sm:grid-cols-2"
           >
             {moreTab === "listing" && (
               <>
@@ -828,7 +876,7 @@ export function PropertyFinder({ districtQuery, view }: Props): React.JSX.Elemen
           </div>
         </div>
       )}
-
+      </div>
 
       {view === "table" && <ListingsTable rows={visible} />}
 
@@ -1267,7 +1315,9 @@ function RadioGroup({
   return (
     <fieldset>
       <legend className="text-[13px] font-semibold text-mist">{legend}</legend>
-      <div className="mt-2 grid gap-y-2 sm:grid-cols-2">
+      {/* One column. Two read as airy in a full-width card and cramped in a 40rem popover,
+          and a vertical list of four is the shape a radio group is scanned as anyway. */}
+      <div className="mt-1.5 grid gap-y-1.5">
         {options.map((o) => (
           <label key={o.id} className="flex cursor-pointer items-center gap-2 text-[13px] text-muted">
             <input

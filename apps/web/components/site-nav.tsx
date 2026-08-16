@@ -60,6 +60,20 @@ export function SiteHeader(): React.JSX.Element {
             Market Explorer
           </Link>
 
+          {/* Pricing was reachable from the landing page only via the mid-page section and the
+              footer — never from the nav, which is the first place anyone looks for it.
+
+              It sits third, between Market Explorer and Analyse a property, on request. That
+              groups the two browsing destinations with the price of what they lead to, and
+              leaves "Analyse a property" last — nearest the account controls, which is where
+              the eye lands on the way to signing in and the natural end of the row. */}
+          <Link
+            href="/pricing"
+            className="hidden text-muted transition-colors hover:text-mist sm:inline"
+          >
+            Pricing
+          </Link>
+
           {/**
            * A plain link, like Finder and Market Explorer beside it.
            *
@@ -75,14 +89,6 @@ export function SiteHeader(): React.JSX.Element {
             className="hidden text-muted transition-colors hover:text-mist sm:inline"
           >
             Analyse a property
-          </Link>
-          {/* Pricing was reachable from the landing page only via the mid-page section and the
-              footer — never from the nav, which is the first place anyone looks for it. */}
-          <Link
-            href="/pricing"
-            className="hidden text-muted transition-colors hover:text-mist sm:inline"
-          >
-            Pricing
           </Link>
 
           {configured && (
@@ -131,14 +137,16 @@ export function SiteHeader(): React.JSX.Element {
       {menuOpen && (
         <div className="border-t border-line bg-surface sm:hidden">
           <div className="col flex flex-col py-3 text-[15px]">
+            {/* Same order as the bar above. The drawer is the phone's version of that row,
+                so a reader who has learned one should not have to relearn the other. */}
             <Link href="/finder" className="py-2.5 text-muted hover:text-mist">
               Finder
             </Link>
-            <Link href="/pricing" className="py-2.5 text-muted hover:text-mist">
-              Pricing
-            </Link>
             <Link href="/map" className="py-2.5 text-muted hover:text-mist">
               Market Explorer
+            </Link>
+            <Link href="/pricing" className="py-2.5 text-muted hover:text-mist">
+              Pricing
             </Link>
             {configured &&
               (user === null ? (

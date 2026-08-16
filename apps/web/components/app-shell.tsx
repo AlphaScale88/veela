@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { useAuth } from "./auth-provider";
-import { WalletIcon } from "./icons";
+import { DocumentIcon, WalletIcon } from "./icons";
 import { ConsentRecorder } from "./consent";
 
 /**
@@ -114,11 +114,23 @@ const NAV_LINKS: readonly NavLink[] = [
   { href: "/map", label: "Market Explorer", icon: MapIcon },
 ];
 
-/** Mashvisor's "Research & Analyze" nests sub-pages; the real, buildable equivalents
- *  here are two — a real "Market Performance" section needs a rank-many-cities feature
- *  this product doesn't have (see "Hong Kong only" in CLAUDE.md), so it isn't a third
- *  item, it's these two. */
+/**
+ * Mashvisor's "Research & Analyze" nests sub-pages; the real, buildable equivalents here are
+ * these — a rank-many-cities "Market Performance" needs a feature this product doesn't have
+ * (see "Hong Kong only" in CLAUDE.md).
+ *
+ * **"Analyse a property" leads the group**, as an ordinary item rather than the white pill it
+ * used to be above the list. The pill's argument was that every other entry is a *place* and
+ * this is the one *action* — Gmail's Compose. Asked to make it match the rest, and the group
+ * label is the reason the request is right: this section is literally called *Research &
+ * Analyse*, and analysing a property is the analysis. It reads as the first thing you do in
+ * the section rather than a control floating above the navigation.
+ *
+ * It is first in the group, not alphabetical: the two market pages are context, this is the
+ * thing the context is for.
+ */
 const RESEARCH_LINKS: readonly NavLink[] = [
+  { href: "/analyse", label: "Analyse a property", icon: DocumentIcon },
   { href: "/research/market-performance", label: "Market Performance", icon: TrendIcon },
   { href: "/research/market-regulations", label: "Market Regulations", icon: ScaleIcon },
 ];
@@ -146,14 +158,23 @@ const SERVICES_LINKS: readonly NavLink[] = [
   { href: "/home-valuation", label: "Home Valuation", icon: TagIcon },
 ];
 
+/**
+ * Pricing was here and is not any more, on request.
+ *
+ * It reads better as a marketing-header item than a product-sidebar one, and the two are not
+ * the same audience: the sidebar belongs to someone already inside the product, while a price
+ * list is read by someone deciding whether to be. That is the same reasoning that took
+ * `/pricing` out of the app shell entirely a day earlier — the sidebar entry was the last
+ * piece of that move left behind. It is still in the marketing header, the landing page's
+ * pricing section and the footer.
+ */
 const TAIL_LINKS: readonly NavLink[] = [
-  { href: "/pricing", label: "Pricing", icon: TagIcon },
   { href: "/account", label: "Settings", icon: GearIcon },
   { href: "/resources", label: "Resources", icon: BookIcon },
 ];
 
-/** Pricing. Its own glyph rather than reusing one — a price tag is the one thing in this nav
- *  a visitor scans for deliberately. */
+/** Home Valuation's glyph. It was drawn for Pricing, which has since left this nav; kept
+ *  because Services still uses it, and a price tag reads correctly for a valuation too. */
 function TagIcon({ className }: { readonly className?: string }): React.JSX.Element {
   return (
     <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
@@ -225,30 +246,11 @@ function Sidebar({
         />
       </Link>
 
-      {/**
-       * `/analyse` moved into this shell but was never added to its navigation — you could
-       * see the sidebar *from* the page and had no way to reach it. Fixed here, but as a
-       * **button above the list rather than an item in it**: every `NAV_LINKS` entry is a
-       * *place* you go to look at something, and this is the one *action* that creates
-       * something. Same reason Gmail separates Compose from its folders, and the same
-       * treatment the marketing header already gives it — a filled pill, not a text link.
-       *
-       * `aria-current` is still set when you are on it, so it doubles as the active
-       * indicator for the page and nothing else has to represent it.
-       */}
-      <Link
-        href="/analyse"
-        aria-current={isActive("/analyse") ? "page" : undefined}
-        title={collapsed ? "Analyse a property" : undefined}
-        className={`mx-2.5 mt-6 flex items-center gap-2.5 rounded-full bg-white px-3 py-2.5 text-sm font-semibold text-accent shadow-card transition-opacity hover:opacity-90 ${
-          collapsed ? "lg:justify-center lg:px-0" : ""
-        }`}
-      >
-        <PlusIcon className="h-[18px] w-[18px] shrink-0" />
-        <span className={collapsed ? "lg:hidden" : ""}>Analyse a property</span>
-      </Link>
+      {/* The white "Analyse a property" pill used to sit here, above the list. It is now the
+          first item of Research & Analyse, in the same treatment as every other entry — see
+          `RESEARCH_LINKS` for why the request was the right call. */}
 
-      <ul className="mt-4 space-y-1 px-2.5">
+      <ul className="mt-6 space-y-1 px-2.5">
         {NAV_LINKS.map((item) => (
           <NavItem key={item.href} item={item} active={isActive(item.href)} collapsed={collapsed} />
         ))}
@@ -390,14 +392,6 @@ function SidebarAccount({ collapsed }: { readonly collapsed: boolean }): React.J
         </Link>
       )}
     </div>
-  );
-}
-
-function PlusIcon({ className }: { readonly className?: string }): React.JSX.Element {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
-      <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
-    </svg>
   );
 }
 
