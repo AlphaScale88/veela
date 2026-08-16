@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { AccountMenu } from "./account-menu";
 import { useAuth } from "./auth-provider";
 
 /**
@@ -59,10 +60,20 @@ export function SiteHeader(): React.JSX.Element {
             Market Explorer
           </Link>
 
-          {/* btn-secondary now, not btn-primary — "Sign in" further right carries the
-              filled pill instead, asked for directly. Still exactly one solid button in
-              this header, just the other one. */}
-          <Link href="/analyse" className="btn-secondary !px-5 !py-2.5 !text-[14px]">
+          {/**
+           * A plain link, like Finder and Market Explorer beside it.
+           *
+           * It was a pill, which made one nav item look like a different *kind* of thing from
+           * its neighbours — three destinations of equal standing, one of them wearing a
+           * button. Asked to make it consistent, and it is the right call: the header's job is
+           * navigation, and the page's own hero already carries the primary call to action for
+           * anyone who needs one. The only visually distinct control left up here is the
+           * account avatar, which earns it by not being a link at all.
+           */}
+          <Link
+            href="/analyse"
+            className="hidden text-muted transition-colors hover:text-mist sm:inline"
+          >
             Analyse a property
           </Link>
 
@@ -85,18 +96,12 @@ export function SiteHeader(): React.JSX.Element {
                   </Link>
                 </>
               ) : (
-                <div className="hidden items-center gap-4 sm:flex">
-                  <Link href="/portfolio" className="text-muted transition-colors hover:text-mist">
-                    My Properties
-                  </Link>
-                  <button
-                    type="button"
-                    onClick={() => void signOut()}
-                    className="text-muted transition-colors hover:text-mist"
-                  >
-                    Sign out
-                  </button>
-                </div>
+                /* The avatar replaces both "My Properties" and "Sign out": one control that
+                   holds every account destination, rather than the header's most prominent
+                   action being the one a reader wants least often. Both links live inside it.
+                   Shown at every width — a phone needs an account menu too, and unlike the
+                   nav links it does not have a drawer equivalent. */
+                <AccountMenu />
               )}
             </>
           )}

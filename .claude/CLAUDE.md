@@ -1882,6 +1882,34 @@ Knock-ons swept: `createApiKeySchema`'s enum, the highlight rule on the pricing 
 plan-limits table in the API docs, and the `"plan": "starter"` in the documented example
 response — which would have shown developers a plan id that no longer exists.
 
+## The marketing header: one nav language, and an account menu (16/08/2026)
+
+**"Analyse a property" stopped being a pill.** It sat between Finder and Market Explorer as a
+button, which made one nav item look like a different *kind* of thing from its neighbours —
+three destinations of equal standing, one of them wearing a call to action. It is a plain link
+now. The header's job is navigation, and the landing hero already carries the primary action for
+anyone who needs one.
+
+**"Sign out" became an avatar menu**, from a Mashvisor reference. The reasoning holds
+independently of the reference: sign out was **the only account action in the header**, which
+made the action a reader wants least often the most prominent one in the bar. The avatar
+collapses identity and every account destination into one control, and it now holds both "My
+Properties" and "Sign out".
+
+**Two things in the reference are deliberately absent: Billing, and "Upgrade Now".** Neither
+exists — there is no payment processor — and a menu item that opens nothing is worse than an
+absent one, because it spends the reader's trust to look finished. The plan line reads **"Free
+plan"** and links to `/pricing`, which is honest on both counts: every account genuinely is on
+free, and that page says outright the subscription is not on sale yet.
+
+Closes on outside click **and** Escape — a pointer user expects clicking away to dismiss, a
+keyboard user has no "away" to click. Listeners are bound only while open.
+
+**Verified in a browser against a real session** (throwaway account, deleted after): logged out
+the header has exactly one button, "Sign in"; signed in it has **none** — every nav item is now
+the same kind of thing — plus the avatar. Menu renders identity, plan, three destinations and
+sign out; Escape and outside-click both dismiss it.
+
 ## Working conventions
 - Dates DD/MM/YYYY. Currency: **HKD** for Hong Kong, **VND** for Vietnam, **EUR** for
   France — always state which, never a bare number. Keep a single reporting currency
