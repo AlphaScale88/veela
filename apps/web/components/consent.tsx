@@ -1,40 +1,28 @@
 "use client";
 
-import { LEGAL_VERSIONS, LEGAL_LABEL, type LegalDocument } from "@veela/types";
+import { LEGAL_VERSIONS, type LegalDocument } from "@veela/types";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { useAuth } from "./auth-provider";
 
 /**
- * Accepting the terms and privacy statement, and the gate that catches everyone the signup
- * form cannot.
+ * Accepting the terms and privacy statement at signup.
  *
- * ## Why a gate exists at all
+ * ## Asked at signup, and only at signup
  *
- * The signup checkbox covers people who sign up from now on. It does not cover:
+ * An earlier version also carried a banner in the app shell that caught existing accounts and
+ * anyone holding superseded wording. **Removed by decision: consent is asked for at signup.**
  *
- *  - **anyone who already has an account** — they never saw an acceptance, and pretending
- *    otherwise would be inventing consent, which is worse than not having it;
- *  - **Google sign-up**, which never touches the signup form at all;
- *  - **anyone who accepted an older version** — consent to wording since rewritten is not
- *    consent to the current wording.
+ * What that costs, stated rather than glossed: accounts created before this existed have no
+ * record, and a future change to the wording will not re-ask. Both are recoverable — the
+ * versioned records make it possible to tell exactly who is missing which document — but until
+ * something re-asks, "accepted" means "accepted at signup, on the version in force that day".
  *
- * All three are the same condition — *the current versions are not on record for this user* —
- * so they get one mechanism rather than three special cases. `GET /consent` answers it.
- *
- * ## Why a banner and not a modal
- *
- * A modal that cannot be dismissed is a hostage situation, and this product's own privacy page
- * promises a DPP6 access route rather than a wall. The banner is persistent and prominent and
- * does not go away until it is accepted, but the reader can still read the documents it is
- * asking them to accept — which a trapping modal makes oddly difficult.
+ * What it must not cost is **Google sign-up silently escaping the checkbox**, which it would,
+ * since that path leaves `/signup` before a session exists. Both signup buttons are gated on
+ * the same acceptance, and `ConsentRecorder` writes the record when the session lands.
  */
-
-export interface ConsentState {
-  readonly outstanding: readonly LegalDocument[];
-  readonly accepted: readonly { document: string; version: string; acceptedAt: string }[];
-}
 
 /** Records acceptance of every document currently in force. Returns an error message, or
  *  `null` on success — the same shape the auth helpers use, so callers handle it the same way. */
@@ -102,89 +90,62 @@ export function AcceptLegal({
 }
 
 /**
- * Shown inside the app shell whenever anything is outstanding. Renders nothing at all when
- * there is nothing to ask, when nobody is signed in, or when Supabase is unconfigured — the
- * same zero-configuration rule as everywhere else.
+ * Key for the acceptance a reader gave on `/signup` immediately before Google took them away.
+ *
+ * `sessionStorage`, not `localStorage`: this only has to survive the few seconds of an OAuth
+ * round trip, exactly like the analyse page's draft stash, and it must not linger on a shared
+ * machine.
  */
-export function ConsentGate(): React.JSX.Element | null {
-  /* Reads auth itself rather than taking a prop: it is mounted in the shell's layout, where
-     no session is in scope, and threading one through would couple the shell to a concern
-     that is entirely this component's. `configured` false means no account system at all. */
+const CONSENT_PENDING_KEY = "veela:consent-pending";
+
+/** Called on `/signup` just before handing off to Google. */
+export function stashConsentForOAuth(): void {
+  try {
+    sessionStorage.setItem(CONSENT_PENDING_KEY, LEGAL_VERSIONS.terms);
+  } catch {
+    /* Private browsing. The worst case is a Google sign-up without a record, which is the
+       same position this was in before any of it existed — not a regression. */
+  }
+}
+
+/**
+ * Records an acceptance that was already given, and renders nothing. Ever.
+ *
+ * **This is not a gate.** Consent is asked for at signup and nowhere else, by decision. What
+ * this handles is the one case where the asking and the recording cannot happen in the same
+ * moment: Google sign-up navigates away from `/signup` before a session exists, so the checkbox
+ * is ticked on one page and the session appears on another. Without this, every Google sign-up
+ * would accept the terms and have nothing written down — the acceptance would be real and the
+ * evidence would not.
+ *
+ * It fires once, only when a stash is present, and clears it immediately. A user who did not
+ * just sign up has no stash and this does nothing at all.
+ *
+ * **Consequence worth being explicit about:** accounts created before consent existed are never
+ * asked. There is no record for them, and this file does not pretend otherwise.
+ */
+export function ConsentRecorder(): null {
   const { user, configured } = useAuth();
-  const userId = configured ? (user?.id ?? null) : null;
-  const [state, setState] = useState<ConsentState | null>(null);
-  const [checked, setChecked] = useState(false);
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const done = useRef(false);
 
   useEffect(() => {
-    if (userId === null) {
-      setState(null);
+    if (!configured || user === null || done.current) return;
+    let pending: string | null = null;
+    try {
+      pending = sessionStorage.getItem(CONSENT_PENDING_KEY);
+    } catch {
       return;
     }
-    let cancelled = false;
-    fetch("/api/consent")
-      .then((res) => (res.ok ? res.json() : null))
-      .then((json: ConsentState | null) => {
-        if (json !== null && !cancelled) setState(json);
-      })
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [userId]);
+    if (pending === null) return;
 
-  if (userId === null || state === null || state.outstanding.length === 0) return null;
-
-  const isUpdate = state.accepted.length > 0;
-
-  async function accept(): Promise<void> {
-    setPending(true);
-    setError(null);
-    const message = await recordConsent();
-    setPending(false);
-    if (message !== null) {
-      setError(message);
-      return;
+    done.current = true;
+    try {
+      sessionStorage.removeItem(CONSENT_PENDING_KEY);
+    } catch {
+      /* nothing to do */
     }
-    setState({ outstanding: [], accepted: state?.accepted ?? [] });
-  }
+    void recordConsent();
+  }, [user, configured]);
 
-  return (
-    <section
-      role="alertdialog"
-      aria-labelledby="consent-gate-title"
-      className="mb-6 rounded-panel border border-caution/50 bg-caution/10 px-5 py-4 shadow-card"
-    >
-      <h2 id="consent-gate-title" className="text-[15px] font-semibold text-mist">
-        {isUpdate ? "Our terms have changed" : "Before you carry on"}
-      </h2>
-      <p className="mt-1.5 max-w-prose text-sm leading-relaxed text-muted">
-        {isUpdate
-          ? `The ${state.outstanding.map((d) => LEGAL_LABEL[d].toLowerCase()).join(" and ")} ${
-              state.outstanding.length === 1 ? "has" : "have"
-            } been updated since you last accepted. Please read and accept the current version.`
-          : "Your account was created before we asked for this. Please read and accept the terms and privacy statement — it records what you agreed to, and when."}
-      </p>
-
-      <div className="mt-3 max-w-prose">
-        <AcceptLegal checked={checked} onChange={setChecked} />
-      </div>
-
-      {error !== null && (
-        <p role="alert" className="mt-2 text-xs text-negative">
-          {error}
-        </p>
-      )}
-
-      <button
-        type="button"
-        onClick={() => void accept()}
-        disabled={!checked || pending}
-        className="btn-primary mt-3 !px-6 !py-2 !text-[13px] disabled:pointer-events-none disabled:opacity-50"
-      >
-        {pending ? "Recording…" : "Accept and continue"}
-      </button>
-    </section>
-  );
+  return null;
 }

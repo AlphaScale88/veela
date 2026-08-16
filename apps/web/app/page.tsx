@@ -404,7 +404,7 @@ function MapTeaser(): React.JSX.Element {
  * have not seen.
  */
 function Pricing(): React.JSX.Element {
-  const plans = [PLANS.free, PLANS.investor, PLANS.starter];
+  const plans = [PLANS.free, PLANS.investor, PLANS.pro];
   return (
     <section className="band">
       <div className="col">

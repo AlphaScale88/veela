@@ -4,6 +4,15 @@
  * Property Finder's yield and the neighbourhood counts already follow, applied to
  * commercial terms.
  *
+ * ## Three tiers, collapsed from four (16/08/2026)
+ *
+ * There were two published API tiers, Starter and Pro. **Merged into one on request**, and it
+ * is the better shape: two tiers that differ only in a call quota ask a buyer to forecast their
+ * own usage before they have integrated anything, which is a question nobody can answer and a
+ * reason to delay. One published team price with *"talk to us for higher volume"* is how this
+ * is usually sold, and it leaves the negotiation where it belongs — in a conversation, with the
+ * ~20 relationships this market actually contains.
+ *
  * ## Why these tiers, and why this shape
  *
  * The business review that produced this found two things that decide the model:
@@ -35,7 +44,7 @@
  * free tier must stay genuinely useful. The line is *decide on one property* (free) versus
  * *keep watching what you own* (paid) — not a paywall dropped in front of what already worked.
  *
- * The real revenue line is still **the API**.
+ * The real revenue line is still **the API**, which is now what Pro is.
  *
  * ## Prices are indicative until someone pays one
  *
@@ -46,7 +55,7 @@
  * price discovery.
  */
 
-export type PlanId = "free" | "investor" | "starter" | "pro";
+export type PlanId = "free" | "investor" | "pro";
 
 export interface Plan {
   readonly id: PlanId;
@@ -101,37 +110,22 @@ export const PLANS: Readonly<Record<PlanId, Plan>> = {
     monthlyQuota: 0,
     ratePerMinute: 30,
   },
-  starter: {
-    id: "starter",
-    name: "API — Starter",
-    priceHkdCents: 500_000, // HK$5,000/month
-    interval: "month",
-    blurb: "The tax engine, for one team.",
-    features: [
-      "REST API: stamp duty, yield, tax and total cost to acquire",
-      "Ad valorem scales versioned by transaction date",
-      "2,000 calls a month",
-      "Rule changes tracked and dated — no re-implementation on your side",
-      "Email support",
-    ],
-    monthlyQuota: 2_000,
-    ratePerMinute: 60,
-  },
   pro: {
     id: "pro",
-    name: "API — Pro",
-    priceHkdCents: 2_000_000, // HK$20,000/month
+    name: "Pro",
+    priceHkdCents: 500_000, // HK$5,000/month
     interval: "month",
-    blurb: "For brokers, agencies and private-bank desks.",
+    blurb: "The tax engine as an API, for brokers, agencies and private-bank desks.",
     features: [
-      "Everything in Starter",
-      "50,000 calls a month",
+      "Everything in Investor, for your whole team",
+      "REST API: stamp duty, yield, tax and total cost to acquire",
+      "Ad valorem scales versioned by transaction date — no re-implementation on your side",
+      "10,000 API calls a month",
       "Area profiles and building lookup via API",
-      "Batch valuation endpoint",
       "Priority support and a named contact",
     ],
-    monthlyQuota: 50_000,
-    ratePerMinute: 300,
+    monthlyQuota: 10_000,
+    ratePerMinute: 120,
   },
 };
 

@@ -1816,7 +1816,8 @@ recorded. DPP1's minimisation principle points the other way.
 continuing you agree" claims agreement from someone who may never have looked. Verified in a
 browser: with a valid email and password but the box unticked, the button stays disabled.
 
-**A gate in `AppShell` catches everyone the form cannot** — existing accounts, Google sign-ups
+**Superseded 16/08/2026 — see below.** ~~A gate in `AppShell` catches everyone the form
+cannot~~ — existing accounts, Google sign-ups
 (which never touch the signup form), and anyone who accepted superseded wording. All three are
 one condition, *the current versions are not on record*, so they get one mechanism rather than
 three special cases. A banner rather than a trapping modal, because the reader has to be able to
@@ -1852,6 +1853,34 @@ clause described a one-off purchase and discretionary refunds (now monthly billi
 time, no part-month refunds, but **defect refunds are not discretionary**, and saved reports stay
 readable after cancellation); and `/pricing`'s **metadata description still advertised HK$680**,
 which is what a search result or a shared link would have shown.
+
+## Consent at signup only, and three plans (16/08/2026)
+
+**The app-shell consent gate was removed on request.** Consent is asked for at signup and
+nowhere else. What that costs, stated rather than glossed: **accounts created before this
+existed have no record**, and a future change to the wording will not re-ask. Both are
+recoverable — the versioned records make it possible to say exactly who is missing which
+document — but until something re-asks, "accepted" means *accepted at signup, on the version in
+force that day*.
+
+**What signup-only must not mean is Google escaping the checkbox**, which it would have: that
+path leaves `/signup` before a session exists, so the acceptance would be given and never
+recorded — or never given at all. Both buttons are now gated on the same acceptance, and the
+checkbox moved **above both**, because underneath the email form it left the Google button
+disabled for a reason the reader had to scroll to find. `ConsentRecorder` renders nothing and
+exists only to write the record when the session lands after the OAuth round trip; it is not a
+gate and never asks anything.
+
+**Pricing collapsed from four tiers to three: Free, Investor, Pro.** The two published API tiers
+differed only in a call quota, which asks a buyer to forecast usage before they have integrated
+anything — a question nobody can answer and a reason to delay. One published team price with
+*"tell us what you need and we will price it"* is how this is actually sold, and it puts the
+negotiation in a conversation with the ~20 relationships this market contains. Pro is HK$5,000/mo
+with 10,000 calls; higher volume is a conversation.
+
+Knock-ons swept: `createApiKeySchema`'s enum, the highlight rule on the pricing cards, the
+plan-limits table in the API docs, and the `"plan": "starter"` in the documented example
+response — which would have shown developers a plan id that no longer exists.
 
 ## Working conventions
 - Dates DD/MM/YYYY. Currency: **HKD** for Hong Kong, **VND** for Vietnam, **EUR** for

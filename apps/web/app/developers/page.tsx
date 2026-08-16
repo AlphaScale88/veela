@@ -58,7 +58,7 @@ const EXAMPLE_RESPONSE = `{
     "findings": [ { "severity": "warning", "title": "No vacancy assumed", "detail": "…" } ],
     "sources": [ "https://www.ird.gov.hk/eng/faq/avd.htm" ]
   },
-  "plan": "starter"
+  "plan": "pro"
 }`;
 
 export default function DevelopersPage(): React.JSX.Element {
@@ -123,7 +123,7 @@ export default function DevelopersPage(): React.JSX.Element {
               </tr>
             </thead>
             <tbody>
-              {[PLANS.starter, PLANS.pro].map((p) => (
+              {[PLANS.pro].map((p) => (
                 <tr key={p.id} className="border-b border-line/60">
                   <td className="py-2.5 pr-4 font-medium text-mist">{p.name}</td>
                   <td className="tnum py-2.5 pr-4">{formatPlanPrice(p)}</td>

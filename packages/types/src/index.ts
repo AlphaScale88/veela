@@ -304,7 +304,7 @@ export type ReportBriefInput = z.infer<typeof reportBriefSchema>;
  *  request cannot mint a key on a tier that does not exist. */
 export const createApiKeySchema = z.object({
   name: z.string().min(1).max(60),
-  plan: z.enum(["free", "starter", "pro"]),
+  plan: z.enum(["free", "pro"]),
 });
 export type CreateApiKeyInput = z.infer<typeof createApiKeySchema>;
 

@@ -36,8 +36,7 @@ export const metadata: Metadata = {
  */
 
 export default function PricingPage(): React.JSX.Element {
-  const consumer = [PLANS.free, PLANS.investor];
-  const api = [PLANS.starter, PLANS.pro];
+  const plans = [PLANS.free, PLANS.investor, PLANS.pro];
 
   /**
    * **Whether anything can actually be bought yet.**
@@ -69,55 +68,41 @@ export default function PricingPage(): React.JSX.Element {
         </p>
       </header>
 
-      <section className="mt-10">
-        <h2 className="font-display text-[20px] font-semibold tracking-[-0.02em]">
-          For an investor
-        </h2>
-        <div className="mt-4 grid gap-5 lg:grid-cols-2">
-          {consumer.map((p) => (
-            <PlanCard
-              key={p.id}
-              plan={p}
-              cta={
-                p.id === "free"
-                  ? "Analyse a property"
+      <div className="mt-10 grid gap-5 lg:grid-cols-3">
+        {plans.map((p) => (
+          <PlanCard
+            key={p.id}
+            plan={p}
+            cta={
+              p.id === "free"
+                ? "Analyse a property"
+                : p.id === "pro"
+                  ? "Talk to us"
                   : paymentsLive
                     ? "Subscribe"
                     : "Not on sale yet"
-              }
-              disabled={p.id === "investor" && !paymentsLive}
-              note={
-                p.id === "investor" && !paymentsLive
-                  ? "Billing isn't built yet. The price is real and everything it unlocks already works — tell us if you'd pay it and you'll be first in line."
-                  : undefined
-              }
-              href="/analyse"
-            />
-          ))}
-        </div>
-      </section>
+            }
+            disabled={p.id === "investor" && !paymentsLive}
+            note={
+              p.id === "investor" && !paymentsLive
+                ? "Billing isn't built yet. The price is real and everything it unlocks already works — tell us if you'd pay it and you'll be first in line."
+                : undefined
+            }
+            href={p.id === "pro" ? "/developers" : "/analyse"}
+          />
+        ))}
+      </div>
 
-      <section className="mt-12">
-        <div className="flex flex-wrap items-baseline justify-between gap-3">
-          <h2 className="font-display text-[20px] font-semibold tracking-[-0.02em]">
-            For a team — the tax engine as an API
-          </h2>
-          <Link href="/developers" className="text-sm font-medium text-accent hover:underline">
-            Read the API docs
-          </Link>
-        </div>
-        <p className="mt-2 max-w-prose text-sm leading-relaxed text-muted">
-          Hong Kong&apos;s ad valorem scales change, repeatedly. Every integration that
-          hard-codes a stamp duty table is wrong the morning after a Budget. Veela&apos;s is
-          versioned by transaction date and tested at every marginal-relief boundary — a 2023
-          purchase still prices under 2023&apos;s rules.
-        </p>
-        <div className="mt-4 grid gap-5 lg:grid-cols-2">
-          {api.map((p) => (
-            <PlanCard key={p.id} plan={p} cta="Talk to us" href="/developers" />
-          ))}
-        </div>
-      </section>
+      <p className="mt-6 max-w-prose text-sm leading-relaxed text-muted">
+        Hong Kong&apos;s ad valorem scales change, repeatedly, and every integration that
+        hard-codes a stamp duty table is wrong the morning after a Budget. Veela&apos;s is
+        versioned by transaction date and tested at every marginal-relief boundary — a 2023
+        purchase still prices under 2023&apos;s rules.{" "}
+        <Link href="/developers" className="font-medium text-accent hover:underline">
+          Read the API docs
+        </Link>
+        . Higher volume than Pro allows? Tell us what you need and we will price it.
+      </p>
 
       {/* Said plainly rather than buried: a price nobody has paid yet is a hypothesis, and
           pretending otherwise is the kind of small dishonesty this product does not do
@@ -168,7 +153,7 @@ function PlanCard({
   readonly disabled?: boolean;
   readonly note?: string | undefined;
 }): React.JSX.Element {
-  const highlighted = plan.id === "investor" || plan.id === "starter";
+  const highlighted = plan.id === "investor";
   return (
     <article
       className={`card flex h-full flex-col ${highlighted ? "border-accent/40 shadow-lift" : ""}`}

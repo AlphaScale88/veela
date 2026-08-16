@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 
-import { AcceptLegal, recordConsent } from "../../components/consent";
+import { AcceptLegal, recordConsent, stashConsentForOAuth } from "../../components/consent";
 import { useEffect, useState } from "react";
 
 import { useAuth } from "../../components/auth-provider";
@@ -162,10 +162,37 @@ export default function SignupPage(): React.JSX.Element {
 
       <div className="order-1 md:order-2">
         <div className="card">
+          {/* First, because it gates *both* sign-up buttons. Below the form it left the Google
+              button disabled for a reason the reader had to scroll to find. */}
+          <div className="mb-4">
+            <AcceptLegal
+              checked={acceptedLegal}
+              onChange={setAcceptedLegal}
+              invalid={touched && !acceptedLegal}
+            />
+            {touched && !acceptedLegal && (
+              <p role="alert" className="mt-1.5 text-xs text-negative">
+                Please accept the terms and privacy statement to continue.
+              </p>
+            )}
+          </div>
+
           <button
             type="button"
-            onClick={() => void signInWithGoogle(next)}
-            className="btn-secondary w-full !py-3"
+            onClick={() => {
+              /* Gated on the same acceptance as the email form. Without this, Google sign-up
+                 would walk straight past the checkbox — the acceptance would never be given,
+                 let alone recorded. The stash carries it across the redirect, since this path
+                 leaves the page before a session exists for the record to attach to. */
+              if (!acceptedLegal) {
+                setTouched(true);
+                return;
+              }
+              stashConsentForOAuth();
+              void signInWithGoogle(next);
+            }}
+            disabled={!acceptedLegal}
+            className="btn-secondary w-full !py-3 disabled:pointer-events-none disabled:opacity-50"
           >
             <GoogleIcon className="h-4 w-4" /> Continue with Google
           </button>
@@ -233,17 +260,6 @@ export default function SignupPage(): React.JSX.Element {
                       } needed.`}
               </span>
             </label>
-
-            <AcceptLegal
-              checked={acceptedLegal}
-              onChange={setAcceptedLegal}
-              invalid={touched && !acceptedLegal}
-            />
-            {touched && !acceptedLegal && (
-              <p role="alert" className="text-xs text-negative">
-                Please accept the terms and privacy statement to create an account.
-              </p>
-            )}
 
             {error !== null && (
               <p role="alert" className="text-xs text-negative">
