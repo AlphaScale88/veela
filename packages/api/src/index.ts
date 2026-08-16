@@ -8,6 +8,7 @@ import {
   marketObservations,
   profiles,
   properties,
+  propertyPhotos,
   verdicts,
   withUser,
   type Database,
@@ -20,6 +21,8 @@ import {
   createApiKeySchema,
   reportBriefSchema,
   createPropertySchema,
+  registerPhotoSchema,
+  reorderPhotosSchema,
   buildingSearchQuerySchema,
   importListingRequestSchema,
   latestByDistrictQuerySchema,
@@ -75,6 +78,13 @@ export interface Env {
 const RULE_SETS = {
   HK: HK_RULE_SETS,
 } as const;
+
+/**
+ * Photos per property. Not a storage-cost limit — twenty-four 10 MB images is a rounding
+ * error — but a limit on what the UI can show and a reader can absorb. It also bounds the
+ * reorder payload, which has to list every photo at once.
+ */
+const MAX_PHOTOS_PER_PROPERTY = 24;
 
 function requireUser(userId: string | null): string {
   if (userId === null) {
@@ -650,6 +660,10 @@ ${area}`,
           costs: body.costs,
           financing: body.financing ?? null,
           monitored: body.monitored,
+          sourceUrl: body.sourceUrl ?? null,
+          address: body.address ?? null,
+          latitude: body.latitude ?? null,
+          longitude: body.longitude ?? null,
         })
         .returning();
 
@@ -718,13 +732,41 @@ ${area}`,
     return c.json({ property: updated });
   })
 
+  /**
+   * Deleting a property now returns the storage keys of its photos, so the caller can delete
+   * the objects too.
+   *
+   * `property_photos` cascades on the foreign key, so the *rows* go by themselves — and that
+   * is precisely what makes this necessary rather than tidy. Without it the images survive in
+   * the bucket with nothing pointing at them: invisible to the product, unreachable through
+   * it, and still photographs of somebody's home after they asked for it to be deleted. That
+   * is a retention problem. **Found by inspecting the bucket after a test deleted a property
+   * — two orphaned objects, exactly as described.**
+   *
+   * The API cannot remove them itself: that needs either the user's session (which lives in
+   * the browser) or a service-role key, which must never sit in a request path keyed by a
+   * user-supplied id. So it reports what to remove and the browser does it — the same
+   * division of labour as `DELETE .../photos/:photoId`.
+   *
+   * This changes a 204 into a 200 with a body. The only caller is `/portfolio`, which is
+   * updated with it; anything else treating 2xx as success is unaffected.
+   */
   .delete("/properties/:id", async (c) => {
     const userId = requireUser(c.get("userId"));
     const db = c.get("db");
-    await withUser(db, userId, (tx) =>
-      tx.delete(properties).where(eq(properties.id, c.req.param("id"))),
-    );
-    return c.body(null, 204);
+    const id = c.req.param("id");
+
+    const storagePaths = await withUser(db, userId, async (tx) => {
+      // Read before the delete: afterwards the cascade has already taken the rows.
+      const photos = await tx
+        .select({ path: propertyPhotos.storagePath })
+        .from(propertyPhotos)
+        .where(eq(propertyPhotos.propertyId, id));
+      await tx.delete(properties).where(eq(properties.id, id));
+      return photos.map((p) => p.path);
+    });
+
+    return c.json({ storagePaths });
   })
 
   /**
@@ -776,6 +818,196 @@ ${area}`,
 
     if (snapshot === null) throw new HTTPException(404, { message: "Property not found" });
     return c.json({ verdict: snapshot }, 201);
+  })
+
+  /**
+   * ── Photos ──────────────────────────────────────────────────────────────
+   *
+   * **No image bytes pass through this API, by design.** The browser uploads straight to a
+   * private Supabase Storage bucket under its own session, and these routes only maintain the
+   * rows that say which objects belong to which property. Two reasons, and the second is the
+   * one that would have bitten: a Vercel function's request body is capped below a modern
+   * phone photo, and proxying megabytes through a serverless function to re-upload them is
+   * latency and cost spent to gain nothing the browser could not do directly.
+   *
+   * The consequence to keep in mind: **an object can exist in the bucket with no row here** —
+   * if a browser uploads and then fails to register, or the tab closes in between. That
+   * orphan is invisible to the product and costs only storage. The reverse (a row with no
+   * object) is the harmful one, so registration always happens *after* a successful upload,
+   * and deletion removes the row first and the object second.
+   */
+  .get("/properties/:id/photos", async (c) => {
+    const userId = requireUser(c.get("userId"));
+    const db = c.get("db");
+    const id = c.req.param("id");
+
+    const rows = await withUser(db, userId, (tx) =>
+      tx
+        .select()
+        .from(propertyPhotos)
+        .where(eq(propertyPhotos.propertyId, id))
+        .orderBy(asc(propertyPhotos.sortOrder), asc(propertyPhotos.createdAt)),
+    );
+    return c.json({ photos: rows });
+  })
+
+  .post("/properties/:id/photos", zValidator("json", registerPhotoSchema), async (c) => {
+    const userId = requireUser(c.get("userId"));
+    const db = c.get("db");
+    const id = c.req.param("id");
+    const body = c.req.valid("json");
+
+    /**
+     * The path is checked against *this* caller and *this* property, not merely against the
+     * regex the schema already applied. Storage's own RLS refuses an upload outside the
+     * caller's folder, so a mismatch here cannot be an attack that succeeded — but it can be
+     * a row pointing at an object its owner will never be able to read, which shows up much
+     * later as a photo that silently fails to load. Rejecting it now names the bug.
+     */
+    const [folder, propertyFolder] = body.storagePath.split("/");
+    if (folder !== userId || propertyFolder !== id) {
+      throw new HTTPException(400, {
+        message: "storagePath must be {ownerId}/{propertyId}/{filename} for this property",
+      });
+    }
+
+    const created = await withUser(db, userId, async (tx) => {
+      // Confirms the property exists *and* is the caller's — RLS makes those one question.
+      const [property] = await tx.select().from(properties).where(eq(properties.id, id));
+      if (property === undefined) return null;
+
+      const existing = await tx
+        .select({ id: propertyPhotos.id })
+        .from(propertyPhotos)
+        .where(eq(propertyPhotos.propertyId, id));
+      if (existing.length >= MAX_PHOTOS_PER_PROPERTY) {
+        throw new HTTPException(409, {
+          message: `A property can hold ${MAX_PHOTOS_PER_PROPERTY} photos; delete one first`,
+        });
+      }
+
+      const [row] = await tx
+        .insert(propertyPhotos)
+        .values({
+          propertyId: id,
+          ownerId: userId,
+          storagePath: body.storagePath,
+          contentType: body.contentType,
+          bytes: body.bytes,
+          // Appended to the end. The first photo uploaded therefore becomes the cover,
+          // which is what someone who uploads one photo expects and never has to ask for.
+          sortOrder: existing.length,
+        })
+        .returning();
+      return row ?? null;
+    });
+
+    if (created === null) throw new HTTPException(404, { message: "Property not found" });
+    return c.json({ photo: created }, 201);
+  })
+
+  /** Reorder, which is also how a photo is promoted to cover — position 0 is the cover, so
+   *  "make this the cover" and "reorder" are one operation rather than two that can disagree. */
+  .patch("/properties/:id/photos", zValidator("json", reorderPhotosSchema), async (c) => {
+    const userId = requireUser(c.get("userId"));
+    const db = c.get("db");
+    const id = c.req.param("id");
+    const { photoIds } = c.req.valid("json");
+
+    const rows = await withUser(db, userId, async (tx) => {
+      const owned = await tx
+        .select({ id: propertyPhotos.id })
+        .from(propertyPhotos)
+        .where(eq(propertyPhotos.propertyId, id));
+      const ownedIds = new Set(owned.map((r) => r.id));
+
+      /* Every id must belong to this property, and every photo must be listed. A partial
+         order would leave the unlisted rows sharing a `sortOrder` with the reordered ones,
+         and "the lowest sortOrder is the cover" stops being a single answer. */
+      if (photoIds.length !== owned.length || photoIds.some((p) => !ownedIds.has(p))) {
+        throw new HTTPException(400, {
+          message: "photoIds must list every photo of this property exactly once",
+        });
+      }
+
+      for (const [i, photoId] of photoIds.entries()) {
+        await tx
+          .update(propertyPhotos)
+          .set({ sortOrder: i })
+          .where(eq(propertyPhotos.id, photoId));
+      }
+
+      return tx
+        .select()
+        .from(propertyPhotos)
+        .where(eq(propertyPhotos.propertyId, id))
+        .orderBy(asc(propertyPhotos.sortOrder));
+    });
+
+    return c.json({ photos: rows });
+  })
+
+  /**
+   * Removes the row and returns the object key, so the caller can delete the object itself.
+   *
+   * The API cannot do that second step: deleting from a private bucket needs either the
+   * user's own session (which lives in the browser) or a service-role key (which this request
+   * path must never hold — `.env.example` says so, and a key that bypasses RLS in a route
+   * that takes a user-supplied id is exactly the wrong place for it). Row first, object
+   * second: if the object delete fails the product is already consistent and what is left is
+   * an orphan nobody can see.
+   */
+  .delete("/properties/:id/photos/:photoId", async (c) => {
+    const userId = requireUser(c.get("userId"));
+    const db = c.get("db");
+    const photoId = c.req.param("photoId");
+
+    const removed = await withUser(db, userId, async (tx) => {
+      const [row] = await tx
+        .delete(propertyPhotos)
+        .where(eq(propertyPhotos.id, photoId))
+        .returning();
+      if (row === undefined) return null;
+
+      // Close the gap left in the ordering, so the cover is always sortOrder 0 rather than
+      // "whatever the lowest surviving number happens to be".
+      const rest = await tx
+        .select()
+        .from(propertyPhotos)
+        .where(eq(propertyPhotos.propertyId, row.propertyId))
+        .orderBy(asc(propertyPhotos.sortOrder));
+      for (const [i, r] of rest.entries()) {
+        if (r.sortOrder !== i) {
+          await tx.update(propertyPhotos).set({ sortOrder: i }).where(eq(propertyPhotos.id, r.id));
+        }
+      }
+      return row;
+    });
+
+    if (removed === null) throw new HTTPException(404, { message: "Photo not found" });
+    return c.json({ storagePath: removed.storagePath });
+  })
+
+  /**
+   * Cover photos for a whole list, in one request.
+   *
+   * `/portfolio` and `/portfolio/compare` both render many properties at once, and asking for
+   * each one's photos separately would add an N+1 on top of the N+1 the compare page already
+   * makes for verdicts. This returns only the cover of each — a list needs one image per card,
+   * and fetching all twenty-four of a property's photos to show the first is waste.
+   */
+  .get("/photos/covers", async (c) => {
+    const userId = requireUser(c.get("userId"));
+    const db = c.get("db");
+
+    const rows = await withUser(db, userId, (tx) =>
+      tx
+        .select()
+        .from(propertyPhotos)
+        .where(and(eq(propertyPhotos.ownerId, userId), eq(propertyPhotos.sortOrder, 0)))
+        .orderBy(asc(propertyPhotos.createdAt)),
+    );
+    return c.json({ covers: rows });
   })
 
   // ── Map: districts as GeoJSON, coloured by one metric ────────────────────

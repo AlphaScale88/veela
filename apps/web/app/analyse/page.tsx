@@ -32,6 +32,7 @@ import {
 } from "../../components/last-search";
 import { ReportBrief } from "../../components/report-brief";
 import { SavedReports } from "../../components/saved-reports";
+import { PropertyPhotos } from "../../components/property-photos";
 import {
   draftToApiInput,
   draftToCoreInput,
@@ -515,7 +516,18 @@ export default function AnalysePage(): React.JSX.Element {
     setSaveState({ status: "saving" });
 
     try {
-      const parsed = createPropertySchema.safeParse(draftToApiInput(lastSubmittedDraft));
+      /* Provenance rides along at the save, the one moment it matters. Until now the
+         importer read a source URL, an address and coordinates and dropped every one at the
+         form boundary, so a saved property could not say which listing produced its figures
+         — the first thing you want when a price is months old. */
+      const parsed = createPropertySchema.safeParse(
+        draftToApiInput(lastSubmittedDraft, {
+          sourceUrl: imported?.sourceUrl,
+          address: imported?.address ?? undefined,
+          latitude: imported?.latitude ?? undefined,
+          longitude: imported?.longitude ?? undefined,
+        }),
+      );
       if (!parsed.success) {
         setSaveState({ status: "error", message: "The saved figures didn't validate — try re-running the report first." });
         return;
@@ -920,6 +932,21 @@ function SaveToPortfolio({
         {aggregateConsentAt === null && (
           <ConsentPrompt onDecided={onConsentDecided} />
         )}
+
+        {/**
+         * Photos are offered **here, after the save, and not before it.**
+         *
+         * A photo belongs to a property row, and until the save returns there is no row and no
+         * id to file one under. Staging files in the browser and uploading them afterwards
+         * would work and was the first design — it was dropped because it puts a silent,
+         * failable upload behind a button that already said "Saved", and a reader who closes
+         * the tab at that moment loses photos the page implied were kept. Asking after the
+         * save means every photo is attached to something that exists, and the reader sees
+         * each one land.
+         */}
+        <div className="mt-5 border-t border-line pt-4">
+          <PropertyPhotos propertyId={saveState.id} ownerId={user.id} initial={[]} />
+        </div>
       </div>
     );
   }

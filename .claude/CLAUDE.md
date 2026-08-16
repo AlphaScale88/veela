@@ -2161,6 +2161,93 @@ reached 3, the footer read "Show 6 listings", Reset all restored 54. No horizont
 the body, the panel or the tab strip at either width; no console errors; 36 engine tests still
 pass.
 
+## Photos on a saved property, and where a property came from (17/08/2026)
+
+Asked to let a signed-in user save properties — by link import or by hand, **with photos** — and
+then compare the saved ones by selecting them.
+
+**Most of that already existed and was left alone.** Saving from `/analyse`, the 17-field manual
+form, the paste-a-link importer, and `/portfolio/compare`'s pick-up-to-three selector were all
+built already; an audit confirmed it rather than assuming. **Two things were genuinely missing**,
+and they are what this change is:
+
+### 1. Photos — greenfield at every layer
+
+No file input, no upload route, no column, no bucket, no `storage.from` anywhere in the repo.
+
+**The bytes never touch our API.** The browser uploads straight to Supabase Storage under its own
+session and only then registers the object with `POST /properties/:id/photos`. Not merely a size
+argument: a Vercel function's request body is capped below a modern phone photo, and proxying
+megabytes through a serverless function to re-upload them spends latency and money for nothing
+the browser could not do directly.
+
+**The bucket is private, and that was the deciding call.** These are photographs of where somebody
+lives, attached to their price, their mortgage and their address — personal data under the PDPO. A
+public bucket protects that only by the unguessability of a URL, which survives until one is
+pasted somewhere. Reads go through hourly signed URLs instead; the cost is that a URL expires, and
+that is the right trade. `{ownerId}/{propertyId}/{uuid}.{ext}` is a **contract**, not a naming
+preference: the bucket's own RLS authorises by comparing the first path segment to `auth.uid()`,
+and the API re-checks the first two against the caller and the property.
+
+**The cover is `sortOrder === 0`, not an `isCover` flag** — "make this the cover" and "reorder"
+are then one operation rather than two states that can disagree about which photo is the cover, a
+disagreement that would only surface on a list page much later.
+
+**This is the one place the product shows a photograph of a reader's own property**, and it is the
+only kind it can: they took it. The report still carries none, for the reason already recorded —
+a stock interior beside somebody's own figures makes the same false claim a made-up number would.
+There is deliberately **no placeholder image** when a property has no photo.
+
+### 2. The importer was throwing away where the figures came from
+
+`sourceUrl`, `address`, `latitude` and `longitude` were all read by the importer and all dropped at
+the form boundary, so a saved property could not say which listing produced its numbers — the first
+thing you want when a price is six months old. Now four nullable columns, rendered on the portfolio
+card as "Imported from spacious.hk · Tsuen Wan West". Provenance rides beside `Draft` rather than
+inside it: `Draft` is what the form edits and the preview recomputes from, and provenance is not
+editable, not a number, and changes nothing the engine does.
+
+### Three real bugs the testing found
+
+- **Deleting a property orphaned its photos in Storage.** `property_photos` cascades on the foreign
+  key, so the *rows* went and the *objects* stayed — invisible to the product, unreachable through
+  it, and still photographs of somebody's home after they asked for it to be deleted. A retention
+  problem, not a tidiness one. Found by inspecting the bucket after a test deleted a property: two
+  orphans, exactly as described. `DELETE /properties/:id` now returns the storage keys (200 with a
+  body, was 204) and the browser removes the objects, the same division of labour the single-photo
+  delete already used — the API cannot do it, since that needs either the user's session or a
+  service-role key that must never sit in a request path keyed by a user-supplied id.
+- **Two destructive buttons on one card both said "Remove"** — one deleted a photo, the other the
+  whole property. Found the hard way, by a test clicking the wrong one and destroying its own
+  fixture. The card's is now "Delete property"; each photo's carries `aria-label="Remove photo N"`.
+- **`text-danger` is not a token in this project** (`negative` is), so the delete control was
+  rendering with no colour at all.
+
+### Worth knowing
+
+- **A hand-inserted `auth.users` row cannot sign in** until `confirmation_token`, `recovery_token`,
+  `email_change*`, `phone_change*` and `reauthentication_token` are `''` rather than `NULL` —
+  GoTrue scans them as non-nullable strings and every attempt returns *"Database error querying
+  schema"*. Creating the test account by SQL rather than through signup is what avoids burning the
+  free tier's email quota, so this is worth remembering.
+- **Supabase refuses `delete from storage.objects` over SQL** ("Direct deletion from storage tables
+  is not allowed"). Cleanup has to go through the Storage API.
+- An object can exist with no row (upload succeeded, registration failed) — invisible, costs only
+  storage. The reverse would be a photo that silently fails to load, so registration always happens
+  *after* a successful upload and the object is rolled back if it fails.
+
+**Verified end-to-end against a real session** (throwaway account created by SQL, **deleted
+afterwards along with every row and storage object** — `alphascale88@gmail.com` is again the only
+account): sign in → manual entry → report → save → upload 2 photos (2 tiles rendered, 1 cover
+badge) → cover thumbnail on `/portfolio` → inline manager reads 2 of 24 → "Make cover" reorders →
+thumbnails in both the compare selector and its column headers → delete one photo → 1 of 24. Then
+separately: a save carrying provenance stored and displayed all four fields, and deleting a
+property with a photo issued a storage `DELETE` returning 200 — confirmed twice in a clean
+reproduction. No console errors at any point.
+
+**One thing not explained:** a single orphaned object survived one earlier run of that delete path,
+and did not reproduce in two clean rounds afterwards. Recorded rather than dismissed.
+
 ## Working conventions
 - Dates DD/MM/YYYY. Currency: **HKD** for Hong Kong, **VND** for Vietnam, **EUR** for
   France — always state which, never a bare number. Keep a single reporting currency

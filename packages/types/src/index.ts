@@ -59,9 +59,58 @@ export const createPropertySchema = z.object({
   costs: costsSchema,
   financing: financingSchema.optional(),
   monitored: z.boolean().default(false),
+
+  /**
+   * Provenance, when the figures came from a listing rather than a keyboard.
+   *
+   * The importer has always read all four and dropped every one at the form boundary, so a
+   * saved property could not say which listing produced its numbers — the one thing you want
+   * when a price is six months old. `sourceUrl` is `.url()`-validated because it is rendered
+   * as a link, and a stored string that is not a URL becomes a broken anchor on the page.
+   * Coordinates are bounded to the real world so a parsing bug cannot put a pin in the sea.
+   */
+  sourceUrl: z.string().url().max(2048).optional(),
+  address: z.string().max(500).optional(),
+  latitude: z.number().min(-90).max(90).optional(),
+  longitude: z.number().min(-180).max(180).optional(),
 });
 
 export const updatePropertySchema = createPropertySchema.partial();
+
+/**
+ * Registering a photo *after* the browser has uploaded it.
+ *
+ * The bytes never reach this API — the browser writes straight to a private Supabase Storage
+ * bucket under its own session, and this only records that the object exists. So the schema
+ * validates a *claim about* a file rather than a file, and each field is checked because a
+ * claim can be wrong or hostile:
+ *
+ * - `storagePath` must match `{uuid}/{uuid}/{name}` exactly. The bucket's RLS already refuses
+ *   an upload outside the caller's own folder, but this API also writes `ownerId` itself, and
+ *   a path pointing at somebody else's folder would produce a row claiming an object the
+ *   owner cannot read. Two checks for one invariant, because the failure is silent.
+ * - `bytes` is capped at the bucket's own 10 MB limit rather than trusted.
+ * - `contentType` is an allow-list, not `image/*`: SVG is an image and also a script host.
+ */
+export const registerPhotoSchema = z.object({
+  storagePath: z
+    .string()
+    .max(512)
+    .regex(
+      /^[0-9a-f-]{36}\/[0-9a-f-]{36}\/[A-Za-z0-9._-]+$/,
+      "storagePath must be {ownerId}/{propertyId}/{filename}",
+    ),
+  contentType: z.enum(["image/jpeg", "image/png", "image/webp", "image/avif"]),
+  bytes: z.number().int().positive().max(10 * 1024 * 1024),
+});
+
+export const reorderPhotosSchema = z.object({
+  /** Photo ids, in the order they should appear. The first is the cover. */
+  photoIds: z.array(z.string().uuid()).min(1).max(24),
+});
+
+export type RegisterPhotoInput = z.infer<typeof registerPhotoSchema>;
+export type ReorderPhotosInput = z.infer<typeof reorderPhotosSchema>;
 
 export type CreatePropertyInput = z.infer<typeof createPropertySchema>;
 export type UpdatePropertyInput = z.infer<typeof updatePropertySchema>;

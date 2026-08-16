@@ -4,6 +4,7 @@ import {
   boolean,
   check,
   date,
+  doublePrecision,
   index,
   integer,
   jsonb,
@@ -215,6 +216,19 @@ export const properties = pgTable(
     costs: jsonb("costs").notNull(),
     financing: jsonb("financing"),
 
+    /**
+     * Where this came from, when it came from a listing rather than a keyboard.
+     *
+     * The importer has always read all four of these and thrown every one away at the form
+     * boundary, so a saved property could not say which listing produced its figures — the
+     * one thing you want when a price is six months old. All nullable: a property typed in
+     * by hand has no source, and most Hong Kong portals publish no coordinates.
+     */
+    sourceUrl: text("source_url"),
+    address: text("address"),
+    latitude: doublePrecision("latitude"),
+    longitude: doublePrecision("longitude"),
+
     /** True once the user asks us to track it against the market. */
     monitored: boolean("monitored").notNull().default(false),
 
@@ -258,7 +272,52 @@ export const verdicts = pgTable(
   ],
 );
 
+/**
+ * Photographs of a user's own property.
+ *
+ * **The bytes are not here.** The row records an object key in a *private* Supabase Storage
+ * bucket; the image itself never passes through this database or through our API, because the
+ * browser uploads to Storage directly. That is not only a size argument — a `bytea` column
+ * would push multi-megabyte images through the same pooled connection that serves every
+ * report, and through a Vercel function whose body limit is below a modern phone photo.
+ *
+ * `storagePath` follows `{ownerId}/{propertyId}/{uuid}.{ext}`, and that shape is a contract:
+ * the bucket's own RLS policies authorise a read by checking the first path segment against
+ * `auth.uid()`. Change the convention and every existing object becomes unreadable.
+ *
+ * Ordering is an explicit `sortOrder` rather than `createdAt`, so a photo can be promoted to
+ * the cover without being re-uploaded, and there is no separate `isCover` flag to drift out of
+ * step with it — the lowest `sortOrder` is the cover, by definition.
+ */
+export const propertyPhotos = pgTable(
+  "property_photos",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    propertyId: uuid("property_id")
+      .notNull()
+      .references(() => properties.id, { onDelete: "cascade" }),
+    /** Denormalised from `properties`: every RLS policy filters on it, and a policy that has
+     *  to join another table to decide is both slower and easier to get wrong. */
+    ownerId: uuid("owner_id")
+      .notNull()
+      .references(() => profiles.id, { onDelete: "cascade" }),
+    storagePath: text("storage_path").notNull().unique(),
+    contentType: text("content_type").notNull(),
+    bytes: integer("bytes").notNull(),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("property_photos_property_idx").on(t.propertyId, t.sortOrder),
+    index("property_photos_owner_idx").on(t.ownerId),
+    check("property_photos_bytes_positive", sql`${t.bytes} > 0`),
+    check("property_photos_type_is_image", sql`${t.contentType} like 'image/%'`),
+  ],
+);
+
 export type Profile = typeof profiles.$inferSelect;
+export type PropertyPhoto = typeof propertyPhotos.$inferSelect;
+export type NewPropertyPhoto = typeof propertyPhotos.$inferInsert;
 export type Property = typeof properties.$inferSelect;
 export type NewProperty = typeof properties.$inferInsert;
 export type Verdict = typeof verdicts.$inferSelect;

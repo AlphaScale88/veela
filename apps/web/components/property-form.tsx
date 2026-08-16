@@ -93,11 +93,33 @@ export const EMPTY_DRAFT: Draft = {
   termYears: 25,
 };
 
+/**
+ * Where a set of figures came from, when it came from a listing rather than a keyboard.
+ *
+ * Kept **out of `Draft`** deliberately. `Draft` is what the form edits and what the live
+ * preview recomputes from; provenance is not editable, not a number, and changes nothing the
+ * engine does. Threading it through the form would put a field in `Draft` that every
+ * `EMPTY_DRAFT`, every restore and every equality check would have to carry for no benefit.
+ * It rides alongside, at the one moment it matters — the save.
+ */
+export interface ListingProvenance {
+  readonly sourceUrl?: string | undefined;
+  readonly address?: string | undefined;
+  readonly latitude?: number | undefined;
+  readonly longitude?: number | undefined;
+}
+
 /** The API contract: minor units, jurisdiction-tagged, validated by Zod on both ends. */
-export function draftToApiInput(d: Draft): CreatePropertyInput {
+export function draftToApiInput(d: Draft, source?: ListingProvenance): CreatePropertyInput {
   const cents = (v: number): number => Math.round(v * HKD_CENTS);
 
   return {
+    /* Spread conditionally rather than assigning `undefined`: `exactOptionalPropertyTypes` is
+       on, so `{ sourceUrl: undefined }` is not the same type as an absent key. */
+    ...(source?.sourceUrl !== undefined && { sourceUrl: source.sourceUrl }),
+    ...(source?.address !== undefined && { address: source.address }),
+    ...(source?.latitude !== undefined && { latitude: source.latitude }),
+    ...(source?.longitude !== undefined && { longitude: source.longitude }),
     label: d.label,
     jurisdiction: "HK",
     currency: "HKD",

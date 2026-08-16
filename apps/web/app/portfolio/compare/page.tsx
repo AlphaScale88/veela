@@ -16,6 +16,7 @@ import { useEffect, useState } from "react";
 
 import { AppShell } from "../../../components/app-shell";
 import { useAuth } from "../../../components/auth-provider";
+import { signedUrls, type PropertyPhoto } from "../../../lib/property-photos";
 
 const MAX_COMPARE = 3;
 
@@ -53,6 +54,30 @@ export default function ComparePage(): React.JSX.Element {
         setRows(detailed);
         setSelected(detailed.slice(0, 2).map((r) => r.property.id));
       }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
+  /** Cover photo per property, so a column is recognisable at a glance rather than by
+   *  reading its label. One batch fetch and one batch signing call for the whole list. */
+  const [covers, setCovers] = useState<ReadonlyMap<string, string>>(new Map());
+  useEffect(() => {
+    if (user === null) return;
+    let cancelled = false;
+    void (async () => {
+      const res = await fetch("/api/photos/covers");
+      if (!res.ok || cancelled) return;
+      const { covers: photos } = (await res.json()) as { covers: PropertyPhoto[] };
+      const urls = await signedUrls(photos.map((p) => p.storagePath));
+      if (cancelled) return;
+      const byProperty = new Map<string, string>();
+      for (const photo of photos) {
+        const url = urls.get(photo.storagePath);
+        if (url !== undefined) byProperty.set(photo.propertyId, url);
+      }
+      setCovers(byProperty);
     })();
     return () => {
       cancelled = true;
@@ -143,6 +168,17 @@ export default function ComparePage(): React.JSX.Element {
                     : "border-line text-muted hover:text-mist"
                 }`}
               >
+                {/* The thumbnail is in the *selector*, not only the table: picking which
+                    three of twelve saved flats to compare is the step where recognising one
+                    by sight actually helps. */}
+                {covers.get(r.property.id) !== undefined && (
+                  /* eslint-disable-next-line @next/next/no-img-element -- expiring signed URL */
+                  <img
+                    src={covers.get(r.property.id)}
+                    alt=""
+                    className="mr-2 inline-block h-5 w-7 rounded object-cover align-middle"
+                  />
+                )}
                 {r.property.label}
               </button>
             ))}
@@ -158,6 +194,14 @@ export default function ComparePage(): React.JSX.Element {
                     <th scope="col" className="px-4 py-2.5 font-medium">—</th>
                     {compared.map((r) => (
                       <th key={r.property.id} scope="col" className="px-4 py-2.5 text-left font-medium text-mist">
+                        {covers.get(r.property.id) !== undefined && (
+                          /* eslint-disable-next-line @next/next/no-img-element -- expiring signed URL */
+                          <img
+                            src={covers.get(r.property.id)}
+                            alt=""
+                            className="mb-1.5 aspect-[16/9] w-28 rounded-card object-cover"
+                          />
+                        )}
                         {r.property.label}
                       </th>
                     ))}

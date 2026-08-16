@@ -9,6 +9,8 @@ import { useEffect, useState } from "react";
 import { AppShell } from "../../components/app-shell";
 import { useAuth } from "../../components/auth-provider";
 import { BuildingIcon } from "../../components/icons";
+import { PropertyPhotos } from "../../components/property-photos";
+import { removeStoredPhotos, signedUrls, type PropertyPhoto } from "../../lib/property-photos";
 
 /**
  * The thing logging in actually buys you: properties saved from `/analyse` persist
@@ -26,6 +28,13 @@ export default function PortfolioPage(): React.JSX.Element {
   const [rows, setRows] = useState<Row[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
+  /** Cover photo per property, as a signed URL. Fetched once for the whole list rather than
+   *  per card — a portfolio of twenty would otherwise mint twenty signatures in twenty round
+   *  trips just to draw its thumbnails. */
+  const [covers, setCovers] = useState<ReadonlyMap<string, string>>(new Map());
+  /** Which card has its photo manager open. One at a time: the grid is the overview, and two
+   *  expanded managers side by side stop it being one. */
+  const [managing, setManaging] = useState<string | null>(null);
 
   useEffect(() => {
     if (user === null) return;
@@ -63,11 +72,44 @@ export default function PortfolioPage(): React.JSX.Element {
     };
   }, [user]);
 
+  /* Covers come from one batch endpoint, then one batch signing call. Signatures expire, so
+     they are never persisted — this re-runs whenever the list does. */
+  useEffect(() => {
+    if (user === null) return;
+    let cancelled = false;
+    void (async () => {
+      const res = await fetch("/api/photos/covers");
+      if (!res.ok || cancelled) return;
+      const { covers: rows } = (await res.json()) as { covers: PropertyPhoto[] };
+      const urls = await signedUrls(rows.map((r) => r.storagePath));
+      if (cancelled) return;
+      const byProperty = new Map<string, string>();
+      for (const row of rows) {
+        const url = urls.get(row.storagePath);
+        if (url !== undefined) byProperty.set(row.propertyId, url);
+      }
+      setCovers(byProperty);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user, rows]);
+
   async function remove(id: string): Promise<void> {
     setDeleting(id);
     try {
       const res = await fetch(`/api/properties/${id}`, { method: "DELETE" });
       if (res.ok || res.status === 404) {
+        /* The photo *rows* cascade in Postgres, but the image objects do not — they would
+           survive in the bucket with nothing pointing at them, which is a retention problem
+           rather than a tidiness one: photographs of somebody's home outliving their request
+           to delete it. The API hands back the keys precisely so this can finish the job. */
+        if (res.ok) {
+          const { storagePaths } = (await res.json()) as { storagePaths?: string[] };
+          if (storagePaths !== undefined && storagePaths.length > 0) {
+            await removeStoredPhotos(storagePaths);
+          }
+        }
         setRows((r) => r?.filter((row) => row.property.id !== id) ?? r);
       }
     } finally {
@@ -144,6 +186,12 @@ export default function PortfolioPage(): React.JSX.Element {
           <PropertyCard
             key={row.property.id}
             row={row}
+            coverUrl={covers.get(row.property.id)}
+            ownerId={user?.id ?? ""}
+            managing={managing === row.property.id}
+            onToggleManage={() =>
+              setManaging((cur) => (cur === row.property.id ? null : row.property.id))
+            }
             deleting={deleting === row.property.id}
             onDelete={() => void remove(row.property.id)}
           />
@@ -155,10 +203,18 @@ export default function PortfolioPage(): React.JSX.Element {
 
 function PropertyCard({
   row,
+  coverUrl,
+  ownerId,
+  managing,
+  onToggleManage,
   deleting,
   onDelete,
 }: {
   readonly row: Row;
+  readonly coverUrl: string | undefined;
+  readonly ownerId: string;
+  readonly managing: boolean;
+  readonly onToggleManage: () => void;
   readonly deleting: boolean;
   readonly onDelete: () => void;
 }): React.JSX.Element {
@@ -169,6 +225,21 @@ function PropertyCard({
 
   return (
     <article className="card">
+      {/* The cover, when there is one. **No placeholder image when there is not** — a stock
+          interior standing in for a reader's own flat is exactly the false claim this product
+          refuses to make with a number, and it would be worse here than on the demo listings,
+          because this card is about a real property they own. An absent photo is absent. */}
+      {coverUrl !== undefined && (
+        /* eslint-disable-next-line @next/next/no-img-element -- signed URL from a private
+           bucket, expiring hourly; next/image would need the host allow-listed and would
+           cache a URL built to expire. */
+        <img
+          src={coverUrl}
+          alt=""
+          className="mb-3 aspect-[16/9] w-full rounded-card object-cover"
+        />
+      )}
+
       <div className="flex items-start justify-between gap-2">
         {/* The same building mark the /analyse saved-reports shelf uses, so a saved property
             looks like the same object in both places. */}
@@ -203,13 +274,58 @@ function PropertyCard({
         </Link>
         <button
           type="button"
+          onClick={onToggleManage}
+          aria-expanded={managing}
+          className="text-xs text-muted hover:text-mist"
+        >
+          {managing ? "Hide photos" : "Photos"}
+        </button>
+        {/* "Delete property", not "Remove". The photo manager below this row has a Remove
+            button on every tile, and two destructive controls a few pixels apart reading the
+            same word is how somebody deletes a property while meaning to drop a photo. Caught
+            by a test doing exactly that. */}
+        <button
+          type="button"
           onClick={onDelete}
           disabled={deleting}
           className="text-xs text-muted hover:text-negative disabled:opacity-50"
         >
-          {deleting ? "Removing…" : "Remove"}
+          {deleting ? "Deleting…" : "Delete property"}
         </button>
       </div>
+
+      {managing && (
+        <div className="mt-4 border-t border-line pt-4">
+          <PropertyPhotos propertyId={property.id} ownerId={ownerId} />
+        </div>
+      )}
+
+      {property.sourceUrl !== null && (
+        /* Where the figures came from. `rel="noreferrer"` because this is a URL the reader
+           supplied and we never verified — it should not carry our page as a referrer. */
+        <p className="mt-3 truncate text-[11px] text-muted">
+          Imported from{" "}
+          <a
+            href={property.sourceUrl}
+            target="_blank"
+            rel="noreferrer nofollow"
+            className="text-accent hover:underline"
+          >
+            {hostOf(property.sourceUrl)}
+          </a>
+          {property.address !== null && ` · ${property.address}`}
+        </p>
+      )}
     </article>
   );
+}
+
+/** The host alone, not the whole URL: a portal permalink is long, opaque and would wrap over
+ *  three lines to say less than its domain does. */
+function hostOf(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return "the listing";
+  }
 }
