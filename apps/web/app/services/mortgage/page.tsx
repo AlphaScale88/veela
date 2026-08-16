@@ -11,6 +11,49 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import { AppShell } from "../../../components/app-shell";
+import { BankIcon, CalculatorIcon, GaugeIcon } from "../../../components/service-icons";
+import { BenefitCards, FactBar, Faq, ServiceHero } from "../../../components/service-page";
+
+const BENEFITS = [
+  {
+    title: "The test that decides it",
+    caption: "Your payment re-run at +2 points, which is what a bank actually checks.",
+    icon: GaugeIcon,
+  },
+  {
+    title: "Both ceilings",
+    caption: "What the loan-to-value cap allows, and what your income allows. The smaller binds.",
+    icon: CalculatorIcon,
+  },
+  {
+    title: "Nothing sold to you",
+    caption: "No lender recommended, no referral fee, no details passed on. Just the arithmetic.",
+    icon: BankIcon,
+  },
+] as const;
+
+const FAQ = [
+  {
+    q: "Will you match me with a lender?",
+    a: "No. Comparable products run this page as a lead funnel — you fill in a form and a lender calls. Veela has vetted nobody, takes no referral fee and passes your details to no one. Approach banks directly or use a broker you chose yourself, then compare their number against this one.",
+  },
+  {
+    q: "What is the stress test, and why does it matter more than the rate?",
+    a: "Hong Kong lenders check you could still afford the payment if rates rose — conventionally by two percentage points — and that your debt-servicing ratio stays inside their limit under that scenario. Plenty of applications clear the payment at today's rate and fail the stressed one, which is why this page leads with it.",
+  },
+  {
+    q: "Are the caps here the real HKMA numbers?",
+    a: "Treat them as working assumptions, not current guidance. Loan-to-value caps and servicing limits have been revised repeatedly, and banks apply their own income assessment on top. That is exactly why every one of them is shown on screen and editable — put in what your bank quotes and the answer becomes yours rather than ours.",
+  },
+  {
+    q: "Why does my income cap look so different from the LTV cap?",
+    a: "They are unrelated constraints. The LTV cap is a share of the property's value; the income cap is whatever monthly payment your income supports under the servicing limits, converted back into a principal. Whichever is smaller is the one that actually binds, and the page names it.",
+  },
+  {
+    q: "Does other debt really count?",
+    a: "Yes, and it is the most commonly forgotten input. Car loans, personal loans and any other mortgage all count against the same servicing ratio, so they reduce what you can borrow pound for pound of monthly payment.",
+  },
+] as const;
 
 /**
  * How much can you borrow, and would a bank's stress test allow it.
@@ -83,19 +126,24 @@ export default function MortgagePage(): React.JSX.Element {
 
   return (
     <AppShell breadcrumb="Services › Mortgage">
-      <header className="max-w-prose">
-        <p className="eyebrow">Services · Mortgage</p>
-        <h1 className="mt-3 font-display text-[30px] font-extrabold leading-tight tracking-[-0.03em]">
-          Would the stress test let this through?
-        </h1>
-        <p className="mt-3 text-[15px] leading-relaxed text-muted">
-          Hong Kong banks do not just check you can afford today&apos;s payment. They check you
-          could still afford it if rates rose — and that test, not the headline rate, is what
-          most applications actually turn on.
-        </p>
-      </header>
+      <ServiceHero
+        eyebrow="Services · Mortgage"
+        icon={BankIcon}
+        title="Would the stress test let this through?"
+        subtitle="Hong Kong banks do not just check you can afford today's payment. They check you could still afford it if rates rose — and that test, not the headline rate, is what most applications actually turn on."
+      />
 
-      <div className="mt-8 grid gap-8 lg:grid-cols-[1.1fr_1fr] lg:items-start">
+      <BenefitCards items={BENEFITS} />
+
+      <FactBar
+        facts={[
+          "Every assumption on screen and editable",
+          "No lender recommended, no referral fee",
+          "13 tests pin the arithmetic in the engine",
+        ]}
+      />
+
+      <div className="mt-12 grid gap-8 lg:grid-cols-[1.1fr_1fr] lg:items-start">
         <div className="space-y-5">
           <Section title="The purchase">
             <Field label="Property price" value={price} onChange={setPrice} money />
@@ -222,7 +270,9 @@ export default function MortgagePage(): React.JSX.Element {
         </aside>
       </div>
 
-      <section className="card mt-10 max-w-prose">
+      <Faq items={FAQ} />
+
+      <section className="card mx-auto mt-12 max-w-2xl">
         <h2 className="text-[15px] font-semibold">What Veela will not do here</h2>
         <p className="mt-2 text-sm leading-relaxed text-muted">
           We do not recommend lenders, take referral fees, or pass your details to a bank. We

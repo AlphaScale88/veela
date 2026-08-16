@@ -1957,6 +1957,41 @@ Verified in a browser: defaults clear the test at 36.9% DSR; a loan over the LTV
 with the excess; income of 30k fails and 200k passes; the valuation page reports the market
 down 18.0% since 2021-06 with its disclaimer present.
 
+## Services, restyled on the reference — and the one thing not copied (16/08/2026)
+
+Sent the four Mashvisor pages to work from. Fetched and read them: Mortgage, Insurance, Agent
+Finder and Home Valuation share one architecture — centred hero with an icon, headline and
+subheadline; three benefit cards; a strip of trust statistics; a numbered "how it works"; an
+FAQ; a closing call to action. **That architecture is adopted almost exactly**, in
+`components/service-page.tsx`, so the four pages share it rather than each inventing a layout.
+
+**What is not adopted is what fills it.** All three are lead-generation funnels for a partner —
+*"Get Matched Now"* hands you to a lender, valuations go to Akrivis at $275, agents come from
+BiggerPockets. Veela has no partners, takes no referral fee, and could not lawfully run the
+agent one.
+
+**The trust strip is the sharpest case.** Theirs reads *"Trusted by 50,000+ investors"* and
+*"10,000+ successful matches"*. **Veela has no users, so any number of that kind would be
+invented** — the precise failure this codebase refuses everywhere else. `FactBar` therefore
+carries only claims checkable from the repository: the IRD transcription, the test count, the
+span of the RVD series, and what we do *not* do. For this product those are the stronger claim
+anyway — someone deciding whether to trust a stamp duty figure cares more that it is tested
+than that other people liked it.
+
+**Agent Finder inverts the reference's promise rather than matching it.** Theirs finds you an
+agent; this one helps you check the agent who already found you. Not a stylistic choice:
+introducing parties to a transaction is estate agency work under Cap. 511, and doing it for a
+fee without a licence is an offence. It is also the more useful page in a market where agents
+are abundant and verification is the scarce step.
+
+Each page now carries a five-question FAQ, written to answer what a reader would actually ask
+— including, on every one, "why won't you just recommend someone". The FAQ uses native
+`<details>` rather than a JavaScript accordion: keyboard-accessible, works before hydration,
+and findable by in-page search, none of which a hand-rolled version gives for free.
+
+Verified at 1400px and 390px: all four render, five FAQ items each, **no horizontal overflow
+anywhere**, no console errors. 36 engine tests still pass.
+
 ## Working conventions
 - Dates DD/MM/YYYY. Currency: **HKD** for Hong Kong, **VND** for Vietnam, **EUR** for
   France — always state which, never a bare number. Keep a single reporting currency

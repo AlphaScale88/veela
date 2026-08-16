@@ -4,6 +4,49 @@ import { RVD_PRICE_INDEX, estimateMonthlyRent } from "@veela/fixtures";
 import { useMemo, useState } from "react";
 
 import { AppShell } from "../../../components/app-shell";
+import { CalculatorIcon, ScaleIcon, TrendIcon } from "../../../components/service-icons";
+import { BenefitCards, ClosingNote, FactBar, Faq, ServiceHero } from "../../../components/service-page";
+
+const BENEFITS = [
+  {
+    title: "Published data, not a guess",
+    caption: "The Rating and Valuation Department's own monthly index, running back to 1993.",
+    icon: TrendIcon,
+  },
+  {
+    title: "Shows its working",
+    caption: "Both index values, both dates, and the arithmetic between them — on screen.",
+    icon: CalculatorIcon,
+  },
+  {
+    title: "Says what it isn't",
+    caption: "Territory-wide, so it cannot know your floor, view or block. Not a valuation.",
+    icon: ScaleIcon,
+  },
+] as const;
+
+const FAQ = [
+  {
+    q: "Why won't you just tell me what my flat is worth?",
+    a: "Because we cannot honestly. A valuation is a professional opinion from a surveyor who has inspected the property, and the finest price series the government publishes for private domestic property is territory-wide — there is no per-district domestic index. A number presented as your flat's value would be a territory-wide figure wearing a specific address, which is exactly the false precision this product refuses elsewhere.",
+  },
+  {
+    q: "So what is this number?",
+    a: "One piece of arithmetic: the market index moved X% between the month you bought and the latest published month, and that movement applied to the price you actually paid gives the figure shown. Nothing about your particular flat enters it.",
+  },
+  {
+    q: "How wrong could it be?",
+    a: "For an individual property, easily by a wide margin over short periods. Floor, view, condition, block and estate all move prices more than the territory-wide index does. Use it to know roughly which direction you are facing, never as a figure to lend, sell or negotiate against.",
+  },
+  {
+    q: "When do I need a real valuation?",
+    a: "A mortgage, probate, a divorce or any dispute. Banks also run their own valuation and will lend against theirs, not yours or ours. The Hong Kong Institute of Surveyors maintains the list of members qualified to give one.",
+  },
+  {
+    q: "Where does the rent figure come from?",
+    a: "RVD publishes market yields by size class — the same source the rent estimate on the analysis form uses. It is applied to the index-adjusted price above, so it inherits every limitation of that figure and adds the size band's own.",
+  },
+] as const;
 
 /**
  * An index-adjusted estimate of what a flat might be worth now — and a page that spends most of
@@ -57,20 +100,24 @@ export default function ValuationPage(): React.JSX.Element {
 
   return (
     <AppShell breadcrumb="Services › Home Valuation">
-      <header className="max-w-prose">
-        <p className="eyebrow">Services · Home valuation</p>
-        <h1 className="mt-3 font-display text-[30px] font-extrabold leading-tight tracking-[-0.03em]">
-          Where the market has moved since you bought
-        </h1>
-        <p className="mt-3 text-[15px] leading-relaxed text-muted">
-          This is not a valuation, and cannot be — nobody here has seen the flat, and the
-          government publishes no price series finer than territory-wide. What it does is apply
-          the Rating and Valuation Department&apos;s published index to the price you actually
-          paid, and show every step.
-        </p>
-      </header>
+      <ServiceHero
+        eyebrow="Services · Home valuation"
+        icon={TrendIcon}
+        title="Where the market has moved since you bought"
+        subtitle="Not a valuation, and it cannot be — nobody here has seen the flat, and the government publishes no price series finer than territory-wide. What it does is apply the RVD's published index to the price you actually paid, and show every step."
+      />
 
-      <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_1fr] lg:items-start">
+      <BenefitCards items={BENEFITS} />
+
+      <FactBar
+        facts={[
+          "RVD price index, monthly since 1993",
+          "Every figure traceable to its source month",
+          "Free — no valuation fee, because this is not one",
+        ]}
+      />
+
+      <div className="mx-auto mt-12 grid max-w-4xl gap-8 lg:grid-cols-[1fr_1fr] lg:items-start">
         <div className="card">
           <h2 className="text-[15px] font-semibold">What you paid</h2>
           <div className="mt-4 space-y-4">
@@ -180,23 +227,24 @@ export default function ValuationPage(): React.JSX.Element {
         </div>
       </div>
 
-      <section className="card mt-10 max-w-prose">
-        <h2 className="text-[15px] font-semibold">When you need a real valuation</h2>
-        <p className="mt-2 text-sm leading-relaxed text-muted">
-          For a mortgage, a probate, a divorce or a dispute, you need a professional valuation
-          from a qualified surveyor who has inspected the property. Banks also run their own
-          valuation and will lend against theirs, not yours. The Hong Kong Institute of Surveyors
-          maintains the list of members qualified to give one.
-        </p>
+      <Faq items={FAQ} />
+
+      <section className="mx-auto mt-12 max-w-2xl text-center">
         <a
           href="https://www.hkis.org.hk/en/"
           target="_blank"
           rel="noreferrer"
-          className="btn-secondary mt-4 inline-flex !px-5 !py-2 !text-[13px]"
+          className="btn-secondary inline-flex !px-6 !py-2.5 !text-[14px]"
         >
-          Hong Kong Institute of Surveyors
+          Find a surveyor — Hong Kong Institute of Surveyors
         </a>
       </section>
+
+      <ClosingNote
+        title="A number you can act on"
+        body="If you are deciding rather than curious, the full report prices the actual transaction — stamp duty on the scale that applies to you, the tax, and the real cash to acquire. All from published rules, all checkable."
+        cta={{ href: "/analyse", label: "Open the report" }}
+      />
     </AppShell>
   );
 }

@@ -1,99 +1,134 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 
 import { AppShell } from "../../../components/app-shell";
+import { DropletIcon, KeyIcon, ShieldIcon } from "../../../components/service-icons";
+import {
+  BenefitCards,
+  ClosingNote,
+  FactBar,
+  Faq,
+  ServiceHero,
+  Steps,
+} from "../../../components/service-page";
 
 export const metadata: Metadata = {
   title: "Insurance — Veela",
   description:
-    "What a Hong Kong landlord actually has to insure, what it costs, and how to check a broker is licensed.",
+    "What a Hong Kong mortgage obliges you to insure, what the management fee already covers, and how to check an intermediary is licensed.",
 };
 
 /**
- * ## Why this page sells nothing
+ * Structured like the reference's Insurance page — hero, three cards, steps, FAQ — and filled
+ * with the opposite kind of content.
  *
- * Arranging or advising on insurance in Hong Kong is a **licensed activity** regulated by the
- * Insurance Authority. A page that recommended an insurer, compared quotes or passed details to
- * a broker would be carrying on regulated business without a licence. That is not a caution to
- * manage — it is a line, and this page stays the safe side of it.
+ * **Arranging or advising on insurance in Hong Kong is a licensed activity** regulated by the
+ * Insurance Authority. A page that compared quotes, recommended an insurer or passed details to
+ * a broker would be carrying on regulated business without a licence. That is a line rather
+ * than a risk to manage, and this page stays the safe side of it.
  *
- * What is useful and unregulated: saying which cover a mortgage actually obliges you to hold,
- * what it typically costs so the figure can go into a report, and where the official register
- * of licensed intermediaries is so a reader can check anyone they are talking to.
+ * What is useful and unregulated: which cover a mortgage actually obliges you to hold, what the
+ * management fee has already bought, and where the official register is. The most valuable item
+ * here is probably the least glamorous — a leak into the flat below is the commonest Hong Kong
+ * liability claim of this kind, and most first-time landlords have never considered it.
  */
+
+const BENEFITS = [
+  {
+    title: "Fire cover, required",
+    caption: "Lenders make it a condition of the loan and usually want to be named on the policy.",
+    icon: ShieldIcon,
+  },
+  {
+    title: "The leak downstairs",
+    caption: "The commonest claim of its kind here. Owner liability does not stop at your floor.",
+    icon: DropletIcon,
+  },
+  {
+    title: "Not your cover",
+    caption: "Mortgage insurance protects the bank while you pay the premium. Know the difference.",
+    icon: KeyIcon,
+  },
+] as const;
+
+const FAQ = [
+  {
+    q: "Does Veela sell or arrange insurance?",
+    a: "No. Advising on or arranging insurance in Hong Kong requires a licence from the Insurance Authority, which Veela does not hold. We recommend no insurer, compare no quotes and receive nothing from anyone. If somebody offers you cover, check they are licensed on the Authority's own register before the conversation goes further.",
+  },
+  {
+    q: "Do I need buildings insurance for a flat?",
+    a: "Usually not separately. In a multi-storey building the structure is insured by the incorporated owners under the Building Management Ordinance and you are already paying for it inside the management fee. A village house or a whole building is a different matter — there, the structure is yours to insure.",
+  },
+  {
+    q: "What does the mortgage actually require?",
+    a: "Almost always fire insurance, and often with the lender named on the policy. It starts at completion, not when a tenant moves in — an empty flat between purchase and first letting still needs to be covered.",
+  },
+  {
+    q: "Is the HKMC Mortgage Insurance Programme cover for me?",
+    a: "No, and this catches people out. It lets a lender advance more than its normal loan-to-value cap. You pay the premium; the bank holds the protection. Treat it as a financing cost in your figures, not as a risk you have transferred.",
+  },
+  {
+    q: "What should I put in the report?",
+    a: "A real quote, in annual other costs. A few thousand Hong Kong dollars a year is the usual order of magnitude for a flat, but do not take that from us — on a 2% net yield, a cost you guessed at is a meaningful slice of the return.",
+  },
+] as const;
+
 export default function InsurancePage(): React.JSX.Element {
   return (
     <AppShell breadcrumb="Services › Insurance">
-      <header className="max-w-prose">
-        <p className="eyebrow">Services · Insurance</p>
-        <h1 className="mt-3 font-display text-[30px] font-extrabold leading-tight tracking-[-0.03em]">
-          What you actually have to insure
-        </h1>
-        <p className="mt-3 text-[15px] leading-relaxed text-muted">
-          Most of a Hong Kong flat&apos;s building cover is already bought for you, through the
-          management fee. What the mortgage adds, and what a landlord carries on top, is smaller
-          than people expect — and it belongs in the report as a real annual cost.
-        </p>
-      </header>
+      <ServiceHero
+        eyebrow="Services · Insurance"
+        icon={ShieldIcon}
+        title="What you actually have to insure"
+        subtitle="Less than most first-time landlords expect, and in a different place. Much of a Hong Kong flat's building cover is already bought through the management fee — what the mortgage adds, and what a landlord carries on top, is the part worth knowing."
+      />
 
-      <div className="mt-8 grid gap-5 lg:grid-cols-2">
-        <Card
-          title="Buildings — usually already covered"
-          body="A multi-storey building's structure is insured by the incorporated owners under the Building Management Ordinance, and you pay for it inside the management fee. Buying a flat rarely means buying separate structural cover; buying a village house or a whole building does."
-        />
-        <Card
-          title="Fire insurance — the mortgage will require it"
-          body="Lenders almost always make fire insurance a condition of the loan, and often want to be named on the policy. Budget for it from the day of completion, not the day the tenant moves in."
-        />
-        <Card
-          title="Home contents and landlord liability"
-          body="Contents cover is yours to choose. Liability cover matters more than most landlords assume: as owner you can be pursued for injury or damage originating in the flat, including a leak into the unit below — the single most common Hong Kong dispute of this kind."
-        />
-        <Card
-          title="Mortgage insurance is not your cover"
-          body="The HKMC Mortgage Insurance Programme lets a lender advance above its normal loan-to-value cap. The premium is yours to pay but the protection is the bank's, not yours. It is a financing cost, not a risk you have transferred."
-        />
-      </div>
+      <BenefitCards items={BENEFITS} />
 
-      <section className="card mt-8 max-w-prose">
-        <h2 className="text-[15px] font-semibold">Putting it in the report</h2>
-        <p className="mt-2 text-sm leading-relaxed text-muted">
-          Insurance goes in the <strong className="text-mist">annual other costs</strong> field on{" "}
-          <Link href="/analyse" className="text-accent hover:underline">
-            the analysis form
-          </Link>
-          . A few thousand Hong Kong dollars a year is the usual order of magnitude for a flat,
-          but do not take that from us — get a real quote and enter that. On a 2% net yield, a
-          cost you guessed at is a meaningful share of the return.
-        </p>
-      </section>
+      <FactBar
+        facts={[
+          "No insurer recommended, no commission taken",
+          "Veela holds no Insurance Authority licence",
+          "Links to the official register, not a panel",
+        ]}
+      />
 
-      <section className="card mt-6 max-w-prose">
-        <h2 className="text-[15px] font-semibold">We do not arrange insurance</h2>
-        <p className="mt-2 text-sm leading-relaxed text-muted">
-          Advising on or arranging insurance in Hong Kong requires a licence from the Insurance
-          Authority. Veela holds none, recommends no insurer, and receives nothing from any. If
-          somebody offers you cover, you can check they are licensed on the Authority&apos;s own
-          register — that is worth doing before a conversation, not after.
-        </p>
+      <Steps
+        title="What sits where"
+        steps={[
+          {
+            title: "The building — already covered",
+            body: "The incorporated owners insure the structure under the Building Management Ordinance, funded by your management fee. Buying a flat rarely means buying structural cover; buying a village house does.",
+          },
+          {
+            title: "The loan — fire insurance",
+            body: "A condition of almost every Hong Kong mortgage, effective from completion. The lender will often require to be noted on the policy.",
+          },
+          {
+            title: "You — contents and liability",
+            body: "Contents are your choice. Liability matters more than most landlords assume: as owner you can be pursued for damage originating in the flat, and water into the unit below is the classic case.",
+          },
+        ]}
+      />
+
+      <Faq items={FAQ} />
+
+      <section className="mx-auto mt-12 max-w-2xl text-center">
         <a
           href="https://iir.ia.org.hk/en/"
           target="_blank"
           rel="noreferrer"
-          className="btn-secondary mt-4 inline-flex !px-5 !py-2 !text-[13px]"
+          className="btn-secondary inline-flex !px-6 !py-2.5 !text-[14px]"
         >
-          Insurance Authority register
+          Check a licence on the Insurance Authority register
         </a>
       </section>
-    </AppShell>
-  );
-}
 
-function Card({ title, body }: { readonly title: string; readonly body: string }): React.JSX.Element {
-  return (
-    <article className="card">
-      <h2 className="text-[15px] font-semibold">{title}</h2>
-      <p className="mt-2 text-sm leading-relaxed text-muted">{body}</p>
-    </article>
+      <ClosingNote
+        title="Then put the real number in"
+        body="Insurance belongs in annual other costs, alongside management fees and repairs. Guessed costs are where a thin Hong Kong yield quietly becomes a negative one — so get a quote and enter that figure, not ours."
+        cta={{ href: "/analyse", label: "Open the report" }}
+      />
+    </AppShell>
   );
 }
