@@ -10,9 +10,8 @@ import { formatCompactMoney, formatPercent } from "@veela/ui";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
-import { AppShell } from "../../../components/app-shell";
-import { BankIcon, CalculatorIcon, GaugeIcon } from "../../../components/service-icons";
-import { BenefitCards, FactBar, Faq, ServiceHero } from "../../../components/service-page";
+import { BankIcon, CalculatorIcon, GaugeIcon } from "../../components/service-icons";
+import { BenefitCards, FactBar, Faq, ServiceHero } from "../../components/service-page";
 
 const BENEFITS = [
   {
@@ -125,7 +124,7 @@ export default function MortgagePage(): React.JSX.Element {
   const pass = a.passesStressTest;
 
   return (
-    <AppShell breadcrumb="Services › Mortgage">
+    <div className="col py-12 sm:py-16">
       <ServiceHero
         eyebrow="Services · Mortgage"
         icon={BankIcon}
@@ -289,7 +288,7 @@ export default function MortgagePage(): React.JSX.Element {
           most when a rate does.
         </p>
       </section>
-    </AppShell>
+    </div>
   );
 }
 

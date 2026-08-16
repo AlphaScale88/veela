@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 
-import { AppShell } from "../../../components/app-shell";
-import { DropletIcon, KeyIcon, ShieldIcon } from "../../../components/service-icons";
+import { DropletIcon, KeyIcon, ShieldIcon } from "../../components/service-icons";
 import {
   BenefitCards,
   ClosingNote,
@@ -9,7 +8,7 @@ import {
   Faq,
   ServiceHero,
   Steps,
-} from "../../../components/service-page";
+} from "../../components/service-page";
 
 export const metadata: Metadata = {
   title: "Insurance — Veela",
@@ -75,7 +74,7 @@ const FAQ = [
 
 export default function InsurancePage(): React.JSX.Element {
   return (
-    <AppShell breadcrumb="Services › Insurance">
+    <div className="col py-12 sm:py-16">
       <ServiceHero
         eyebrow="Services · Insurance"
         icon={ShieldIcon}
@@ -129,6 +128,6 @@ export default function InsurancePage(): React.JSX.Element {
         body="Insurance belongs in annual other costs, alongside management fees and repairs. Guessed costs are where a thin Hong Kong yield quietly becomes a negative one — so get a quote and enter that figure, not ours."
         cta={{ href: "/analyse", label: "Open the report" }}
       />
-    </AppShell>
+    </div>
   );
 }

@@ -3,9 +3,8 @@
 import { RVD_PRICE_INDEX, estimateMonthlyRent } from "@veela/fixtures";
 import { useMemo, useState } from "react";
 
-import { AppShell } from "../../../components/app-shell";
-import { CalculatorIcon, ScaleIcon, TrendIcon } from "../../../components/service-icons";
-import { BenefitCards, ClosingNote, FactBar, Faq, ServiceHero } from "../../../components/service-page";
+import { CalculatorIcon, ScaleIcon, TrendIcon } from "../../components/service-icons";
+import { BenefitCards, ClosingNote, FactBar, Faq, ServiceHero } from "../../components/service-page";
 
 const BENEFITS = [
   {
@@ -99,7 +98,7 @@ export default function ValuationPage(): React.JSX.Element {
   );
 
   return (
-    <AppShell breadcrumb="Services › Home Valuation">
+    <div className="col py-12 sm:py-16">
       <ServiceHero
         eyebrow="Services · Home valuation"
         icon={TrendIcon}
@@ -245,6 +244,6 @@ export default function ValuationPage(): React.JSX.Element {
         body="If you are deciding rather than curious, the full report prices the actual transaction — stamp duty on the scale that applies to you, the tax, and the real cash to acquire. All from published rules, all checkable."
         cta={{ href: "/analyse", label: "Open the report" }}
       />
-    </AppShell>
+    </div>
   );
 }

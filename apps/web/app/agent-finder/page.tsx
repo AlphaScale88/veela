@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 
-import { AppShell } from "../../../components/app-shell";
-import { BadgeCheckIcon, DocumentIcon, SearchGlassIcon } from "../../../components/service-icons";
+import { BadgeCheckIcon, DocumentIcon, SearchGlassIcon } from "../../components/service-icons";
 import {
   BenefitCards,
   ClosingNote,
@@ -9,7 +8,7 @@ import {
   Faq,
   ServiceHero,
   Steps,
-} from "../../../components/service-page";
+} from "../../components/service-page";
 
 export const metadata: Metadata = {
   title: "Agent Finder — Veela",
@@ -79,7 +78,7 @@ const FAQ = [
 
 export default function AgentFinderPage(): React.JSX.Element {
   return (
-    <AppShell breadcrumb="Services › Agent Finder">
+    <div className="col py-12 sm:py-16">
       <ServiceHero
         eyebrow="Services · Agent Finder"
         icon={BadgeCheckIcon}
@@ -131,6 +130,6 @@ export default function AgentFinderPage(): React.JSX.Element {
         body="An agent's job is to close a transaction; yours is to know whether it works. When they quote a yield, put the same figures through the full report — the stamp duty scale, the tax and the real cash to acquire are all computed from published rules you can check."
         cta={{ href: "/analyse", label: "Open the report" }}
       />
-    </AppShell>
+    </div>
   );
 }

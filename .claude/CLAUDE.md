@@ -2020,6 +2020,34 @@ also above floor 26 → 2 also under 20 years old; the badge reached 4; Reset re
 view alone would have hidden this — page size is 6, so page one looks identical whether a
 filter narrowed 54 to 50 or not.
 
+## Services moved to top-level marketing pages (16/08/2026)
+
+Asked to publish them the way the reference does — `/mortgage`, `/insurance`,
+`/home-valuation`, and Agent Finder as its own page. They were at `/services/*` inside the app
+shell; they are now `/mortgage`, `/insurance`, `/agent-finder` and `/home-valuation`, rendered
+with the **marketing header and footer** rather than the product sidebar.
+
+**The chrome change is the substantive half, not the URL.** These are the pages someone arrives
+on from a search or a shared link, before they have an account — and a stranger's first screen
+should be a header they can navigate from, not a logged-out product sidebar. Nested three
+levels deep behind app chrome they were also effectively unfindable to anyone not already
+inside the product, which is the opposite of what a page about mortgages is for.
+
+`/services` stays in the app shell as the in-product index; the sidebar group links straight to
+the four pages. `servicesActive` now lists the leaves explicitly rather than matching a prefix —
+`/mortgage` and `/insurance` share none, so a single `startsWith` would have quietly stopped
+lighting the group.
+
+**Old paths 308 to the new ones.** Permanent rather than temporary because the move is settled:
+a 308 transfers the old URL's standing to the new one, where a 307 would leave both competing
+indefinitely. `/services/valuation → /home-valuation` is the one that changed *name* as well as
+depth, which is why the four are listed rather than generated from a pattern — a pattern would
+have sent it to `/valuation`, a route that does not exist.
+
+Verified at 1400px and 390px: all four render with a header and footer and **no product
+sidebar**, five FAQ items each, no horizontal overflow, no console errors; all four old paths
+return 308 to the right destination.
+
 ## Working conventions
 - Dates DD/MM/YYYY. Currency: **HKD** for Hong Kong, **VND** for Vietnam, **EUR** for
   France — always state which, never a bare number. Keep a single reporting currency

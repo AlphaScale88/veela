@@ -36,8 +36,29 @@ import { SiteFooter, SiteHeader } from "./site-nav";
  * a Server Component (it exports `metadata`, which a client component cannot do).
  */
 
-/** The only page that keeps the marketing header and footer. */
-const MARKETING_ROUTES = new Set(["/"]);
+/**
+ * Pages that keep the marketing header and footer.
+ *
+ * The landing page, plus the four **Services** pages. Those were nested at `/services/*`
+ * inside the app shell; they are top-level and public now, matching how the reference
+ * publishes them (`/mortgage`, `/insurance`, `/home-valuation`).
+ *
+ * The move is not cosmetic. These are the pages someone arrives on from a search or a shared
+ * link, before they have an account — and a stranger's first screen should be the marketing
+ * header they can navigate from, not a logged-out product sidebar. Nesting them three levels
+ * deep behind an app chrome also made them effectively unfindable to anyone not already
+ * inside the product, which is the opposite of what a page about mortgages is for.
+ *
+ * `/services` itself stays in the app shell: it is the in-product index of the four, and the
+ * sidebar group links straight to the pages anyway.
+ */
+const MARKETING_ROUTES = new Set([
+  "/",
+  "/mortgage",
+  "/insurance",
+  "/agent-finder",
+  "/home-valuation",
+]);
 
 /** Deliberately chrome-less: nothing to click but the form. */
 const BARE_ROUTES = new Set(["/login", "/signup", "/auth/callback"]);

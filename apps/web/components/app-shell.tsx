@@ -140,10 +140,10 @@ const WORKSPACE_LINKS: readonly NavLink[] = [
 /** Services — the same expandable-group treatment My Workspace gets, because it is the other
  *  place with several related leaves rather than one destination. */
 const SERVICES_LINKS: readonly NavLink[] = [
-  { href: "/services/mortgage", label: "Mortgage", icon: WalletIcon },
-  { href: "/services/insurance", label: "Insurance", icon: ShieldIcon },
-  { href: "/services/agent-finder", label: "Agent Finder", icon: BadgeIcon },
-  { href: "/services/valuation", label: "Home Valuation", icon: TagIcon },
+  { href: "/mortgage", label: "Mortgage", icon: WalletIcon },
+  { href: "/insurance", label: "Insurance", icon: ShieldIcon },
+  { href: "/agent-finder", label: "Agent Finder", icon: BadgeIcon },
+  { href: "/home-valuation", label: "Home Valuation", icon: TagIcon },
 ];
 
 const TAIL_LINKS: readonly NavLink[] = [
@@ -192,7 +192,11 @@ function Sidebar({
     pathname === href || pathname?.startsWith(`${href}/`) === true;
   const workspaceActive = sectionActive("/portfolio");
   const [workspaceOpen, setWorkspaceOpen] = useState(workspaceActive);
-  const servicesActive = pathname.startsWith("/services");
+  /* The leaves are top-level now, so a single prefix no longer covers the group. Listed
+     explicitly rather than matched loosely — `/mortgage` and `/insurance` share no prefix. */
+  const servicesActive =
+    pathname.startsWith("/services") ||
+    SERVICES_LINKS.some((l) => pathname === l.href);
   const [servicesOpen, setServicesOpen] = useState(servicesActive);
 
   return (

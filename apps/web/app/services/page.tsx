@@ -30,7 +30,7 @@ export const metadata: Metadata = {
  */
 
 interface Service {
-  readonly href: "/services/mortgage" | "/services/insurance" | "/services/agent-finder" | "/services/valuation";
+  readonly href: "/mortgage" | "/insurance" | "/agent-finder" | "/home-valuation";
   readonly name: string;
   readonly summary: string;
   readonly kind: "Calculator" | "Guide" | "Official register";
@@ -38,28 +38,28 @@ interface Service {
 
 const SERVICES: readonly Service[] = [
   {
-    href: "/services/mortgage",
+    href: "/mortgage",
     name: "Mortgage",
     summary:
       "What you can borrow, the monthly payment, and whether it survives a bank's stress test at +2 points. Every policy assumption is on screen and editable.",
     kind: "Calculator",
   },
   {
-    href: "/services/valuation",
+    href: "/home-valuation",
     name: "Home valuation",
     summary:
       "Apply the RVD's published price index to what you actually paid. Shows its working, and says plainly why it is not a valuation.",
     kind: "Calculator",
   },
   {
-    href: "/services/insurance",
+    href: "/insurance",
     name: "Insurance",
     summary:
       "What a mortgage obliges you to hold, what the management fee already covers, and where to check an intermediary is licensed.",
     kind: "Guide",
   },
   {
-    href: "/services/agent-finder",
+    href: "/agent-finder",
     name: "Agent finder",
     summary:
       "Check a licence on the EAA's own register, and know what Form 3 and Form 4 commit you to before you sign.",
