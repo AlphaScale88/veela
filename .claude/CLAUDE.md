@@ -1910,6 +1910,53 @@ the header has exactly one button, "Sign in"; signed in it has **none** — ever
 the same kind of thing — plus the avatar. Menu renders identity, plan, three destinations and
 sign out; Escape and outside-click both dismiss it.
 
+## Services — built, and the objection to it answered rather than dropped (16/08/2026)
+
+This file recorded Services as **deliberately not built**: the reference product's version is a
+vetted marketplace of lenders, insurers and contractors, and "Veela has vetted no one — a page
+presenting unvetted names as trusted services would be inventing authority the product
+doesn't have."
+
+Built on request, and **that objection shapes every page rather than being overridden.** There
+is no marketplace: each page either computes something from published rules, or points at the
+official register that is authoritative in a way a curated list never could be. Nobody is
+recommended and no money passes with any provider.
+
+That is also the only lawful shape, and each page names its own line:
+
+- **Mortgage** — a real stress-test calculator. Introducing a borrower to a lender for a fee is
+  a different activity from computing a number; this stays on the computing side.
+- **Insurance** — advising on or arranging insurance needs an Insurance Authority licence.
+  The page explains what a mortgage obliges you to hold and links to the IA register.
+- **Agent Finder** — introducing parties to a transaction is estate agency work under Cap. 511.
+  So it **checks** agents rather than finding them: the EAA register, plus what Form 3 and
+  Form 4 actually commit you to.
+- **Home Valuation** — a valuation is a surveyor's professional opinion. This applies the RVD
+  price index to what you paid, shows its working, and says three times that it is not a
+  valuation. Links to HKIS for a real one.
+
+### The mortgage calculator, and why its numbers are inputs
+
+`packages/core/src/mortgage.ts` computes the payment, the payment at **+2 points**, the
+debt-servicing ratio under both, and the largest loan the LTV cap and the income each allow —
+solving the payment formula backwards for principal, so the income cap is exact rather than
+searched for.
+
+**Every policy number is a parameter, shown on screen and editable.** The HKMA has revised LTV
+caps and servicing limits repeatedly; hardcoding a cap that cannot be cited is the "unsourced
+rate is a bug" failure with a worse consequence than usual — telling someone they qualify when
+they do not. `HK_LENDING_DEFAULT` is flagged `unverified`, and the UI's "confirm these with a
+bank" caveat is **keyed off that flag**, so clearing the flag without checking the source would
+also remove the warning. A test asserts the flag is still set, for that reason.
+
+**13 new engine tests, 36 total.** They pin the arithmetic and never the policy — a test
+asserting "the cap is 70%" would fail for the right reason and be deleted for the wrong one, so
+policy-shaped tests pass a policy in and check it is honoured.
+
+Verified in a browser: defaults clear the test at 36.9% DSR; a loan over the LTV cap is flagged
+with the excess; income of 30k fails and 200k passes; the valuation page reports the market
+down 18.0% since 2021-06 with its disclaimer present.
+
 ## Working conventions
 - Dates DD/MM/YYYY. Currency: **HKD** for Hong Kong, **VND** for Vietnam, **EUR** for
   France — always state which, never a bare number. Keep a single reporting currency

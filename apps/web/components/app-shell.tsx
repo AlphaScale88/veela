@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { useAuth } from "./auth-provider";
+import { WalletIcon } from "./icons";
 import { ConsentRecorder } from "./consent";
 
 /**
@@ -136,6 +137,15 @@ const WORKSPACE_LINKS: readonly NavLink[] = [
   { href: "/portfolio/favorites", label: "My Favorite Markets", icon: StarIcon },
 ];
 
+/** Services — the same expandable-group treatment My Workspace gets, because it is the other
+ *  place with several related leaves rather than one destination. */
+const SERVICES_LINKS: readonly NavLink[] = [
+  { href: "/services/mortgage", label: "Mortgage", icon: WalletIcon },
+  { href: "/services/insurance", label: "Insurance", icon: ShieldIcon },
+  { href: "/services/agent-finder", label: "Agent Finder", icon: BadgeIcon },
+  { href: "/services/valuation", label: "Home Valuation", icon: TagIcon },
+];
+
 const TAIL_LINKS: readonly NavLink[] = [
   { href: "/pricing", label: "Pricing", icon: TagIcon },
   { href: "/account", label: "Settings", icon: GearIcon },
@@ -182,6 +192,8 @@ function Sidebar({
     pathname === href || pathname?.startsWith(`${href}/`) === true;
   const workspaceActive = sectionActive("/portfolio");
   const [workspaceOpen, setWorkspaceOpen] = useState(workspaceActive);
+  const servicesActive = pathname.startsWith("/services");
+  const [servicesOpen, setServicesOpen] = useState(servicesActive);
 
   return (
     <nav
@@ -278,6 +290,36 @@ function Sidebar({
         {workspaceOpen && (
           <ul className={`space-y-1 pl-4 ${collapsed ? "lg:pl-0" : ""}`}>
             {WORKSPACE_LINKS.map((item) => (
+              <NavItem key={item.href} item={item} active={isActive(item.href)} collapsed={collapsed} />
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <div className="mt-2 space-y-1 px-2.5">
+        <button
+          type="button"
+          onClick={() => setServicesOpen((o) => !o)}
+          aria-expanded={servicesOpen}
+          title={collapsed ? "Services" : undefined}
+          className={`flex w-full items-center gap-3 rounded-full px-3 py-2.5 text-sm font-medium transition-colors ${
+            servicesActive
+              ? "text-inverseText"
+              : "text-inverseMuted hover:bg-white/10 hover:text-inverseText"
+          }`}
+        >
+          <LayersIcon className="h-[18px] w-[18px] shrink-0" />
+          <span className={`flex-1 text-left ${collapsed ? "lg:hidden" : ""}`}>Services</span>
+          <ChevronDownIcon
+            className={`h-3.5 w-3.5 shrink-0 transition-transform ${servicesOpen ? "rotate-180" : ""} ${
+              collapsed ? "lg:hidden" : ""
+            }`}
+          />
+        </button>
+
+        {servicesOpen && (
+          <ul className={`space-y-1 pl-4 ${collapsed ? "lg:pl-0" : ""}`}>
+            {SERVICES_LINKS.map((item) => (
               <NavItem key={item.href} item={item} active={isActive(item.href)} collapsed={collapsed} />
             ))}
           </ul>
@@ -690,6 +732,36 @@ function ChevronIcon({ className }: { readonly className?: string }): React.JSX.
         strokeLinecap="round"
         strokeLinejoin="round"
       />
+    </svg>
+  );
+}
+
+/* Services glyphs, in the sidebar's house style: 24×24, stroked, currentColor. */
+
+function LayersIcon({ className }: { readonly className?: string }): React.JSX.Element {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round">
+      <path d="M12 3 3 7.5 12 12l9-4.5L12 3Z" />
+      <path d="M3 12.5 12 17l9-4.5" />
+      <path d="M3 17 12 21.5 21 17" />
+    </svg>
+  );
+}
+
+function ShieldIcon({ className }: { readonly className?: string }): React.JSX.Element {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round">
+      <path d="M12 3 5 6v6c0 4.2 2.9 7.6 7 9 4.1-1.4 7-4.8 7-9V6l-7-3Z" />
+      <path d="m9 12 2 2 4-4" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function BadgeIcon({ className }: { readonly className?: string }): React.JSX.Element {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round">
+      <circle cx="12" cy="9" r="4.5" />
+      <path d="M8.5 12.8 7 21l5-2.5 5 2.5-1.5-8.2" strokeLinecap="round" />
     </svg>
   );
 }
