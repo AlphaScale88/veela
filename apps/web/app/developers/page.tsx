@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { AppShell } from "../../components/app-shell";
 import { PLANS, formatPlanPrice } from "@veela/api/plans";
 
 export const metadata: Metadata = {
@@ -63,7 +62,7 @@ const EXAMPLE_RESPONSE = `{
 
 export default function DevelopersPage(): React.JSX.Element {
   return (
-    <AppShell breadcrumb="API">
+    <div className="col py-12 sm:py-16">
       <header className="max-w-prose">
         <p className="eyebrow">Developers</p>
         <h1 className="mt-3 font-display text-[34px] font-extrabold leading-tight tracking-[-0.03em]">
@@ -177,6 +176,6 @@ export default function DevelopersPage(): React.JSX.Element {
         licensed adviser. Veela does not introduce parties to a transaction and is not an estate
         agency.
       </p>
-    </AppShell>
+    </div>
   );
 }

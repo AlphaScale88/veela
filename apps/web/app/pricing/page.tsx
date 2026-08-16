@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { AppShell } from "../../components/app-shell";
 import { PLANS, formatPlanPrice, type Plan } from "@veela/api/plans";
 
 export const metadata: Metadata = {
@@ -55,7 +54,7 @@ export default function PricingPage(): React.JSX.Element {
     (process.env["STRIPE_SECRET_KEY"] ?? "") !== "";
 
   return (
-    <AppShell breadcrumb="Pricing">
+    <div className="col py-12 sm:py-16">
       <header className="max-w-prose">
         <p className="eyebrow">Pricing · Hong Kong</p>
         <h1 className="mt-3 font-display text-[34px] font-extrabold leading-tight tracking-[-0.03em]">
@@ -132,7 +131,7 @@ export default function PricingPage(): React.JSX.Element {
         </Link>
         .
       </p>
-    </AppShell>
+    </div>
   );
 }
 

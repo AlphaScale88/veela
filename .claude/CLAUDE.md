@@ -2048,6 +2048,30 @@ Verified at 1400px and 390px: all four render with a header and footer and **no 
 sidebar**, five FAQ items each, no horizontal overflow, no console errors; all four old paths
 return 308 to the right destination.
 
+## Pricing and the API docs left the product shell too (16/08/2026)
+
+Asked to put pricing on a standalone page rather than a logged-in one. `/pricing` and
+`/developers` were rendering inside `AppShell` — the product sidebar, breadcrumb and all — which
+is the same mistake the Services pages had just been moved out of, one section up.
+
+**A price list is read by someone deciding whether to have an account at all.** Wrapping it in
+the furniture of a product they have not bought asks them to navigate a workspace before they
+have decided to want one, and it is the page most likely to be reached from a search result or a
+shared link — a stranger's first screen. Both now render as plain content under the marketing
+header and footer, added to `MARKETING_ROUTES` in `site-chrome.tsx`.
+
+**They moved as a pair, deliberately.** Pricing's Pro card ends in "Talk to us" and its closing
+paragraph links to "Read the API docs" — both go to `/developers`. Moving one and not the other
+would flip the page furniture halfway through a single decision, which reads as a bug rather than
+a boundary. The reasoning is in the `MARKETING_ROUTES` comment, not only here, so a future
+addition to that set knows what the set is *for*.
+
+Nothing else changed: same content, same `PLANS` source of truth, no new routes and no
+redirects — these URLs did not move, only their chrome.
+
+Verified at 1400px and 390px: both render with the marketing header and footer, **zero product
+sidebars**, no horizontal overflow, no console errors.
+
 ## Working conventions
 - Dates DD/MM/YYYY. Currency: **HKD** for Hong Kong, **VND** for Vietnam, **EUR** for
   France — always state which, never a bare number. Keep a single reporting currency

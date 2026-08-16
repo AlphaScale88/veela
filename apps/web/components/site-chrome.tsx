@@ -51,9 +51,17 @@ import { SiteFooter, SiteHeader } from "./site-nav";
  *
  * `/services` itself stays in the app shell: it is the in-product index of the four, and the
  * sidebar group links straight to the pages anyway.
+ *
+ * **`/pricing` and `/developers` moved for the same reason, and as a pair.** A price list is
+ * read by someone deciding whether to have an account at all — putting it behind the chrome of
+ * a product they have not bought is precisely backwards. They move together because pricing's
+ * own "Talk to us" links straight to the API docs: moving one and not the other would flip the
+ * page furniture halfway through a single decision.
  */
 const MARKETING_ROUTES = new Set([
   "/",
+  "/pricing",
+  "/developers",
   "/mortgage",
   "/insurance",
   "/agent-finder",
