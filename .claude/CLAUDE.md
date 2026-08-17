@@ -2468,6 +2468,73 @@ build clean.
 is exactly what a correct overlay does — so `img.click()` retries forever and looks like a bug in
 the feature. Click a coordinate instead; that is what a user does anyway.
 
+## Photos on the report, and notes you can compare (18/08/2026)
+
+Asked for two things: show photos on `/analyse`, and let a reader write notes on a property that
+can be retrieved and compared as annotations.
+
+### Photos and notes on the report — and the auth race that was hiding the whole path
+
+Both belong to a *row*, so they appear when the report was opened from a saved property
+(`?property=<id>`) and **detach the moment the figures are edited** — leaving a reader's own
+photographs attached to numbers that no longer describe that flat would quietly imply the photos
+are of whatever is now in the form.
+
+This is the exception to the rule that **the report carries no photography**. That rule exists
+because a stock interior beside somebody's figures reads as a picture of *their* flat — the same
+false claim the product refuses to make with a number. These are the only images that can't be
+that: the reader took them, of the property the figures describe. Notes are the same case — the
+reader's observations, not an assertion Veela is making.
+
+**Building this surfaced a real bug on the very path it targets.** `submit()` treated
+`user === null` as "signed out" and **navigated away to `/login`** — correct on a click, where auth
+resolved long ago, but `?property=<id>` submits from a *mount effect*, so it raced `useAuth` and
+lost. Every direct visit to a saved property bounced a **signed-in** reader to the login screen and
+stashed their draft. Reproduced in a browser: the page rendered nothing but "Log in". Worth noting
+how it hid — the recurring `GET /login?next=/analyse` lines in the dev log had been written off as
+Next prefetching a link on the page. Fixed by holding the submit while `authLoading` is true and
+replaying it once auth resolves, which closes the class rather than the one caller that exposed it.
+
+### Notes are dated rows, not one editable field
+
+`property_notes`, newest first. A single `notes` column would have satisfied "show it on the
+comparison" and destroyed the thing that makes notes worth keeping: **when you thought it.** Notes
+on a flat accumulate across a viewing, a second viewing, what the agent said and what the bank
+quoted, and the sequence is the substance — one column turns that into a blob somebody hand-dates,
+where every edit silently overwrites what it used to say. `updatedAt` is kept distinct from
+`createdAt` so a revised note says *edited* rather than appearing to have always read that way.
+
+No author column and no replies: a property has exactly one owner in this schema and nothing is
+shared, so an author field could only ever repeat `ownerId`.
+
+**The comparison shows the latest note per property plus a count** — which is all a single column
+could ever have shown — from **one** request using `distinct on (property_id)`, not one request per
+column. A comparison row has space for a line or two, and shipping a property's whole history to
+render its most recent line is waste that grows with use. The count is displayed so one line never
+implies it is everything written.
+
+**Plain text, never markdown**, with newlines preserved. Same rule the AI brief follows: rendering
+stored text as markup means trusting it as markup. Here the text is the reader's own so the risk is
+smaller — but so is the reason to add a parser.
+
+**Zod trims before checking length**, because `"   "` passes `min(1)` and then fails the database's
+`length(btrim(body)) > 0` constraint — a 500 on something the schema was supposed to catch.
+
+### The ambiguous-destructive-label mistake, again
+
+A test deleted a property while trying to delete a note: `getByRole("button", { name: "Delete" })`
+substring-matches **"Delete property"** on the same card. That is the second time this exact shape
+of bug has bitten (the photo tiles were the first), so the note controls now carry
+`aria-label="Delete this note"` / `"Edit this note"` — which is what a screen-reader user needs
+anyway, sitting a few pixels from a control that deletes the whole property.
+
+Verified against a real session: Photos and Notes both render on `?property=`; Add is disabled when
+empty **and on whitespace only**; a note saves, edits, and shows "18 AUG 2026 · EDITED"; editing the
+price detaches both sections; a note can be written from the portfolio card; the comparison's "Your
+notes" row shows both properties' latest notes with "latest of 1"; a note deletes. No horizontal
+overflow at 1500px or 390px. Throwaway account, its notes and every storage object deleted
+afterwards.
+
 ## Working conventions
 - Dates DD/MM/YYYY. Currency: **HKD** for Hong Kong, **VND** for Vietnam, **EUR** for
   France — always state which, never a bare number. Keep a single reporting currency

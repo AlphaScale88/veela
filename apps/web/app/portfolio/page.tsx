@@ -9,6 +9,7 @@ import { useEffect, useState } from "react";
 import { AppShell } from "../../components/app-shell";
 import { useAuth } from "../../components/auth-provider";
 import { BuildingIcon } from "../../components/icons";
+import { PropertyNotes } from "../../components/property-notes";
 import { PropertyPhotos } from "../../components/property-photos";
 import { removeStoredPhotos, signedUrls, type PropertyPhoto } from "../../lib/property-photos";
 
@@ -35,6 +36,9 @@ export default function PortfolioPage(): React.JSX.Element {
   /** Which card has its photo manager open. One at a time: the grid is the overview, and two
    *  expanded managers side by side stop it being one. */
   const [managing, setManaging] = useState<string | null>(null);
+  /** Which card has its notes open. Separate from `managing` so photos and notes can be open at
+   *  once on one card — they are read together when deciding about a flat. */
+  const [noting, setNoting] = useState<string | null>(null);
 
   useEffect(() => {
     if (user === null) return;
@@ -192,6 +196,10 @@ export default function PortfolioPage(): React.JSX.Element {
             onToggleManage={() =>
               setManaging((cur) => (cur === row.property.id ? null : row.property.id))
             }
+            noting={noting === row.property.id}
+            onToggleNotes={() =>
+              setNoting((cur) => (cur === row.property.id ? null : row.property.id))
+            }
             deleting={deleting === row.property.id}
             onDelete={() => void remove(row.property.id)}
           />
@@ -207,6 +215,8 @@ function PropertyCard({
   ownerId,
   managing,
   onToggleManage,
+  noting,
+  onToggleNotes,
   deleting,
   onDelete,
 }: {
@@ -215,6 +225,8 @@ function PropertyCard({
   readonly ownerId: string;
   readonly managing: boolean;
   readonly onToggleManage: () => void;
+  readonly noting: boolean;
+  readonly onToggleNotes: () => void;
   readonly deleting: boolean;
   readonly onDelete: () => void;
 }): React.JSX.Element {
@@ -280,6 +292,14 @@ function PropertyCard({
         >
           {managing ? "Hide photos" : "Photos"}
         </button>
+        <button
+          type="button"
+          onClick={onToggleNotes}
+          aria-expanded={noting}
+          className="text-xs text-muted hover:text-mist"
+        >
+          {noting ? "Hide notes" : "Notes"}
+        </button>
         {/* "Delete property", not "Remove". The photo manager below this row has a Remove
             button on every tile, and two destructive controls a few pixels apart reading the
             same word is how somebody deletes a property while meaning to drop a photo. Caught
@@ -297,6 +317,12 @@ function PropertyCard({
       {managing && (
         <div className="mt-4 border-t border-line pt-4">
           <PropertyPhotos propertyId={property.id} ownerId={ownerId} />
+        </div>
+      )}
+
+      {noting && (
+        <div className="mt-4 border-t border-line pt-4">
+          <PropertyNotes propertyId={property.id} />
         </div>
       )}
 

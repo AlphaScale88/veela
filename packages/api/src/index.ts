@@ -8,6 +8,7 @@ import {
   marketObservations,
   profiles,
   properties,
+  propertyNotes,
   propertyPhotos,
   verdicts,
   withUser,
@@ -21,6 +22,7 @@ import {
   createApiKeySchema,
   reportBriefSchema,
   createPropertySchema,
+  propertyNoteSchema,
   registerPhotoSchema,
   reorderPhotosSchema,
   buildingSearchQuerySchema,
@@ -987,6 +989,119 @@ ${area}`,
 
     if (removed === null) throw new HTTPException(404, { message: "Photo not found" });
     return c.json({ storagePath: removed.storagePath });
+  })
+
+  /**
+   * ── Notes ───────────────────────────────────────────────────────────────
+   *
+   * Dated rows rather than one editable field, because the sequence is the point — see the table's
+   * own comment in `@veela/db`. Newest first everywhere, since that is the only order either the
+   * property page or the comparison ever wants.
+   */
+  .get("/properties/:id/notes", async (c) => {
+    const userId = requireUser(c.get("userId"));
+    const db = c.get("db");
+    const id = c.req.param("id");
+
+    const rows = await withUser(db, userId, (tx) =>
+      tx
+        .select()
+        .from(propertyNotes)
+        .where(eq(propertyNotes.propertyId, id))
+        .orderBy(desc(propertyNotes.createdAt)),
+    );
+    return c.json({ notes: rows });
+  })
+
+  .post("/properties/:id/notes", zValidator("json", propertyNoteSchema), async (c) => {
+    const userId = requireUser(c.get("userId"));
+    const db = c.get("db");
+    const id = c.req.param("id");
+    const { body } = c.req.valid("json");
+
+    const created = await withUser(db, userId, async (tx) => {
+      /* Confirms the property exists *and* is the caller's — RLS makes those one question — before
+         writing a note whose `ownerId` this route sets itself. Without it, a note could be created
+         against somebody else's property id and then be invisible to everyone including its
+         author. */
+      const [property] = await tx.select().from(properties).where(eq(properties.id, id));
+      if (property === undefined) return null;
+
+      const [row] = await tx
+        .insert(propertyNotes)
+        .values({ propertyId: id, ownerId: userId, body })
+        .returning();
+      return row ?? null;
+    });
+
+    if (created === null) throw new HTTPException(404, { message: "Property not found" });
+    return c.json({ note: created }, 201);
+  })
+
+  .patch("/notes/:noteId", zValidator("json", propertyNoteSchema), async (c) => {
+    const userId = requireUser(c.get("userId"));
+    const db = c.get("db");
+    const noteId = c.req.param("noteId");
+    const { body } = c.req.valid("json");
+
+    const updated = await withUser(db, userId, async (tx) => {
+      const [row] = await tx
+        .update(propertyNotes)
+        .set({ body, updatedAt: new Date() })
+        .where(eq(propertyNotes.id, noteId))
+        .returning();
+      return row ?? null;
+    });
+
+    if (updated === null) throw new HTTPException(404, { message: "Note not found" });
+    return c.json({ note: updated });
+  })
+
+  .delete("/notes/:noteId", async (c) => {
+    const userId = requireUser(c.get("userId"));
+    const db = c.get("db");
+    const noteId = c.req.param("noteId");
+
+    const removed = await withUser(db, userId, async (tx) => {
+      const [row] = await tx
+        .delete(propertyNotes)
+        .where(eq(propertyNotes.id, noteId))
+        .returning({ id: propertyNotes.id });
+      return row ?? null;
+    });
+
+    if (removed === null) throw new HTTPException(404, { message: "Note not found" });
+    return c.body(null, 204);
+  })
+
+  /**
+   * The latest note per property, plus how many there are — what the comparison needs.
+   *
+   * One request rather than one per column, and it returns a *summary* rather than every note:
+   * a comparison row has space for one line, and shipping a property's entire note history to
+   * render its most recent line is waste that grows with use.
+   *
+   * `distinct on` is Postgres-specific and is the reason this is raw SQL: it takes the first row
+   * of each `property_id` group under the given ordering, which is exactly "newest note per
+   * property" in one pass and without a window function or a self-join.
+   */
+  .get("/notes/latest", async (c) => {
+    const userId = requireUser(c.get("userId"));
+    const db = c.get("db");
+
+    const rows = await withUser(db, userId, (tx) =>
+      tx.execute(sql`
+        select distinct on (n.property_id)
+          n.property_id  as "propertyId",
+          n.body         as "body",
+          n.created_at   as "createdAt",
+          count(*) over (partition by n.property_id)::int as "total"
+        from property_notes n
+        where n.owner_id = ${userId}
+        order by n.property_id, n.created_at desc
+      `),
+    );
+    return c.json({ latest: rows });
   })
 
   /**

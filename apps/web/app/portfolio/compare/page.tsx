@@ -92,6 +92,34 @@ export default function ComparePage(): React.JSX.Element {
   /** Cover photo per property, so a column is recognisable at a glance rather than by
    *  reading its label. One batch fetch and one batch signing call for the whole list. */
   const [covers, setCovers] = useState<ReadonlyMap<string, string>>(new Map());
+  /**
+   * The most recent note per property, plus how many there are.
+   *
+   * A summary rather than every note, from one request rather than one per column: a comparison
+   * row has space for a line or two, and fetching a property's whole note history to render its
+   * latest line is waste that grows with use. The count is shown so a single line never implies it
+   * is everything written.
+   */
+  const [latestNotes, setLatestNotes] = useState<
+    ReadonlyMap<string, { readonly body: string; readonly total: number }>
+  >(new Map());
+
+  useEffect(() => {
+    if (user === null) return;
+    let cancelled = false;
+    void (async () => {
+      const res = await fetch("/api/notes/latest");
+      if (!res.ok || cancelled) return;
+      const { latest } = (await res.json()) as {
+        latest: { propertyId: string; body: string; total: number }[];
+      };
+      if (cancelled) return;
+      setLatestNotes(new Map(latest.map((n) => [n.propertyId, { body: n.body, total: n.total }])));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
   useEffect(() => {
     if (user === null) return;
     let cancelled = false;
@@ -253,6 +281,35 @@ export default function ComparePage(): React.JSX.Element {
                   <CompareRow label="Stamp duty" rows={compared} render={(v) => (v !== null ? formatCompactMoney(v.acquisition.stampDuty) : "—")} />
                   <CompareRow label="Critical findings" rows={compared} render={(v) => (v !== null ? String(criticalCount(v)) : "—")} />
                   <CompareRow label="Veela rating" rows={compared} render={(v) => (v !== null ? `${rateVerdict(v).stars.toFixed(1)}/5` : "—")} />
+
+                  {/* Notes are the one row that comes from the reader rather than the engine, so
+                      it sits last — after everything Veela computed, which is the order the page
+                      reads in. `whitespace-pre-wrap`, not markdown: the same rule the note editor
+                      itself follows. */}
+                  <tr className="border-b border-line/60 align-top last:border-b-0">
+                    <th scope="row" className="px-4 py-2.5 text-left font-normal text-muted">
+                      Your notes
+                    </th>
+                    {compared.map((r) => {
+                      const note = latestNotes.get(r.property.id);
+                      return (
+                        <td key={r.property.id} className="px-4 py-2.5 text-sm">
+                          {note === undefined ? (
+                            <span className="text-muted">—</span>
+                          ) : (
+                            <>
+                              <span className="line-clamp-4 whitespace-pre-wrap text-mist">
+                                {note.body}
+                              </span>
+                              <span className="mt-1 block font-mono text-[10px] uppercase tracking-[0.06em] text-muted">
+                                latest of {note.total}
+                              </span>
+                            </>
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
                 </tbody>
               </table>
             </div>

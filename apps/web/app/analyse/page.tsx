@@ -32,6 +32,7 @@ import {
 } from "../../components/last-search";
 import { ReportBrief } from "../../components/report-brief";
 import { SavedReports } from "../../components/saved-reports";
+import { PropertyNotes } from "../../components/property-notes";
 import { PropertyPhotos } from "../../components/property-photos";
 import {
   draftToApiInput,
@@ -128,6 +129,15 @@ export default function AnalysePage(): React.JSX.Element {
   const [saveState, setSaveState] = useState<SaveState>({ status: "idle" });
   const autoLoadedRef = useRef(false);
   /**
+   * The saved property this report was opened from, when it was.
+   *
+   * Photos and notes belong to a *row*, so they can only be shown once there is one. Opening
+   * `?property=<id>` is exactly that case and was the gap: the report rendered, and the reader's
+   * own photographs and notes about that very flat were only reachable by going back to
+   * `/portfolio`. Cleared whenever the figures stop describing that row — see `setDraft` below.
+   */
+  const [loadedPropertyId, setLoadedPropertyId] = useState<string | null>(null);
+  /**
    * A location attached by hand, via the building search below.
    *
    * The neighbourhood section needs coordinates, and the form does not collect any — so
@@ -150,6 +160,19 @@ export default function AnalysePage(): React.JSX.Element {
    *  gate below renders instead of the report, and the auto-retry effect further down
    *  clears it and re-submits the moment `user` stops being `null`. */
   const [reportGated, setReportGated] = useState(false);
+  /**
+   * A submit that arrived before `useAuth` had decided whether there is a session.
+   *
+   * `submit()` used to treat `user === null` as "signed out" and **navigate away to /login**. On
+   * a click that is right, because by then auth has long resolved. On `?property=<id>`, which
+   * submits from a mount effect, it is a race the page loses more often than not — so opening a
+   * saved property straight from a URL bounced a *signed-in* reader to the login screen and
+   * stashed their draft. Reproduced with a browser: the report never rendered, only "Log in".
+   *
+   * Holding the draft and replaying it once auth resolves fixes the whole class, rather than
+   * special-casing the one caller that happened to expose it.
+   */
+  const [deferredSubmit, setDeferredSubmit] = useState<Draft | null>(null);
 
   /** The previous analysis on this device, offered rather than applied. `undefined` until the
    *  mount effect has looked; `null` once looked and there was nothing (or it was dismissed). */
@@ -313,6 +336,7 @@ export default function AnalysePage(): React.JSX.Element {
       const { property } = (await res.json()) as { property: Parameters<typeof draftFromSavedProperty>[0] };
       const loaded = draftFromSavedProperty(property);
       setDraft(loaded);
+      setLoadedPropertyId(id);
       void submit(loaded);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Something went wrong.");
@@ -410,6 +434,15 @@ export default function AnalysePage(): React.JSX.Element {
     }
   }, []);
 
+  /* Replay a submit that was held while auth was still resolving. */
+  useEffect(() => {
+    if (authLoading || deferredSubmit === null) return;
+    const held = deferredSubmit;
+    setDeferredSubmit(null);
+    void submit(held);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- replays exactly once per hold
+  }, [authLoading, deferredSubmit]);
+
   // The whole reason `reportGated` exists: once a session actually shows up — the
   // email/password form resolved in place, or a stashed draft's Google round-trip just
   // landed — retry automatically rather than making the reader click "See the full
@@ -463,6 +496,13 @@ export default function AnalysePage(): React.JSX.Element {
      * here is a real set of figures rather than a half-typed field.
      */
     if (submitted.price > 0) rememberLastSearch(submitted);
+
+    /* "Still loading" is not "signed out". Deciding before auth resolves is what sent signed-in
+       readers to the login page; see `deferredSubmit`. */
+    if (authConfigured && authLoading) {
+      setDeferredSubmit(submitted);
+      return;
+    }
 
     if (authConfigured && user === null) {
       sessionStorage.setItem(DRAFT_STASH_KEY, JSON.stringify(submitted));
@@ -773,6 +813,12 @@ export default function AnalysePage(): React.JSX.Element {
             ) {
               setRentEstimated(false);
             }
+            /* Editing the figures detaches the report from the saved row it was opened from, so
+               the photos and notes go with it. They belong to that property, and leaving them
+               attached to numbers that no longer describe it would quietly imply the reader's own
+               photographs are of whatever is now in the form. Re-open from /portfolio to get them
+               back — the row itself is untouched. */
+            setLoadedPropertyId(null);
             setDraft((d) => ({ ...d, ...patch }));
           }}
           onSubmit={() => void submit()}
@@ -837,6 +883,28 @@ export default function AnalysePage(): React.JSX.Element {
             <div className="mt-6">
               <VerdictView verdict={verdict} />
             </div>
+
+            {/**
+             * Your own photographs and your own notes, on your own property.
+             *
+             * The report deliberately carries **no** photography — a stock interior beside
+             * somebody's figures reads as a picture of *their* flat, which is the same false
+             * claim this product refuses to make with a number. These are the exception that
+             * proves the rule, and the only kind that can be: the reader took them, of the flat
+             * the figures describe. Same for the notes: they are the reader's own observations,
+             * not an assertion Veela is making.
+             *
+             * Shown only when the report was opened from a saved property (`?property=<id>`) and
+             * detached the moment the figures are edited — there is no row for photos to belong
+             * to otherwise, and leaving them attached to changed numbers would imply the photos
+             * are of whatever is now in the form.
+             */}
+            {loadedPropertyId !== null && user !== null && (
+              <div className="mt-8 grid gap-8 border-t border-line pt-8 lg:grid-cols-2">
+                <PropertyPhotos propertyId={loadedPropertyId} ownerId={user.id} />
+                <PropertyNotes propertyId={loadedPropertyId} />
+              </div>
+            )}
 
             {/* Only when coordinates are actually known. The report is computed from
                 figures typed into the form, which carry no location — so this appears for

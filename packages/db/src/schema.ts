@@ -328,8 +328,47 @@ export const propertyPhotos = pgTable(
   ],
 );
 
+/**
+ * Notes a user writes on their own property.
+ *
+ * **Dated rows, not one `notes` column**, because the sequence is the substance: notes on a flat
+ * accumulate across a viewing, a second viewing, a conversation with the agent and a mortgage
+ * quote, and a single column turns that into a blob somebody has to hand-date, where an edit
+ * silently overwrites what was there before. The comparison shows the most recent note plus a
+ * count — which is all a single column could have given anyway — so the table costs nothing there
+ * and keeps the history.
+ *
+ * No author column and no replies: a property has exactly one owner in this schema and nothing is
+ * shared, so an author field could only ever repeat `ownerId`. When sharing exists, it earns one.
+ */
+export const propertyNotes = pgTable(
+  "property_notes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    propertyId: uuid("property_id")
+      .notNull()
+      .references(() => properties.id, { onDelete: "cascade" }),
+    /** Denormalised for the same reason `propertyPhotos.ownerId` is — every RLS policy reads it. */
+    ownerId: uuid("owner_id")
+      .notNull()
+      .references(() => profiles.id, { onDelete: "cascade" }),
+    body: text("body").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    /** Set on edit, and kept distinct from `createdAt` so a revised note can say so rather than
+     *  quietly appearing to have always said what it now says. */
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("property_notes_property_idx").on(t.propertyId, t.createdAt),
+    index("property_notes_owner_idx").on(t.ownerId),
+    check("property_notes_body_not_blank", sql`length(btrim(${t.body})) > 0`),
+    check("property_notes_body_bounded", sql`length(${t.body}) <= 4000`),
+  ],
+);
+
 export type Profile = typeof profiles.$inferSelect;
 export type PropertyPhoto = typeof propertyPhotos.$inferSelect;
+export type PropertyNote = typeof propertyNotes.$inferSelect;
 export type NewPropertyPhoto = typeof propertyPhotos.$inferInsert;
 export type Property = typeof properties.$inferSelect;
 export type NewProperty = typeof properties.$inferInsert;

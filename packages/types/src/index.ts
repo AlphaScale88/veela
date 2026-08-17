@@ -117,6 +117,20 @@ export const reorderPhotosSchema = z.object({
   photoIds: z.array(z.string().uuid()).min(1).max(24),
 });
 
+/**
+ * Writing or editing a note.
+ *
+ * `.trim()` before the length check, not after: a body of three spaces satisfies `min(1)` and then
+ * fails the database's `length(btrim(body)) > 0` constraint, which would surface as a 500 on
+ * something the schema was supposed to have caught. Trimming here makes the two agree, and means
+ * what is stored is what will be displayed.
+ */
+export const propertyNoteSchema = z.object({
+  body: z.string().trim().min(1, "A note needs some text").max(4000),
+});
+
+export type PropertyNoteInput = z.infer<typeof propertyNoteSchema>;
+
 export type RegisterPhotoInput = z.infer<typeof registerPhotoSchema>;
 export type ReorderPhotosInput = z.infer<typeof reorderPhotosSchema>;
 
