@@ -186,12 +186,220 @@ export function draftToCoreInput(d: Draft): PropertyInput {
   };
 }
 
+/**
+ * Turning a Zod failure into something a reader can act on.
+ *
+ * The form used to print `parsed.error.issues` verbatim, which produced
+ * *"label: String must contain at least 1 character(s); priceMinor: Number must be greater than
+ * 0"*. Three separate problems with that, and only the last is cosmetic:
+ *
+ * 1. **`priceMinor` is not a field anyone can see.** It is the API's name for the money the form
+ *    calls *Price*, in cents. Naming it tells a reader to look for something that is not there.
+ * 2. **It says what failed, never what to do.** "Number must be greater than 0" is a predicate,
+ *    not an instruction.
+ * 3. It is written for whoever wrote the schema.
+ *
+ * So each issue is mapped to the field's **visible label**, a sentence about what is wrong, and
+ * the fix. This lives directly beneath `draftToApiInput` on purpose: that function decides which
+ * `Draft` field becomes which API path, and this is its inverse. Split across two files they
+ * would drift the first time a field was renamed.
+ *
+ * An unmapped path still produces something usable rather than nothing — see `FALLBACK`.
+ */
+export interface FormProblem {
+  /** The field as the form labels it, so the reader knows where to look. */
+  readonly field: string;
+  readonly what: string;
+  readonly fix: string;
+}
+
+interface Rule {
+  readonly field: string;
+  readonly what: string;
+  readonly fix: string;
+}
+
+const PROBLEMS: Record<string, Rule> = {
+  label: {
+    field: "Label",
+    what: "This report has no name.",
+    fix: "Type anything that will help you recognise it later — “Flat 12B, Tai Koo” is plenty.",
+  },
+  priceMinor: {
+    field: "Price",
+    what: "The purchase price is missing or zero.",
+    fix: "Enter what you would pay for the flat. Every figure in the report — stamp duty, yield, payback — is derived from it.",
+  },
+  monthlyRentMinor: {
+    field: "Monthly rent",
+    what: "The rent is not a valid amount.",
+    fix: "Enter the monthly rent you expect, or leave it at zero — the report will show the costs and say the yield needs a rent.",
+  },
+  saleableAreaSqft: {
+    field: "Saleable area",
+    what: "The area is not a usable figure.",
+    fix: "Enter the saleable area in square feet, between 1 and 100,000. Saleable, not gross — the two differ by roughly a quarter.",
+  },
+  transactionDate: {
+    field: "Transaction date",
+    what: "The purchase date is missing or malformed.",
+    fix: "Pick the date you expect to complete. It decides which stamp duty scale applies, so it changes the answer.",
+  },
+  "costs.vacancyRate": {
+    field: "Vacancy",
+    what: "Vacancy is outside the range a percentage can take.",
+    fix: "Enter a figure between 0 and 100. It is the share of the year you expect the flat to sit empty — 4 is a common assumption.",
+  },
+  "costs.monthlyManagementFeeMinor": {
+    field: "Management fee",
+    what: "The management fee is not a valid amount.",
+    fix: "Enter the monthly fee, or zero if there is none. It comes straight off the yield, so it is worth getting right.",
+  },
+  "costs.annualOtherCostsMinor": {
+    field: "Other annual costs",
+    what: "That is not a valid amount.",
+    fix: "Enter the yearly total of anything else you pay, or zero.",
+  },
+  "costs.agencyFeeMinor": {
+    field: "Agency fee",
+    what: "That is not a valid amount.",
+    fix: "Enter the agency fee, or zero. In Hong Kong this is typically about 1% of the price.",
+  },
+  "costs.legalFeesMinor": {
+    field: "Legal fees",
+    what: "That is not a valid amount.",
+    fix: "Enter your solicitor’s fee, or zero if you do not know it yet.",
+  },
+  "financing.loanAmountMinor": {
+    field: "Loan amount",
+    what: "The loan is not a valid amount.",
+    fix: "Enter how much you intend to borrow, or zero for a cash purchase.",
+  },
+  "financing.annualInterestRate": {
+    field: "Interest rate",
+    what: "The interest rate is outside the range a percentage can take.",
+    fix: "Enter a figure between 0 and 100 — for example 3 for 3% a year.",
+  },
+  "financing.termYears": {
+    field: "Term",
+    what: "The mortgage term is not a whole number of years between 1 and 50.",
+    fix: "Enter the length of the loan in years. Hong Kong lenders rarely write beyond 30.",
+  },
+};
+
+/** Used when a schema grows a field this map has not caught up with. Naming the raw path is a
+ *  poor experience but a far better one than a silent failure, and it stays diagnosable. */
+function fallbackFor(path: string, message: string): FormProblem {
+  return {
+    field: path === "" ? "One of the figures" : path,
+    what: message,
+    fix: "Check that field and try again. If it looks right, this is a bug worth reporting.",
+  };
+}
+
+/**
+ * `ZodError["issues"]`, structurally — taken as a plain shape rather than importing Zod's type,
+ * so this file does not gain a dependency on the validator to describe its own form.
+ */
+export function describeProblems(
+  issues: readonly { readonly path: readonly (string | number)[]; readonly message: string }[],
+): readonly FormProblem[] {
+  const seen = new Set<string>();
+  const out: FormProblem[] = [];
+  for (const issue of issues) {
+    const path = issue.path.join(".");
+    // One line per field: three failing rules on one number is still one thing to fix.
+    if (seen.has(path)) continue;
+    seen.add(path);
+    out.push(PROBLEMS[path] ?? fallbackFor(path, issue.message));
+  }
+  return out;
+}
+
+/**
+ * The panel a reader meets when the report cannot be produced.
+ *
+ * Three deliberate choices, all of them about it being read by somebody who is stuck:
+ *
+ * - **The heading says what happened in plain terms**, not "Validation failed". The reader does
+ *   not care that a schema rejected something; they care that the report did not appear and that
+ *   it is fixable.
+ * - **Every item names the field as the form labels it**, then what is wrong, then the fix. The
+ *   old version printed the API's internal path (`priceMinor`) and Zod's predicate ("Number must
+ *   be greater than 0"), which told a reader to look for a field that does not exist and gave
+ *   them no instruction.
+ * - **`role="alert"`** so a screen reader announces it the moment it appears — this replaces the
+ *   report somebody just asked for, and silently swapping one for the other is the worst case.
+ *
+ * The single-sentence `error` covers failures that are not about a field at all (the network, the
+ * server). It renders in the same frame so there is one place to look either way.
+ */
+function FormProblems({
+  problems,
+  error,
+}: {
+  readonly problems: readonly FormProblem[];
+  readonly error: string | null;
+}): React.JSX.Element | null {
+  if (problems.length === 0 && error === null) return null;
+
+  return (
+    <div
+      role="alert"
+      className="rounded-panel border border-negative/35 bg-negative/[0.04] px-4 py-3.5"
+    >
+      <div className="flex items-start gap-2.5">
+        <span className="mt-px grid size-5 shrink-0 place-items-center rounded-full bg-negative/15 text-negative">
+          <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" aria-hidden="true">
+            <path
+              d="M12 8v5m0 3.5h.01"
+              stroke="currentColor"
+              strokeWidth="2.4"
+              strokeLinecap="round"
+            />
+          </svg>
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold text-mist">
+            {/* "Needs fixing", not "missing": a vacancy rate of 400 is present and wrong, and
+                telling somebody it is missing sends them looking for an empty box. */}
+            {problems.length === 0
+              ? "The report could not be produced"
+              : problems.length === 1
+                ? "One thing needs fixing before the report can be produced"
+                : `${problems.length} things need fixing before the report can be produced`}
+          </p>
+
+          {problems.length > 0 && (
+            <ul className="mt-2 space-y-2">
+              {problems.map((p) => (
+                <li key={p.field} className="text-sm leading-relaxed">
+                  <span className="font-medium text-mist">{p.field}</span>
+                  <span className="text-muted"> — {p.what} </span>
+                  <span className="text-muted">{p.fix}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {error !== null && (
+            <p className="mt-2 text-sm leading-relaxed text-muted">{error}</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 interface Props {
   readonly draft: Draft;
   readonly onChange: (patch: Partial<Draft>) => void;
   readonly onSubmit: () => void;
   readonly pending: boolean;
+  /** A single sentence — used for failures that are not about a particular field (the network
+   *  died, the server refused). Field-level failures come through `problems` instead. */
   readonly error: string | null;
+  readonly problems: readonly FormProblem[];
   /** Applying the RVD estimate goes through its own callback rather than `onChange`, so the
    *  page can remember the rent was estimated and label it as such — and can clear that flag
    *  the moment the reader types over it. */
@@ -263,6 +471,7 @@ export function PropertyForm({
   onSubmit,
   pending,
   error,
+  problems,
   onUseRentEstimate,
 }: Props): React.JSX.Element {
   return (
@@ -384,14 +593,7 @@ export function PropertyForm({
         />
       </Section>
 
-      {error !== null && (
-        <p
-          role="alert"
-          className="rounded-card border border-negative/40 bg-negative/5 px-4 py-3 text-sm text-negative"
-        >
-          {error}
-        </p>
-      )}
+      <FormProblems problems={problems} error={error} />
 
       <button
         type="submit"

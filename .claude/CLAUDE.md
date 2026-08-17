@@ -2535,6 +2535,51 @@ notes" row shows both properties' latest notes with "latest of 1"; a note delete
 overflow at 1500px or 390px. Throwaway account, its notes and every storage object deleted
 afterwards.
 
+## Validation errors that name a field the reader can see (18/08/2026)
+
+Reported with a screenshot: the report failed and the panel said
+
+> `label: String must contain at least 1 character(s); priceMinor: Number must be greater than 0`
+
+That was `parsed.error.issues` printed verbatim. Three problems, and only the last is cosmetic:
+
+1. **`priceMinor` is not a field anyone can see.** It is the API's name, in cents, for the box the
+   form labels *Price*. Naming it sends a reader looking for something that is not on screen.
+2. **It says what failed and never what to do.** "Number must be greater than 0" is a predicate.
+3. It is written for whoever wrote the schema.
+
+Now each issue maps to the field's **visible label**, a sentence about what is wrong, and the fix —
+"Price — The purchase price is missing or zero. Enter what you would pay for the flat. Every figure
+in the report — stamp duty, yield, payback — is derived from it."
+
+**The map lives directly beneath `draftToApiInput`**, which is the function deciding which `Draft`
+field becomes which API path. This is its inverse; in another file the two would drift the first
+time a field was renamed. An unmapped path still renders — naming the raw path is a poor experience
+and a far better one than a silent failure.
+
+**One line per field**, not per failing rule: three broken constraints on one number is still one
+thing to fix. The heading says *"needs fixing"* rather than *"missing"*, because a vacancy rate of
+400 is present and wrong, and calling it missing sends somebody hunting for an empty box.
+
+**Two other messages in the same path were as bad and are fixed with it.** A server rejection said
+only `(400)`; it now reads the two shapes a Hono rejection arrives in — plain text from
+`HTTPException`, JSON from `zValidator` — and runs Zod issues through the same translator, so a
+server-side rejection reads exactly like a client-side one. And the `catch` printed the raw
+exception, so a dropped connection surfaced as "Failed to fetch" — which looks like a defect in the
+reader's figures. It now says it is probably the connection and that nothing typed has been lost.
+
+**`role="alert"`** on the panel: it appears in place of the report somebody just asked for, and
+swapping one for the other silently is the worst case for a screen-reader user.
+
+Verified against a real session at 1400px and 390px: an empty form gives "2 things need fixing"
+naming Label and Price; one missing field gives the singular heading; a vacancy of 400 gives
+"Vacancy — outside the range a percentage can take. Enter a figure between 0 and 100"; valid
+figures render **no** panel; no `priceMinor`, no Zod phrasing, no horizontal overflow, no console
+errors.
+
+**Worth knowing:** this panel is only reachable **signed in**. A signed-out submit redirects to
+`/login` before validation runs, which is why the first attempt to reproduce it found nothing.
+
 ## Working conventions
 - Dates DD/MM/YYYY. Currency: **HKD** for Hong Kong, **VND** for Vietnam, **EUR** for
   France — always state which, never a bare number. Keep a single reporting currency

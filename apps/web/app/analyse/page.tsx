@@ -35,11 +35,13 @@ import { SavedReports } from "../../components/saved-reports";
 import { PropertyNotes } from "../../components/property-notes";
 import { PropertyPhotos } from "../../components/property-photos";
 import {
+  describeProblems,
   draftToApiInput,
   draftToCoreInput,
   EMPTY_DRAFT,
   PropertyForm,
   type Draft,
+  type FormProblem,
 } from "../../components/property-form";
 import { listingToDraft } from "../../components/property-finder";
 import { VerdictView } from "../../components/verdict-view";
@@ -120,6 +122,8 @@ export default function AnalysePage(): React.JSX.Element {
   const [verdict, setVerdict] = useState<Verdict | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Field-level failures, already translated out of Zod's vocabulary — see `describeProblems`. */
+  const [problems, setProblems] = useState<readonly FormProblem[]>([]);
   const reportRef = useRef<HTMLDivElement>(null);
   const { setContext } = useAiChat();
   const { user, loading: authLoading, configured: authConfigured } = useAuth();
@@ -484,6 +488,7 @@ export default function AnalysePage(): React.JSX.Element {
   async function submit(overrideDraft?: Draft): Promise<void> {
     const submitted = overrideDraft ?? draft;
     setError(null);
+    setProblems([]);
 
     /**
      * Remembered here — when a report is *asked for* — not after one successfully returns.
@@ -515,9 +520,10 @@ export default function AnalysePage(): React.JSX.Element {
     try {
       const parsed = createPropertySchema.safeParse(draftToApiInput(submitted));
       if (!parsed.success) {
-        setError(
-          parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; "),
-        );
+        /* Translated rather than printed. The raw issues named the API's own field paths and
+           Zod's predicates — "priceMinor: Number must be greater than 0" — which points a reader
+           at a field that does not exist on screen and tells them nothing to do about it. */
+        setProblems(describeProblems(parsed.error.issues));
         return;
       }
 
@@ -528,7 +534,12 @@ export default function AnalysePage(): React.JSX.Element {
       });
 
       if (!res.ok) {
-        setError(`The server rejected the figures (${res.status}).`);
+        /* The server validates the same schema, so a rejection here is either a figure the client
+           somehow let through or something transient. Both are translated the same way, and the
+           status code goes in the fallback sentence rather than the headline. */
+        const detail = await readServerProblems(res);
+        if (detail.problems.length > 0) setProblems(detail.problems);
+        else setError(detail.message);
         return;
       }
 
@@ -536,10 +547,40 @@ export default function AnalysePage(): React.JSX.Element {
       setVerdict(json.verdict);
       setLastSubmittedDraft(submitted);
       setSaveState({ status: "idle" });
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Something went wrong.");
+    } catch {
+      /* Almost always the network rather than anything the reader typed, so it must not read as
+         though they got something wrong. The raw exception message ("Failed to fetch") said
+         nothing useful and looked like a defect in their figures. */
+      setError(
+        "The report could not be reached — this is usually a connection problem rather than anything you entered. Check your connection and press the button again; nothing you typed has been lost.",
+      );
     } finally {
       setPending(false);
+    }
+  }
+
+  /**
+   * A rejection from `/verdict/preview` arrives in one of two shapes and always has: Hono's
+   * `HTTPException` sends plain text, `zValidator` sends a Zod error as JSON. Reading `res.json()`
+   * unconditionally throws on the first and loses the reason — the same bug the listing importer's
+   * toast had, and the reason this is a shared habit rather than a one-off.
+   */
+  async function readServerProblems(
+    res: Response,
+  ): Promise<{ readonly problems: readonly FormProblem[]; readonly message: string }> {
+    const fallback = `The figures were refused by the server (${res.status}). If they look right, this is worth reporting.`;
+    const text = await res.text().catch(() => "");
+    try {
+      const parsed = JSON.parse(text) as {
+        error?: { issues?: { path: (string | number)[]; message: string }[] };
+        message?: string;
+      };
+      if (parsed.error?.issues !== undefined) {
+        return { problems: describeProblems(parsed.error.issues), message: fallback };
+      }
+      return { problems: [], message: parsed.message ?? fallback };
+    } catch {
+      return { problems: [], message: text === "" ? fallback : text };
     }
   }
 
@@ -824,6 +865,7 @@ export default function AnalysePage(): React.JSX.Element {
           onSubmit={() => void submit()}
           pending={pending}
           error={error}
+          problems={problems}
           onUseRentEstimate={(monthlyRent) => {
             setDraft((d) => ({ ...d, monthlyRent }));
             setRentEstimated(true);
