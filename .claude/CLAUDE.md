@@ -2566,6 +2566,16 @@ being exercised.
   monorepo root directory. **Deploys are run from the CLI (`vercel --prod`)** — the
   GitHub integration stopped picking up pushes after a force-push rewrote history and has
   not been reconnected. Reconnect it before relying on push-to-deploy.
+  **Run `vercel` from the repository root, never from `apps/web`.** Running it from inside the
+  app directory created a *second* Vercel project called `web`, which then failed to build with
+  "No Next.js version detected" — because Vercel applied that project's own root directory on
+  top of a path that already was the app. It served nothing, held no domain, and was the source
+  of a confusing deploy failure; **deleted 17/08/2026** on request (`vercel project rm web`),
+  after confirming the account had no custom domains and `web-alpha-scale1.vercel.app` returned
+  404. `alpha-scale1` now holds exactly one project. There is now exactly one right way to
+  deploy, and one project that can be deployed to.
+  *(The CLI's `rm` prompts even with `--non-interactive`, and `--yes` is not a flag it accepts.
+  Piping `y` from PowerShell sends a BOM that reads as "no" and aborts; pipe it from bash.)*
 - **Repository**: `github.com/AlphaScale88/veela`, extracted out of the parent workspace
   repo (which mixes in unrelated projects) as its own standalone repo with a fresh
   history.
