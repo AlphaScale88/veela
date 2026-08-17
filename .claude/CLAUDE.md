@@ -2291,6 +2291,77 @@ account is not representative. And `/account`'s sections are independent disclos
 must be driven off `aria-expanded`; clicking each header blindly toggles shut what the previous
 click opened, which produced an audit that examined an empty page and reported no problems.
 
+## The Search page screens real properties now (17/08/2026)
+
+Asked how to fix the fact that `/finder`'s listings are fabricated. Four routes were laid out —
+verify Centaline's open-data licence, license a commercial feed, keep paying HK$10 per Land
+Registry lookup, or point the page at the reader's own saved properties — and **the last was
+chosen**: the only one needing no licence, no new supply and nobody's permission. It is also the
+product's own stated model ("the user brings the property") applied to the one page still
+pretending otherwise.
+
+### Both modes, because deleting the demo would have broken something deliberate
+
+`/finder` is public and ungated *on purpose* — the login wall came off on 09/08/2026 precisely
+because fabricated listings are marketing for the report rather than the product. Replacing them
+outright would leave every logged-out visitor and every brand-new account staring at an empty
+page, throwing away the demonstration the page exists to give. So the fabricated set **stops
+pretending to be inventory and becomes a labelled sample you can switch to**, and the mode
+**defaults to real data whenever there is any** — which is what makes this a fix rather than a
+toggle nobody finds. A reader's own choice pins the mode, so the property count arriving a second
+later cannot yank the page out from under someone who just picked the sample deliberately.
+
+### The filter set is deliberately smaller, and that is the honest part
+
+`PropertyFinder` offers twelve extra criteria — bedrooms, floor, renovation, furnishing, outdoor
+space, view, car park, facilities, pets, tenancy — because it *generates* those fields. **A saved
+property has none of them**: the report form collects price, rent, area, transaction date, buyer
+situation, costs and financing, and nothing else. Offering the same panel would mean inventing the
+values or filtering on empty, and the second is worse because it silently returns nothing.
+
+So `SavedPropertyFinder` screens what a saved property really carries — price, net yield from the
+stored snapshot, saleable area, plus *tracked* / *has photos* / *from a link* — and **says on
+screen which criteria are missing and why**. If the form starts collecting bedrooms and floor,
+they belong here the same day.
+
+**No district filter, and no derived one.** `districtId` is null in practice. Deriving a district
+from the stored coordinates by nearest centroid was considered and rejected: those centroids are
+accurate to a few hundred metres and Hong Kong's districts are large with contested edges, so
+nearest-centroid would confidently mislabel anything near a boundary. The top bar matches **label
+and address text** instead — explainable in one sentence and never wrong.
+
+### `FinderPin` no longer knows what a `DemoListing` is
+
+The map used to take a listing and compute *district centroid + that listing's fixed offset*. Fine
+while every pin was fabricated; wrong the moment a real property needed plotting, since it has real
+coordinates and no offset to add them to — and a shared map had no business knowing the demo
+fixture's shape anyway. It takes a `position` now; `PropertyFinder` does its own centroid
+arithmetic, and only properties that genuinely carry coordinates get a pin. **The count of
+unmapped ones is stated** ("1 mapped. 2 not shown — a property only has coordinates if it came
+from a listing link that published them") rather than left to be inferred from a map emptier than
+the list beside it.
+
+### Two bugs the screenshots caught
+
+- **`fitBounds` on a single pin zooms to the basemap maximum**, giving a featureless tile with one
+  dot in it — no street, no coastline, nothing to locate the property against. Invisible while
+  every caller passed 54 pins spread across the territory; immediate for a reader with *one* saved
+  property. Capped at zoom 16, and **clamped on the next `idle` rather than straight after
+  `fitBounds`**, because the new zoom is not guaranteed readable on the same tick and reading it
+  early clamps a stale value while leaving the real one alone.
+- **The yield badge was absolutely positioned in a card with no `relative`**, and would have sat
+  over the price on any property without a photo. It now only overlays a photo, and moves inline
+  when there isn't one.
+
+Verified in a browser against a real session: logged out → sample mode with its banner; signed in
+with nothing saved → defaults to sample, and *My properties* shows a real empty state with a CTA
+(not a blank panel); with three saved → defaults to *My properties*, "3 of 3 saved", one mapped and
+two correctly reported unmapped. Filters in table view where rows are countable: 3 → under 500 sq ft
+1 → from a link 1 → also has photos 1 → tracked only 1 → reset 3; searching "Tsuen" → 1. Switching
+back to the sample returns 54 rows and the banner. No horizontal overflow at 1400px or 390px, no
+console errors, 36 engine tests still pass. Throwaway account and every storage object deleted
+afterwards.
+
 ## Working conventions
 - Dates DD/MM/YYYY. Currency: **HKD** for Hong Kong, **VND** for Vietnam, **EUR** for
   France — always state which, never a bare number. Keep a single reporting currency

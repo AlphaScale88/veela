@@ -4,6 +4,7 @@ import { computeVerdict, HK_RULE_SETS, money, type PropertyInput, type Verdict }
 import {
   DEMO_DISTRICTS,
   DEMO_LISTINGS,
+  DISTRICT_CENTRES,
   LISTINGS_NOTICE,
   type DemoDistrict,
   type DemoListing,
@@ -503,14 +504,26 @@ export function PropertyFinder({ districtQuery, view }: Props): React.JSX.Elemen
   const currentPage = Math.min(page, pageCount);
   const paged = visible.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
-  const pins: readonly FinderPin[] = visible.map((r) => ({
-    listing: r.listing,
+  /* Position is computed here now, not in `ListingsMap` — district centroid plus the
+     listing's own fixed offset. Still not a real address; just spread out enough to browse
+     rather than stacking three pins on each of eighteen points. The map takes a position and
+     asks no questions, which is what lets the saved-property finder pass real coordinates. */
+  const pins: readonly FinderPin[] = visible.flatMap((r) => {
+    const centre = DISTRICT_CENTRES[r.listing.districtId];
+    if (centre === undefined) return [];
+    return [{
+    id: r.listing.id,
+    position: {
+      lat: centre.lat + r.listing.latOffset,
+      lng: centre.lng + r.listing.lngOffset,
+    },
     standing: r.standing,
     label: `${districtName(r.listing.districtId)} · ${formatPercent(r.verdict.returns.netYield)} net yield`,
     priceLabel: formatCompactMoney(r.verdict.acquisition.price),
     yieldLabel: formatPercent(r.verdict.returns.netYield),
     metaLabel: `${districtName(r.listing.districtId)} · ${r.listing.bedrooms}-bed · ${r.listing.saleableAreaSqft} sqft`,
-  }));
+    }];
+  });
 
   // The heatmap wash — one figure per district, averaged over whatever is currently
   // passing the filters, in whichever metric "Heat Map Filters" currently selects.

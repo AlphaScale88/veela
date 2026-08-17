@@ -3,7 +3,6 @@
 import {
   DISTRICT_CENTRES,
   isPlausibleHongKong,
-  type DemoListing,
   type LatLng,
 } from "@veela/fixtures";
 import { standingColor, type Standing } from "@veela/ui";
@@ -26,9 +25,15 @@ import { useEffect, useMemo, useState } from "react";
  *   Mashvisor's "hover for projected ROI" behaviour; clicking selects it, syncing with
  *   the card grid beside the map.
  *
- * Position is the district centroid plus each listing's small fixed offset
- * (`district-map.tsx`'s pattern, one level finer): still not a real address, just
- * spread out enough to browse on a map instead of stacking pins on eighteen points.
+ * **The caller supplies the position; this file no longer derives one.** It used to take a
+ * `DemoListing` and compute district centroid + that listing's fixed offset — fine while every
+ * pin was fabricated, and wrong the moment a *saved* property needed plotting, because a real
+ * property has real coordinates and no district offset to add them to. A shared map had no
+ * business knowing the shape of the demo fixture either. `PropertyFinder` still does the
+ * centroid-plus-offset arithmetic for its generated listings (still not a real address, just
+ * spread out enough to browse rather than stacking pins on eighteen points); the saved-property
+ * finder passes coordinates the listing actually published. Anything outside Hong Kong is still
+ * dropped here — a wrong pin on a real map reads as data, never as the bug it is.
  *
  * No `<APIProvider>` here — it used to wrap one locally, same as `district-map.tsx`
  * did, and the two independent instances were exactly what broke Market Finder after a
@@ -36,8 +41,12 @@ import { useEffect, useMemo, useState } from "react";
  * (`components/maps-provider.tsx`); this assumes it's already inside it.
  */
 
+/** Ceiling for the fit-to-bounds zoom — see the effect that applies it. */
+const MAX_FIT_ZOOM = 16;
+
 export interface FinderPin {
-  readonly listing: DemoListing;
+  readonly id: string;
+  readonly position: LatLng;
   readonly standing: Standing;
   /** Accessible name / native tooltip fallback. */
   readonly label: string;
@@ -135,36 +144,45 @@ function Pins({
   const map = useMap();
   const core = useMapsLibrary("core");
 
-  const positioned = useMemo(
-    () =>
-      pins.flatMap((p) => {
-        const centre = DISTRICT_CENTRES[p.listing.districtId];
-        if (centre === undefined) return [];
-        const position = {
-          lat: centre.lat + p.listing.latOffset,
-          lng: centre.lng + p.listing.lngOffset,
-        };
-        return isPlausibleHongKong(position) ? [{ ...p, position }] : [];
-      }),
-    [pins],
-  );
+  const positioned = useMemo(() => pins.filter((p) => isPlausibleHongKong(p.position)), [pins]);
 
+  /**
+   * Fit to whatever is on screen, then **cap the zoom.**
+   *
+   * `fitBounds` on a single point zooms to the maximum the basemap has, which produces a
+   * featureless tile with one pin in the middle of it — no street, no coastline, nothing to
+   * locate the property against. It never showed up while every caller passed 54 pins spread
+   * across Hong Kong; it appeared immediately once a reader with **one** saved property could
+   * map it. The same cap is already applied on the neighbourhood map, for the same reason.
+   *
+   * 16 is close enough to read street names and far enough to see which block you are on.
+   */
   useEffect(() => {
     if (map === null || core === null || positioned.length === 0) return;
     const bounds = new core.LatLngBounds();
     for (const p of positioned) bounds.extend(p.position);
     map.fitBounds(bounds, { top: 48, bottom: 48, left: 48, right: 48 });
+
+    /* Clamped on the next `idle` rather than immediately after `fitBounds`: the new zoom is not
+       guaranteed to be readable on the same tick, so reading it straight away can clamp a stale
+       value and leave the real one untouched. One-shot listener, removed either way. */
+    const listener = map.addListener("idle", () => {
+      const zoom = map.getZoom();
+      if (zoom !== undefined && zoom > MAX_FIT_ZOOM) map.setZoom(MAX_FIT_ZOOM);
+      listener.remove();
+    });
+    return () => listener.remove();
   }, [map, core, positioned]);
 
   return (
     <>
       {positioned.map((p) => (
         <Pin
-          key={p.listing.id}
+          key={p.id}
           pin={p}
           position={p.position}
-          selected={p.listing.id === selectedId}
-          onSelect={() => onSelect(p.listing.id)}
+          selected={p.id === selectedId}
+          onSelect={() => onSelect(p.id)}
         />
       ))}
     </>
