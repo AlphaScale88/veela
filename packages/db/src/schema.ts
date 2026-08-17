@@ -229,6 +229,19 @@ export const properties = pgTable(
     latitude: doublePrecision("latitude"),
     longitude: doublePrecision("longitude"),
 
+    /**
+     * Set when this row came from the Search page's fabricated sample catalogue.
+     *
+     * The heart on a sample card saves it, which puts invented figures in the same table as
+     * somebody's real flat. The label already says "sample flat", but a label is editable text
+     * and cannot answer *is this listing already saved* — the heart has to render filled before
+     * anything is clicked, and un-hearting must delete the row this listing produced and no
+     * other. Three listings share a district and can share a bedroom count, so the label
+     * collides by construction. Not a foreign key: the catalogue is a TypeScript fixture, and
+     * seeding fabricated rows into the database to point at is the thing this project refuses.
+     */
+    demoListingId: text("demo_listing_id"),
+
     /** True once the user asks us to track it against the market. */
     monitored: boolean("monitored").notNull().default(false),
 

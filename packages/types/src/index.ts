@@ -73,6 +73,14 @@ export const createPropertySchema = z.object({
   address: z.string().max(500).optional(),
   latitude: z.number().min(-90).max(90).optional(),
   longitude: z.number().min(-180).max(180).optional(),
+
+  /**
+   * Set only by the Search page's heart, and only when the thing being saved is a fabricated
+   * sample listing. Not a URL and not user-facing: it is the fixture's own id, which is what
+   * lets the heart render filled before anything is clicked and lets un-hearting delete the row
+   * *this* listing produced rather than one that merely shares its label.
+   */
+  demoListingId: z.string().max(64).optional(),
 });
 
 export const updatePropertySchema = createPropertySchema.partial();

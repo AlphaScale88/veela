@@ -18,10 +18,13 @@ import {
   type Standing,
 } from "@veela/ui";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { useAuth } from "./auth-provider";
+import { CompareBar, CompareCheckbox, HeartButton, MAX_COMPARE } from "./listing-actions";
 import { ListingsMap, type DistrictHeat, type FinderPin } from "./listings-map";
-import { draftToCoreInput, EMPTY_DRAFT, type Draft } from "./property-form";
+import { draftToApiInput, draftToCoreInput, EMPTY_DRAFT, type Draft } from "./property-form";
 
 /**
  * A Mashvisor-style "Property Finder" — screen units against price, size and yield
@@ -334,6 +337,108 @@ export function PropertyFinder({ districtQuery, view }: Props): React.JSX.Elemen
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [heatMetric, setHeatMetric] = useState<HeatMetricId>("yield");
   const [page, setPage] = useState(1);
+
+  const { user } = useAuth();
+  const router = useRouter();
+  /**
+   * `demoListingId` → the id of the saved property it produced.
+   *
+   * This is what lets the heart render filled before anything is clicked, and lets un-hearting
+   * delete *that* row rather than one that merely shares a label. Built from the saved list, so a
+   * property saved from the report's own Save button (which sets no `demoListingId`) correctly
+   * leaves its sample card un-hearted — it is a different object with the same figures.
+   */
+  const [savedByDemoId, setSavedByDemoId] = useState<ReadonlyMap<string, string>>(new Map());
+  const [heartBusy, setHeartBusy] = useState<string | null>(null);
+  const [compareIds, setCompareIds] = useState<readonly string[]>([]);
+
+  useEffect(() => {
+    if (user === null) {
+      setSavedByDemoId(new Map());
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const res = await fetch("/api/properties");
+      if (!res.ok || cancelled) return;
+      const { properties } = (await res.json()) as {
+        properties: { id: string; demoListingId: string | null }[];
+      };
+      if (cancelled) return;
+      setSavedByDemoId(
+        new Map(
+          properties.flatMap((p) =>
+            p.demoListingId === null ? [] : [[p.demoListingId, p.id] as const],
+          ),
+        ),
+      );
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
+  /**
+   * Saving a sample listing goes through the **same** `POST /properties` the report's Save button
+   * uses, built from the **same** `listingToDraft`. That is the point: a hearted card and the
+   * report you would have reached by clicking through cannot disagree about the figures, because
+   * neither one re-derives them.
+   */
+  async function toggleHeart(row: Row): Promise<void> {
+    if (user === null) {
+      router.push("/login?next=/finder");
+      return;
+    }
+    const demoId = row.listing.id;
+    const existing = savedByDemoId.get(demoId);
+    setHeartBusy(demoId);
+    try {
+      if (existing !== undefined) {
+        const res = await fetch(`/api/properties/${existing}`, { method: "DELETE" });
+        if (res.ok || res.status === 404) {
+          setSavedByDemoId((m) => {
+            const next = new Map(m);
+            next.delete(demoId);
+            return next;
+          });
+          // An unsaved property cannot stay in a comparison of saved ones.
+          setCompareIds((ids) => ids.filter((id) => id !== existing));
+        }
+      } else {
+        const res = await fetch("/api/properties", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            ...draftToApiInput(listingToDraft(row.listing, districtName(row.listing.districtId))),
+            demoListingId: demoId,
+          }),
+        });
+        if (res.ok) {
+          const { property } = (await res.json()) as { property: { id: string } };
+          setSavedByDemoId((m) => new Map(m).set(demoId, property.id));
+        }
+      }
+    } finally {
+      setHeartBusy(null);
+    }
+  }
+
+  /** True when this sample listing's saved property is in the comparison. Reads through the
+   *  saved map rather than comparing ids directly, so an un-hearted listing is never "checked". */
+  function savedForCompare(demoId: string): boolean {
+    const id = savedByDemoId.get(demoId);
+    return id !== undefined && compareIds.includes(id);
+  }
+
+  function toggleCompare(propertyId: string): void {
+    setCompareIds((ids) =>
+      ids.includes(propertyId)
+        ? ids.filter((id) => id !== propertyId)
+        : ids.length >= MAX_COMPARE
+          ? ids
+          : [...ids, propertyId],
+    );
+  }
 
   const mapsKey = process.env["NEXT_PUBLIC_GOOGLE_MAPS_API_KEY"];
   const matchedDistrict = matchDistrictByQuery(districtQuery);
@@ -891,6 +996,8 @@ export function PropertyFinder({ districtQuery, view }: Props): React.JSX.Elemen
       )}
       </div>
 
+      <CompareBar ids={compareIds} max={MAX_COMPARE} onClear={() => setCompareIds([])} />
+
       {view === "table" && <ListingsTable rows={visible} />}
 
       {view === "list" && (
@@ -907,6 +1014,15 @@ export function PropertyFinder({ districtQuery, view }: Props): React.JSX.Elemen
                     rank={(currentPage - 1) * PAGE_SIZE + i}
                     selected={r.listing.id === selectedId}
                     onSelect={() => setSelectedId(r.listing.id)}
+                    savedPropertyId={savedByDemoId.get(r.listing.id)}
+                    heartBusy={heartBusy === r.listing.id}
+                    onHeart={() => void toggleHeart(r)}
+                    compareChecked={savedForCompare(r.listing.id)}
+                    compareFull={compareIds.length >= MAX_COMPARE}
+                    onCompare={() => {
+                      const id = savedByDemoId.get(r.listing.id);
+                      if (id !== undefined) toggleCompare(id);
+                    }}
                   />
                 ))}
               </div>
@@ -967,6 +1083,15 @@ export function PropertyFinder({ districtQuery, view }: Props): React.JSX.Elemen
                       rank={(currentPage - 1) * PAGE_SIZE + i}
                       selected={r.listing.id === selectedId}
                       onSelect={() => setSelectedId(r.listing.id)}
+                      savedPropertyId={savedByDemoId.get(r.listing.id)}
+                      heartBusy={heartBusy === r.listing.id}
+                      onHeart={() => void toggleHeart(r)}
+                      compareChecked={savedForCompare(r.listing.id)}
+                      compareFull={compareIds.length >= MAX_COMPARE}
+                      onCompare={() => {
+                        const id = savedByDemoId.get(r.listing.id);
+                        if (id !== undefined) toggleCompare(id);
+                      }}
                     />
                   ))}
                 </div>
@@ -1057,11 +1182,24 @@ function PropertyCard({
   rank,
   selected,
   onSelect,
+  savedPropertyId,
+  heartBusy,
+  onHeart,
+  compareChecked,
+  compareFull,
+  onCompare,
 }: {
   readonly row: Row;
   readonly rank: number;
   readonly selected: boolean;
   readonly onSelect: () => void;
+  /** Set once this listing has been hearted — the id of the property it created. */
+  readonly savedPropertyId: string | undefined;
+  readonly heartBusy: boolean;
+  readonly onHeart: () => void;
+  readonly compareChecked: boolean;
+  readonly compareFull: boolean;
+  readonly onCompare: () => void;
 }): React.JSX.Element {
   const { listing, verdict, standing } = row;
 
@@ -1072,12 +1210,37 @@ function PropertyCard({
     >
       <div className="relative">
         <ListingPhoto rank={rank} className="aspect-[16/9]" />
+        {/* Heart top-left, yield top-right — Zillow's own placement, and it keeps the two apart
+            so neither is clicked by accident. */}
+        <span className="absolute left-2.5 top-2.5">
+          <HeartButton
+            filled={savedPropertyId !== undefined}
+            busy={heartBusy}
+            label={
+              savedPropertyId === undefined
+                ? "Save this sample to my properties"
+                : "Remove this sample from my properties"
+            }
+            onClick={onHeart}
+          />
+        </span>
         <span
           className="absolute right-2.5 top-2.5 rounded-full px-2 py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.08em] shadow-card"
           style={{ color: standingColor[standing], backgroundColor: "rgba(255,255,255,0.92)" }}
         >
           {formatPercent(verdict.returns.netYield)}
         </span>
+        {/* Only once it is saved: the comparison reads stored snapshots, so there is nothing for
+            it to show about a listing nobody has saved. */}
+        {savedPropertyId !== undefined && (
+          <span className="absolute bottom-2.5 left-2.5">
+            <CompareCheckbox
+              checked={compareChecked}
+              disabled={compareFull && !compareChecked}
+              onChange={onCompare}
+            />
+          </span>
+        )}
       </div>
 
       <div className="p-2.5">
@@ -1116,11 +1279,23 @@ function ListingRow({
   rank,
   selected,
   onSelect,
+  savedPropertyId,
+  heartBusy,
+  onHeart,
+  compareChecked,
+  compareFull,
+  onCompare,
 }: {
   readonly row: Row;
   readonly rank: number;
   readonly selected: boolean;
   readonly onSelect: () => void;
+  readonly savedPropertyId: string | undefined;
+  readonly heartBusy: boolean;
+  readonly onHeart: () => void;
+  readonly compareChecked: boolean;
+  readonly compareFull: boolean;
+  readonly onCompare: () => void;
 }): React.JSX.Element {
   const { listing, verdict, standing } = row;
 
@@ -1154,12 +1329,31 @@ function ListingRow({
         </span>
       </div>
 
-      <Link
-        href={`/analyse?listing=${listing.id}`}
-        className="btn-secondary shrink-0 !px-3 !py-1.5 !text-[12px]"
-      >
-        Analyse
-      </Link>
+      <div className="flex shrink-0 items-center gap-2">
+        {savedPropertyId !== undefined && (
+          <CompareCheckbox
+            checked={compareChecked}
+            disabled={compareFull && !compareChecked}
+            onChange={onCompare}
+          />
+        )}
+        <HeartButton
+          filled={savedPropertyId !== undefined}
+          busy={heartBusy}
+          label={
+            savedPropertyId === undefined
+              ? "Save this sample to my properties"
+              : "Remove this sample from my properties"
+          }
+          onClick={onHeart}
+        />
+        <Link
+          href={`/analyse?listing=${listing.id}`}
+          className="btn-secondary !px-3 !py-1.5 !text-[12px]"
+        >
+          Analyse
+        </Link>
+      </div>
     </article>
   );
 }

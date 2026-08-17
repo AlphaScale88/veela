@@ -16,9 +16,9 @@ import { useEffect, useState } from "react";
 
 import { AppShell } from "../../../components/app-shell";
 import { useAuth } from "../../../components/auth-provider";
+import { MAX_COMPARE } from "../../../components/listing-actions";
 import { signedUrls, type PropertyPhoto } from "../../../lib/property-photos";
 
-const MAX_COMPARE = 3;
 
 interface Row {
   readonly property: Property;
@@ -34,13 +34,28 @@ export default function ComparePage(): React.JSX.Element {
   const { user, loading, configured } = useAuth();
   const [rows, setRows] = useState<Row[] | null>(null);
   const [selected, setSelected] = useState<readonly string[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  /**
+   * `?ids=a,b,c` — what the finder's Compare button sends.
+   *
+   * Read from `location` inside the load effect rather than via `useSearchParams`, for two
+   * reasons. The practical one: `useSearchParams` opts a page out of static prerendering unless
+   * it sits inside a `Suspense` boundary, and **this broke the production build** rather than
+   * failing quietly. The honest one: these ids are a *seed*, not state. A reader who lands here
+   * and unticks a column must not have it reinstated because the URL still names it, so reading
+   * once is the behaviour actually wanted — the hook's reactivity would have been a bug.
+   *
+   * Ids that are not the caller's never match a loaded row, so a hand-edited URL smuggles
+   * nothing in: the rows come from `GET /properties`, which RLS has already scoped.
+   */
 
   useEffect(() => {
     if (user === null) return;
     let cancelled = false;
     (async () => {
+      try {
       const listRes = await fetch("/api/properties");
-      if (!listRes.ok) return;
+      if (!listRes.ok) throw new Error(`Could not load your properties (${listRes.status}).`);
       const { properties } = (await listRes.json()) as { properties: Property[] };
       const detailed = await Promise.all(
         properties.map(async (property) => {
@@ -52,7 +67,21 @@ export default function ComparePage(): React.JSX.Element {
       );
       if (!cancelled) {
         setRows(detailed);
-        setSelected(detailed.slice(0, 2).map((r) => r.property.id));
+        const own = new Set(detailed.map((r) => r.property.id));
+        const asked = (new URLSearchParams(window.location.search).get("ids") ?? "")
+          .split(",")
+          .map((id) => id.trim())
+          .filter((id) => id !== "" && own.has(id))
+          .slice(0, MAX_COMPARE);
+        /* Fall back to the two most recent, which is what this page did before it could be
+           linked into — landing on an empty comparison would be a worse default than a guess. */
+        setSelected(asked.length > 0 ? asked : detailed.slice(0, 2).map((r) => r.property.id));
+      }
+      } catch (cause) {
+        /* Previously a rejected fetch left `rows` null for ever, and the page rendered its
+           heading over an empty space — indistinguishable from "still loading" and from
+           "nothing saved". Silence is the worst of the three. */
+        if (!cancelled) setError(cause instanceof Error ? cause.message : "Something went wrong.");
       }
     })();
     return () => {
@@ -141,6 +170,15 @@ export default function ComparePage(): React.JSX.Element {
           if it's been a while.
         </p>
       </header>
+
+      {error !== null && <p className="card mt-6 max-w-prose text-sm text-negative">{error}</p>}
+
+      {/* An explicit loading line. The page used to render its heading and then nothing at all
+          while the two fetches were in flight, which reads as a broken page rather than a busy
+          one — and looked identical to having saved nothing. */}
+      {error === null && rows === null && (
+        <p className="card mt-6 max-w-prose text-sm text-muted">Loading your properties…</p>
+      )}
 
       {rows !== null && rows.length === 0 && (
         <p className="card mt-8 max-w-prose text-sm text-muted">

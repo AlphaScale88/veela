@@ -15,6 +15,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "./auth-provider";
 import { BuildingIcon } from "./icons";
+import { CompareBar, CompareCheckbox, HeartButton, MAX_COMPARE } from "./listing-actions";
 import { ListingsMap, type FinderPin } from "./listings-map";
 import { signedUrls, type PropertyPhoto } from "../lib/property-photos";
 
@@ -134,6 +135,49 @@ export function SavedPropertyFinder({
   const [sort, setSort] = useState<SortId>("recent");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
+  const [compareIds, setCompareIds] = useState<readonly string[]>([]);
+  const [heartBusy, setHeartBusy] = useState<string | null>(null);
+
+  /**
+   * Here the heart means **tracked**, not saved — the property already is saved, so there is
+   * nothing for a save to do. `monitored` is the flag that already existed and already feeds
+   * `/portfolio/alerts`, which is what "keep an eye on this" means in this product. Writing it
+   * through the same `PATCH /properties/:id` the Alerts page uses means the two cannot disagree.
+   */
+  async function toggleTracked(row: SavedRow): Promise<void> {
+    const id = row.property.id;
+    setHeartBusy(id);
+    try {
+      const res = await fetch(`/api/properties/${id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ monitored: !row.property.monitored }),
+      });
+      if (res.ok) {
+        setRows((prev) =>
+          prev === null
+            ? prev
+            : prev.map((r) =>
+                r.property.id === id
+                  ? { ...r, property: { ...r.property, monitored: !r.property.monitored } }
+                  : r,
+              ),
+        );
+      }
+    } finally {
+      setHeartBusy(null);
+    }
+  }
+
+  function toggleCompare(id: string): void {
+    setCompareIds((ids) =>
+      ids.includes(id)
+        ? ids.filter((x) => x !== id)
+        : ids.length >= MAX_COMPARE
+          ? ids
+          : [...ids, id],
+    );
+  }
 
   useEffect(() => {
     if (user === null) return;
@@ -365,6 +409,7 @@ export function SavedPropertyFinder({
 
   return (
     <div className="space-y-6">
+      <CompareBar ids={compareIds} max={MAX_COMPARE} onClear={() => setCompareIds([])} />
       <div className="card flex flex-wrap items-end gap-4 py-4">
         <FilterSelect
           label="Price"
@@ -439,7 +484,16 @@ export function SavedPropertyFinder({
           <>
             <div className="space-y-3">
               {paged.map((r) => (
-                <SavedRowCard key={r.property.id} row={r} compact />
+                <SavedRowCard
+                  key={r.property.id}
+                  row={r}
+                  compact
+                  heartBusy={heartBusy === r.property.id}
+                  onHeart={() => void toggleTracked(r)}
+                  compareChecked={compareIds.includes(r.property.id)}
+                  compareFull={compareIds.length >= MAX_COMPARE}
+                  onCompare={() => toggleCompare(r.property.id)}
+                />
               ))}
             </div>
             <Pager page={currentPage} pageCount={pageCount} onPage={setPage} />
@@ -476,6 +530,11 @@ export function SavedPropertyFinder({
                       row={r}
                       selected={r.property.id === selectedId}
                       onHover={() => setSelectedId(r.property.id)}
+                      heartBusy={heartBusy === r.property.id}
+                      onHeart={() => void toggleTracked(r)}
+                      compareChecked={compareIds.includes(r.property.id)}
+                      compareFull={compareIds.length >= MAX_COMPARE}
+                      onCompare={() => toggleCompare(r.property.id)}
                     />
                   ))}
                 </div>
@@ -494,11 +553,21 @@ function SavedRowCard({
   compact = false,
   selected = false,
   onHover,
+  heartBusy,
+  onHeart,
+  compareChecked,
+  compareFull,
+  onCompare,
 }: {
   readonly row: SavedRow;
   readonly compact?: boolean;
   readonly selected?: boolean;
   readonly onHover?: () => void;
+  readonly heartBusy: boolean;
+  readonly onHeart: () => void;
+  readonly compareChecked: boolean;
+  readonly compareFull: boolean;
+  readonly onCompare: () => void;
 }): React.JSX.Element {
   const { property, verdict, standing, coverUrl } = row;
   const netYield = verdict?.returns.netYield ?? null;
@@ -556,17 +625,45 @@ function SavedRowCard({
           {coverUrl !== undefined && <Chip>Photo</Chip>}
         </p>
         {!compact && (
-          <Link
-            href={`/analyse?property=${property.id}`}
-            className="btn-secondary mt-2 w-full !py-1.5 !text-[12px]"
-          >
-            Open the report
-          </Link>
+          <>
+            <div className="mt-2 flex items-center gap-2">
+              <CompareCheckbox
+                checked={compareChecked}
+                disabled={compareFull && !compareChecked}
+                onChange={onCompare}
+              />
+              <span className="ml-auto">
+                <HeartButton
+                  filled={property.monitored}
+                  busy={heartBusy}
+                  label={property.monitored ? "Stop tracking this property" : "Track this property"}
+                  onClick={onHeart}
+                />
+              </span>
+            </div>
+            <Link
+              href={`/analyse?property=${property.id}`}
+              className="btn-secondary mt-2 w-full !py-1.5 !text-[12px]"
+            >
+              Open the report
+            </Link>
+          </>
         )}
       </div>
 
       {compact && (
         <>
+          <CompareCheckbox
+            checked={compareChecked}
+            disabled={compareFull && !compareChecked}
+            onChange={onCompare}
+          />
+          <HeartButton
+            filled={property.monitored}
+            busy={heartBusy}
+            label={property.monitored ? "Stop tracking this property" : "Track this property"}
+            onClick={onHeart}
+          />
           <div className="shrink-0 text-right">
             <span
               className="inline-block rounded-full px-1.5 py-0.5 font-mono text-[9px] font-semibold uppercase tracking-[0.08em]"

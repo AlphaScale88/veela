@@ -2362,6 +2362,81 @@ back to the sample returns 54 rows and the banner. No horizontal overflow at 140
 console errors, 36 engine tests still pass. Throwaway account and every storage object deleted
 afterwards.
 
+## A heart, a tick, and a Compare button (17/08/2026)
+
+Asked for Zillow's heart on the listing cards, a checkbox on the saved ones, and a Compare button
+that puts them side by side.
+
+### The heart means two different things, and that is the honest mapping
+
+Zillow's heart means *keep this*. Here that lands on two concepts that already exist, and forcing
+one behaviour would have meant inventing a third:
+
+- **A sample listing is not yours yet** → the heart **saves** it, through the same
+  `POST /properties` and the same `listingToDraft` the report's Save button uses. A hearted card
+  and the report you would have reached by clicking through therefore cannot disagree about the
+  figures, because neither re-derives them.
+- **A saved property is already yours** → nothing to save, so the heart toggles **`monitored`**,
+  the flag that already existed and already feeds `/portfolio/alerts`. That is what "keep an eye
+  on this" actually means in this product.
+
+Both are labelled, so nobody infers it from an icon. Filled vs outlined rather than two colours,
+for the same reason report severities carry a shape as well as a hue.
+
+### Saving a fabricated listing needed a column, not a label
+
+Hearting a sample puts invented figures in the same table as somebody's real flat — the table
+alerts run against. Flagged before building rather than after. What makes it defensible is that
+`listingToDraft` already labels them "2-bed sample flat — Central and Western", so a saved sample
+is self-identifying wherever it appears.
+
+But a label cannot do the two things the heart needs. It cannot answer **is this already saved**
+(the heart has to render filled before anything is clicked) and it is not an **identity**
+(un-hearting must delete the row *this* listing produced, and three listings share a district and
+can share a bedroom count, so labels collide by construction). Hence `properties.demo_listing_id`,
+nullable, with a **partial index** on `(owner_id, demo_listing_id) where not null` — the only query
+is "which samples has this owner saved", which never wants the null majority. Not a foreign key:
+the catalogue is a TypeScript fixture, and seeding fabricated rows into the database to point at is
+the thing this project refuses.
+
+### The tick only exists on saved cards
+
+The comparison reads **stored snapshots**, so there is nothing for it to show about a listing
+nobody has saved. Heart first, then the tick appears. `MAX_COMPARE` moved out of the compare page
+into `listing-actions.tsx`, because the bar has to disable at the ceiling and the page has to
+enforce it — two copies of that number is one too many.
+
+The bar is **fixed to the bottom of the viewport**, since the thing it acts on is the list you are
+scrolling; a button that scrolls away with the first card you ticked is a button you hunt for
+again. With one selected it says so and shows Compare **disabled rather than absent** — a control
+that only appears once the condition is met leaves a reader unsure whether a second tick does
+anything.
+
+### Three things found while building it
+
+- **`useSearchParams` broke the production build.** Reading `?ids=` with it opts a page out of
+  static prerendering unless wrapped in `Suspense`, and `next build` failed on
+  `/portfolio/compare` — loudly, which is the good case. Replaced by reading `location.search`
+  once inside the load effect, which is also **truer to the intent**: the ids are a *seed*, not
+  state. A reader who unticks a column must not have it reinstated because the URL still names it,
+  so the hook's reactivity would itself have been a bug. Ids that are not the caller's never match
+  a loaded row, so a hand-edited URL smuggles nothing in.
+- **The compare page had no loading and no error state.** It rendered its heading over empty space
+  while two fetches were in flight, and a rejected fetch left it that way for ever — identical to
+  having saved nothing. Found by a screenshot of a blank page, not by reading the code. Both states
+  exist now.
+- **A NUL byte got written into `property-finder.tsx`** by an over-escaped sentinel string in an
+  edit script; `grep` reporting the file as binary is what caught it. The sentinel was a bad idea
+  anyway and became a named helper.
+
+Verified against a real session: signed out the heart routes to `/login` rather than failing
+silently; hearting three samples produced three 201s for three distinct listings; three ticks
+appeared, and only on saved cards; the bar read "1 selected — pick one more", then 2, then "3 is
+the maximum"; Compare landed on `?ids=…` with four header columns and three pressed pills; and
+un-hearting took the count 3 → 2, deleting the right row. In My-properties mode the heart flipped
+`monitored` 0 → 1. No horizontal overflow at 1500px or 390px, no console errors, 36 engine tests
+pass, production build clean. Throwaway account deleted afterwards.
+
 ## Working conventions
 - Dates DD/MM/YYYY. Currency: **HKD** for Hong Kong, **VND** for Vietnam, **EUR** for
   France — always state which, never a bare number. Keep a single reporting currency
