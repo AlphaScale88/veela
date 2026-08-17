@@ -1156,7 +1156,7 @@ function ListingsTable({ rows }: { readonly rows: readonly Row[] }): React.JSX.E
               </td>
               <td className="px-4 py-2.5 text-right">
                 <Link
-                  href={`/analyse?listing=${r.listing.id}`}
+                  href={`/analyse?listing=${r.listing.id}&photo=${photoNumberForListing(r.listing.id)}`}
                   className="text-xs font-medium text-accent hover:underline"
                 >
                   Analyse →
@@ -1224,7 +1224,7 @@ function PropertyCard({
        * user hears in a list of links — "view full analysis" twelve times over is useless.
        */}
       <Link
-        href={`/analyse?listing=${listing.id}`}
+        href={`/analyse?listing=${listing.id}&photo=${photoNumberForRank(rank)}`}
         aria-label={`${listing.bedrooms}-bed sample flat in ${districtName(listing.districtId)}, ${formatCompactMoney(verdict.acquisition.price)}, ${formatPercent(verdict.returns.netYield)} net yield — open the full report`}
         className="absolute inset-0 z-10 rounded-card focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
       />
@@ -1283,7 +1283,7 @@ function PropertyCard({
             the overlay already gives this card exactly one stop in the tab order, and two
             links to the same place is one too many for a keyboard user. */}
         <Link
-          href={`/analyse?listing=${listing.id}`}
+          href={`/analyse?listing=${listing.id}&photo=${photoNumberForRank(rank)}`}
           tabIndex={-1}
           className="btn-secondary relative z-20 mt-2 w-full !py-1.5 !text-[12px]"
         >
@@ -1330,7 +1330,7 @@ function ListingRow({
       className={`card card-hover relative flex items-center gap-4 !p-3 ${selected ? "ring-2 ring-accent" : ""}`}
     >
       <Link
-        href={`/analyse?listing=${listing.id}`}
+        href={`/analyse?listing=${listing.id}&photo=${photoNumberForRank(rank)}`}
         aria-label={`${listing.bedrooms}-bed sample flat in ${districtName(listing.districtId)}, ${formatCompactMoney(verdict.acquisition.price)}, ${formatPercent(verdict.returns.netYield)} net yield — open the full report`}
         className="absolute inset-0 z-10 rounded-card focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
       />
@@ -1378,7 +1378,7 @@ function ListingRow({
           onClick={onHeart}
         />
         <Link
-          href={`/analyse?listing=${listing.id}`}
+          href={`/analyse?listing=${listing.id}&photo=${photoNumberForRank(rank)}`}
           tabIndex={-1}
           className="btn-secondary !px-3 !py-1.5 !text-[12px]"
         >
@@ -1467,9 +1467,38 @@ const LISTING_PHOTO_COUNT = 16;
  * card, and six identical thumbnails on one screen fails that job badly.
  */
 function photoForRank(rank: number): string {
-  const n = (rank % LISTING_PHOTO_COUNT) + 1;
-  return `/listings/listing-${String(n).padStart(2, "0")}.jpg`;
+  return listingPhotoPath(photoNumberForRank(rank));
 }
+
+/** 1-based file number, so it can travel in a link. */
+export function photoNumberForRank(rank: number): number {
+  return (rank % LISTING_PHOTO_COUNT) + 1;
+}
+
+/**
+ * A number derived from the listing itself, for callers that have no rank — the table, and any
+ * direct link to `/analyse?listing=…` typed or shared without the photo.
+ *
+ * **Not what the cards use, and that is the whole reason the rank scheme exists.** Selection by
+ * rank guarantees six consecutive cards never repeat an image (a page is 6 and there are 16
+ * photos); anything derived from the id is a draw from 16 that collides roughly four times in
+ * five over six cards. So the grid keeps rank, and the *link* carries the chosen number across —
+ * which is what makes the report show the same picture the reader clicked. This fallback only
+ * has to be stable and plausible, not collision-free, because nothing shows two of them at once.
+ */
+export function photoNumberForListing(listingId: string): number {
+  let h = 0;
+  for (let i = 0; i < listingId.length; i += 1) h = (h * 31 + listingId.charCodeAt(i)) >>> 0;
+  return (h % LISTING_PHOTO_COUNT) + 1;
+}
+
+export function listingPhotoPath(n: number): string {
+  const safe = ((Math.trunc(n) - 1 + LISTING_PHOTO_COUNT) % LISTING_PHOTO_COUNT) + 1;
+  return `/listings/listing-${String(safe).padStart(2, "0")}.jpg`;
+}
+
+/** The one sentence that must travel with any of these images, wherever they are shown. */
+export const LISTING_PHOTO_ALT = "Stock interior photograph — illustrative only, not this property";
 
 /**
  * A real photograph — but **not of this property**, because these listings are
@@ -1493,7 +1522,7 @@ function ListingPhoto({
     // would add a resizing pipeline over files that need no resizing.
     <img
       src={photoForRank(rank)}
-      alt="Stock interior photograph — illustrative only, not this property"
+      alt={LISTING_PHOTO_ALT}
       loading="lazy"
       className={`w-full bg-surfaceMuted object-cover ${className}`}
     />

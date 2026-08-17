@@ -43,7 +43,12 @@ import {
   type Draft,
   type FormProblem,
 } from "../../components/property-form";
-import { listingToDraft } from "../../components/property-finder";
+import {
+  LISTING_PHOTO_ALT,
+  listingPhotoPath,
+  listingToDraft,
+  photoNumberForListing,
+} from "../../components/property-finder";
 import { VerdictView } from "../../components/verdict-view";
 
 /**
@@ -141,6 +146,16 @@ export default function AnalysePage(): React.JSX.Element {
    * `/portfolio`. Cleared whenever the figures stop describing that row — see `setDraft` below.
    */
   const [loadedPropertyId, setLoadedPropertyId] = useState<string | null>(null);
+  /**
+   * The illustrative photo to show when this report came from a *sample* listing.
+   *
+   * Reported: "where are the photos when I click a listing?" — the card showed one and the report
+   * showed none, which reads as something broken rather than as a rule. The card's image is
+   * chosen by its **rank on the page** (six consecutive cards must not repeat, and there are only
+   * sixteen photos), so the report cannot re-derive it from the listing id — the link carries the
+   * number instead, and a link without one falls back to something stable for that listing.
+   */
+  const [listingPhoto, setListingPhoto] = useState<number | null>(null);
   /**
    * A location attached by hand, via the building search below.
    *
@@ -361,6 +376,12 @@ export default function AnalysePage(): React.JSX.Element {
       autoLoadedRef.current = true;
       const listing = DEMO_LISTINGS.find((l) => l.id === listingId);
       if (listing === undefined) return;
+      const photoParam = Number(params.get("photo"));
+      setListingPhoto(
+        Number.isFinite(photoParam) && photoParam > 0
+          ? photoParam
+          : photoNumberForListing(listing.id),
+      );
       const districtLabel =
         DEMO_DISTRICTS.find((d) => d.id === listing.districtId)?.nameEn ?? listing.districtId;
       // The same function `property-finder.tsx` uses to price the card in the first
@@ -860,6 +881,9 @@ export default function AnalysePage(): React.JSX.Element {
                photographs are of whatever is now in the form. Re-open from /portfolio to get them
                back — the row itself is untouched. */
             setLoadedPropertyId(null);
+            /* Same reasoning as the photos on a saved property: once the figures are edited they
+               no longer describe the sample the picture illustrated. */
+            setListingPhoto(null);
             setDraft((d) => ({ ...d, ...patch }));
           }}
           onSubmit={() => void submit()}
@@ -922,6 +946,34 @@ export default function AnalysePage(): React.JSX.Element {
               />
             </div>
 
+            {/**
+             * The picture the reader clicked, carried through so the report is recognisably the
+             * same listing.
+             *
+             * **The caption is not decoration.** These flats are fabricated and the photograph is
+             * stock, so the report has to say so where the picture is, not only in a banner
+             * further up the page — the same standard the finder's cards already meet. It is the
+             * one kind of photography the report allows besides the reader's own, and only
+             * because it is labelled as illustrating nothing.
+             */}
+            {listingPhoto !== null && (
+              <figure className="mt-6 overflow-hidden rounded-hero border border-line shadow-card">
+                {/* eslint-disable-next-line @next/next/no-img-element -- already sized and
+                    compressed to what this renders; next/image would add a pipeline over files
+                    that need no resizing. */}
+                <img
+                  src={listingPhotoPath(listingPhoto)}
+                  alt={LISTING_PHOTO_ALT}
+                  className="aspect-[16/9] w-full bg-surfaceMuted object-cover"
+                />
+                <figcaption className="bg-surfaceMuted px-4 py-2.5 text-xs leading-relaxed text-muted">
+                  Stock interior — <strong className="text-mist">illustrative only, not this
+                  property</strong>. This is a generated sample listing, so there is no real flat
+                  to photograph. Save a property of your own and you can attach your own pictures.
+                </figcaption>
+              </figure>
+            )}
+
             <div className="mt-6">
               <VerdictView verdict={verdict} />
             </div>
@@ -941,6 +993,19 @@ export default function AnalysePage(): React.JSX.Element {
              * to otherwise, and leaving them attached to changed numbers would imply the photos
              * are of whatever is now in the form.
              */}
+            {/* The answer to "where are the photos?" for the other case: a report that is not
+                yet a saved property has nowhere to put them. Said once, near the bottom, rather
+                than left to be discovered. */}
+            {loadedPropertyId === null && user !== null && saveState.status !== "saved" && (
+              <p className="mt-8 border-t border-line pt-6 text-sm leading-relaxed text-muted">
+                <strong className="text-mist">Your own photos and notes live on a saved
+                property.</strong>{" "}
+                Save this report to your portfolio and you can attach pictures of the flat and
+                write notes on it — both appear here whenever you open it again, and your notes
+                show up side by side on the comparison.
+              </p>
+            )}
+
             {loadedPropertyId !== null && user !== null && (
               <div className="mt-8 grid gap-8 border-t border-line pt-8 lg:grid-cols-2">
                 <PropertyPhotos propertyId={loadedPropertyId} ownerId={user.id} />

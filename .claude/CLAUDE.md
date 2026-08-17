@@ -2580,6 +2580,39 @@ errors.
 **Worth knowing:** this panel is only reachable **signed in**. A signed-out submit redirects to
 `/login` before validation runs, which is why the first attempt to reproduce it found nothing.
 
+## "Where are the photos when I click a listing?" (18/08/2026)
+
+A fair question with two different answers, and neither was on screen.
+
+**A sample listing.** The card shows a stock interior; the report showed nothing at all, which
+reads as broken rather than as a rule. The report now carries the picture through — and **the
+picture the reader actually clicked**, which was the awkward part: a card's image is chosen by its
+**rank on the page**, not by the listing, precisely so six consecutive cards never repeat from a
+set of sixteen. Anything derived from the id collides roughly four times in five across six cards,
+so the grid keeps rank and the **link carries the chosen number** (`?listing=…&photo=3`). A link
+without one — the table, or a shared URL — falls back to a stable number derived from the id,
+which only has to be plausible because nothing shows two of them at once.
+
+The caption is not decoration. The flat is fabricated and the photograph is stock, so it says so
+**where the picture is**, not only in a banner further up: *"Stock interior — illustrative only,
+not this property."* Same standard the cards already meet, and the reason this is the only
+photography the report allows besides the reader's own.
+
+**A report that is not a saved property.** Photos and notes belong to a row, and there isn't one
+yet — so the report now says where they live rather than leaving it to be discovered: save it, and
+you can attach pictures and write notes that appear whenever you reopen it and show up side by side
+on the comparison. That was the real gap behind the question.
+
+Both clear the moment the figures are edited, for the reason the saved-property photos already do.
+
+Verified signed in: the card's `listing-01.jpg` and the report's are the same file, the caption and
+alt text both carry the disclaimer, a direct link with no `photo` still shows one, no horizontal
+overflow, no console errors.
+
+**Worth knowing:** a *signed-out* click on a sample listing never reaches a report at all — it
+redirects to `/login`, because the report is gated. The first attempt to verify this found "no
+photo on the report" for that reason and not because the feature was broken.
+
 ## Working conventions
 - Dates DD/MM/YYYY. Currency: **HKD** for Hong Kong, **VND** for Vietnam, **EUR** for
   France — always state which, never a bare number. Keep a single reporting currency
