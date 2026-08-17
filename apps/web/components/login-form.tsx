@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useId, useState } from "react";
 
 import { useAuth } from "./auth-provider";
 
@@ -28,6 +28,10 @@ export function LoginForm({ next, heading, description }: Props): React.JSX.Elem
   const [password, setPassword] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /* Generated, not hard-coded: this component renders on `/login` *and* inline as
+     `/analyse`'s report gate, so a fixed id is a duplicate-id bug waiting for the day both
+     appear on one page — at which point a label silently points at the wrong input. */
+  const ids = useId();
 
   if (!configured) {
     return (
@@ -78,7 +82,26 @@ export function LoginForm({ next, heading, description }: Props): React.JSX.Elem
         }}
         className="space-y-3"
       >
+        {/**
+         * Real `<label>`s, hidden visually.
+         *
+         * These two boxes carried a placeholder and nothing else, which is not a label: a
+         * placeholder is the accessible name only as a last-resort fallback, it disappears
+         * the moment anything is typed, and it is the wrong text anyway — the email field
+         * announced as *"you@example.com"*. So a screen-reader user got no persistent name
+         * for either field on the one form the whole account system stands behind.
+         *
+         * `sr-only` rather than a visible label because the compact card is deliberate and
+         * `/signup` — which does show its labels — is the form where the extra guidance
+         * earns its space. A real hidden label beats `aria-label`: it is still a label
+         * element, so it is exposed consistently and picked up by page-translation tools
+         * that skip ARIA attributes.
+         */}
+        <label htmlFor={`${ids}-email`} className="sr-only">
+          Email address
+        </label>
         <input
+          id={`${ids}-email`}
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
@@ -87,7 +110,11 @@ export function LoginForm({ next, heading, description }: Props): React.JSX.Elem
           required
           className="w-full rounded-card border border-line bg-surfaceMuted px-3.5 py-2.5 text-sm outline-none focus:border-accent focus:bg-surface"
         />
+        <label htmlFor={`${ids}-password`} className="sr-only">
+          Password
+        </label>
         <input
+          id={`${ids}-password`}
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}

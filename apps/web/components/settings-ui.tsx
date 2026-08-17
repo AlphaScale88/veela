@@ -87,20 +87,38 @@ export function SettingsSection({
  * One setting. The control is pushed to the far right and the label given the room, which
  * is what makes a long list scannable — the eye runs down the labels, then down the
  * controls, without crossing between.
+ *
+ * **Pass `htmlFor` whenever `children` is a single form control.** The row's label text is
+ * otherwise a `<p>` sitting in a different subtree from the input, which looks like a label
+ * and is not one: a screen reader announcing the field falls back to its placeholder, so
+ * `/account`'s display-name box read out as *"Optional"*. Rendering a real `<label>` also
+ * makes the text clickable, which is the visible half of the same fix.
+ *
+ * It stays optional because several rows hold a button, a toggle or a sentence rather than a
+ * labellable control, and `htmlFor` pointing at nothing is worse than no label at all.
  */
 export function SettingRow({
   label,
   hint,
+  htmlFor,
   children,
 }: {
   readonly label: string;
   readonly hint?: ReactNode;
+  /** `id` of the control in `children`, when there is exactly one. */
+  readonly htmlFor?: string;
   readonly children: ReactNode;
 }): React.JSX.Element {
   return (
     <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-b border-line py-4 last:border-b-0">
       <div className="min-w-0 flex-1 basis-52">
-        <p className="text-[15px] text-mist">{label}</p>
+        {htmlFor === undefined ? (
+          <p className="text-[15px] text-mist">{label}</p>
+        ) : (
+          <label htmlFor={htmlFor} className="block cursor-pointer text-[15px] text-mist">
+            {label}
+          </label>
+        )}
         {hint !== undefined && (
           <p className="mt-0.5 text-xs leading-relaxed text-muted">{hint}</p>
         )}

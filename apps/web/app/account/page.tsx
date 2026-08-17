@@ -157,8 +157,13 @@ function ProfileSection(): React.JSX.Element {
 
   return (
     <SettingsSection title="Profile">
-      <SettingRow label="Display name" hint="Optional. Only you see it for now.">
+      <SettingRow
+        label="Display name"
+        hint="Optional. Only you see it for now."
+        htmlFor="account-display-name"
+      >
         <input
+          id="account-display-name"
           value={displayName}
           onChange={(e) => setDisplayName(e.target.value)}
           placeholder="Optional"
@@ -208,8 +213,10 @@ function EmailSection({
       <SettingRow
         label="Address you sign in with"
         hint="A confirmation link goes to the new address — nothing changes until you open it."
+        htmlFor="account-email"
       >
         <input
+          id="account-email"
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
@@ -286,8 +293,13 @@ function PasswordSection({
 
   return (
     <SettingsSection title="Password">
-      <SettingRow label="New password" hint={`${MIN_PASSWORD} characters minimum.`}>
+      <SettingRow
+        label="New password"
+        hint={`${MIN_PASSWORD} characters minimum.`}
+        htmlFor="account-new-password"
+      >
         <input
+          id="account-new-password"
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
@@ -295,8 +307,9 @@ function PasswordSection({
           className="w-56 rounded-card border border-line bg-surfaceMuted px-3 py-2 text-sm outline-none focus:border-accent focus:bg-surface"
         />
       </SettingRow>
-      <SettingRow label="Repeat it">
+      <SettingRow label="Repeat it" htmlFor="account-repeat-password">
         <input
+          id="account-repeat-password"
           type="password"
           value={confirm}
           onChange={(e) => setConfirm(e.target.value)}

@@ -2248,6 +2248,49 @@ reproduction. No console errors at any point.
 **One thing not explained:** a single orphaned object survived one earlier run of that delete path,
 and did not reproduce in two clean rounds afterwards. Recorded rather than dismissed.
 
+## Six form fields had no accessible name (17/08/2026)
+
+Noticed while writing a Playwright login for something else: `/login`'s inputs could only be
+targeted by CSS, never by label. That is the symptom of a real defect — **a placeholder is not a
+label.** It is the accessible name only as a last-resort fallback, it disappears the moment
+anything is typed, and here it was the wrong text anyway: the email field announced itself as
+*"you@example.com"*. On the one form the whole account system stands behind.
+
+`sr-only` `<label>`s rather than visible ones on `/login`, because the compact card is deliberate
+and `/signup` — which already showed proper labels — is where the extra guidance earns its space.
+**A hidden real label beats `aria-label`**: it is still a label element, so it is exposed
+consistently and picked up by page-translation tools that skip ARIA attributes.
+
+**Generated ids, via `useId`.** `LoginForm` renders on `/login` *and* inline as `/analyse`'s report
+gate, so a hard-coded `id` is a duplicate-id bug waiting for the day both appear on one page — at
+which point a label silently points at the wrong input.
+
+**The bigger find was `/account`.** `SettingRow` rendered its label text as a `<p>` in a different
+subtree from the control — something that looks like a label and is not one. Four fields affected;
+the display-name box read out as *"Optional"*, from its placeholder. `SettingRow` now takes an
+optional `htmlFor` and renders a real `<label>` when given one. Optional on purpose: several rows
+hold a button, a toggle or a sentence rather than a labellable control, and `htmlFor` pointing at
+nothing is worse than no label at all. It also makes the text clickable, which is the visible half
+of the same fix.
+
+**One of the four was found only by measuring.** Grepping for `placeholder=` found three; the
+email-change field has no placeholder at all, so it never appeared in the search — it surfaced when
+a script walked the rendered DOM asking *which controls have no accessible name by any route*. The
+search was for the symptom; the audit was for the defect.
+
+Verified by resolving each field's name the way a browser does, not by reading markup: `/login`
+gives "Email address" and "Password", `/analyse`'s gate the same with **no duplicate ids**,
+`/signup` unchanged, and all four `/account` fields resolve via `label[for]` with no dangling
+references and nothing unlabelled.
+
+**Two things worth knowing for the next time a test account is made by SQL** (see the photos
+section for why that is the route): `auth.users` alone is not enough — without a matching
+**`auth.identities` row with `provider = 'email'`** the app's own `hasPasswordIdentity` check
+correctly concludes the account signs in with Google and hides the password fields entirely, so the
+account is not representative. And `/account`'s sections are independent disclosures whose state
+must be driven off `aria-expanded`; clicking each header blindly toggles shut what the previous
+click opened, which produced an audit that examined an empty page and reported no problems.
+
 ## Working conventions
 - Dates DD/MM/YYYY. Currency: **HKD** for Hong Kong, **VND** for Vietnam, **EUR** for
   France — always state which, never a bare number. Keep a single reporting currency
