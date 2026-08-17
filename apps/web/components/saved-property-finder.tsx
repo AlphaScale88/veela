@@ -579,6 +579,13 @@ function SavedRowCard({
         selected ? "ring-2 ring-accent" : ""
       }`}
     >
+      {/* Stretched link — see `property-finder.tsx`'s card for why this is an overlay anchor
+          rather than an onClick or a wrapping Link. */}
+      <Link
+        href={`/analyse?property=${property.id}`}
+        aria-label={`${property.label}, ${formatCompactMoney({ amount: property.priceMinor, currency: property.currency })}, ${formatPercent(netYield)} net yield — open the full report`}
+        className="absolute inset-0 z-10 rounded-card focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+      />
       {/* No placeholder when there is no photo — a stock interior standing in for someone's
           own flat is the same false claim this product refuses to make with a number. */}
       {coverUrl !== undefined ? (
@@ -626,7 +633,7 @@ function SavedRowCard({
         </p>
         {!compact && (
           <>
-            <div className="mt-2 flex items-center gap-2">
+            <div className="relative z-20 mt-2 flex items-center gap-2">
               <CompareCheckbox
                 checked={compareChecked}
                 disabled={compareFull && !compareChecked}
@@ -643,7 +650,8 @@ function SavedRowCard({
             </div>
             <Link
               href={`/analyse?property=${property.id}`}
-              className="btn-secondary mt-2 w-full !py-1.5 !text-[12px]"
+              tabIndex={-1}
+              className="btn-secondary relative z-20 mt-2 w-full !py-1.5 !text-[12px]"
             >
               Open the report
             </Link>
@@ -652,7 +660,7 @@ function SavedRowCard({
       </div>
 
       {compact && (
-        <>
+        <div className="relative z-20 flex shrink-0 items-center gap-2">
           <CompareCheckbox
             checked={compareChecked}
             disabled={compareFull && !compareChecked}
@@ -674,11 +682,12 @@ function SavedRowCard({
           </div>
           <Link
             href={`/analyse?property=${property.id}`}
+            tabIndex={-1}
             className="btn-secondary shrink-0 !px-3 !py-1.5 !text-[12px]"
           >
             Open
           </Link>
-        </>
+        </div>
       )}
 
       {/* The yield badge sits over the photo where the demo cards put theirs — but only when

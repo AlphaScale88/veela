@@ -2437,6 +2437,37 @@ un-hearting took the count 3 → 2, deleting the right row. In My-properties mod
 `monitored` 0 → 1. No horizontal overflow at 1500px or 390px, no console errors, 36 engine tests
 pass, production build clean. Throwaway account deleted afterwards.
 
+## The whole card opens the listing (17/08/2026)
+
+Asked to make the entire card clickable, photo included, rather than only its button.
+
+**A "stretched link", not an `onClick` on the card.** An `onClick` has no `href`, so middle-click,
+Cmd-click, "open in new tab" and the status-bar preview all stop working, and a keyboard user gets
+nothing to focus. A `<Link>` *wrapping* the card was the other obvious option and is invalid: the
+heart, the compare tick and the CTA are themselves interactive, and an anchor inside an anchor
+behaves differently in every browser. So: one absolutely positioned anchor covering the card at
+`z-10`, with those three raised to `z-20`. The text sits *under* the overlay, which is what makes
+clicking the text navigate.
+
+**The accessible name is the card's whole substance** — "2-bed sample flat in Central and Western,
+HKD 9.11M, 2.68% net yield — open the full report" — because that is what a screen-reader user
+hears when tabbing a list of links. Twelve links all named "View full analysis" would be useless.
+
+**The visible button stays, with `tabIndex={-1}`.** A clickable card is discoverable only by trying
+it, so the button still says so; but the overlay already gives the card one tab stop, and two
+focusable links to the same destination is one too many.
+
+Verified in a browser, one page per assertion (sharing a page raced each navigation against the
+previous one's prefetches, which failed the harness rather than the feature): clicking the photo
+and clicking the text both land on `/analyse?listing=HK-CW-3`; clicking the heart goes to `/login`
+and **does not** open the listing; the anchors alternate `[null, "-1", null, "-1"]`, confirming one
+focusable overlay and one non-focusable CTA per card. No overflow, no console errors, production
+build clean.
+
+**Playwright note for next time:** it refuses to click an element another element intercepts, which
+is exactly what a correct overlay does — so `img.click()` retries forever and looks like a bug in
+the feature. Click a coordinate instead; that is what a user does anyway.
+
 ## Working conventions
 - Dates DD/MM/YYYY. Currency: **HKD** for Hong Kong, **VND** for Vietnam, **EUR** for
   France — always state which, never a bare number. Keep a single reporting currency

@@ -1206,13 +1206,33 @@ function PropertyCard({
   return (
     <article
       onMouseEnter={onSelect}
-      className={`card card-hover overflow-hidden !p-0 ${selected ? "ring-2 ring-accent" : ""}`}
+      className={`card card-hover relative overflow-hidden !p-0 ${selected ? "ring-2 ring-accent" : ""}`}
     >
+      {/**
+       * The whole card opens the listing — the "stretched link" pattern: one absolutely
+       * positioned anchor covering the card, with the genuinely interactive children raised
+       * above it.
+       *
+       * Not an `onClick` on the `<article>`: that gives no href, so middle-click, ⌘-click and
+       * "open in new tab" all stop working, and a keyboard user gets nothing to focus. Not a
+       * `<Link>` wrapping everything either — the heart, the tick and the button are themselves
+       * interactive, and an anchor nested inside an anchor is invalid and behaves differently
+       * per browser. The overlay sits *under* the text (so a click on the text still navigates)
+       * and *over* nothing else.
+       *
+       * The accessible name is the whole card's substance, because that is what a screen-reader
+       * user hears in a list of links — "view full analysis" twelve times over is useless.
+       */}
+      <Link
+        href={`/analyse?listing=${listing.id}`}
+        aria-label={`${listing.bedrooms}-bed sample flat in ${districtName(listing.districtId)}, ${formatCompactMoney(verdict.acquisition.price)}, ${formatPercent(verdict.returns.netYield)} net yield — open the full report`}
+        className="absolute inset-0 z-10 rounded-card focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+      />
       <div className="relative">
         <ListingPhoto rank={rank} className="aspect-[16/9]" />
         {/* Heart top-left, yield top-right — Zillow's own placement, and it keeps the two apart
             so neither is clicked by accident. */}
-        <span className="absolute left-2.5 top-2.5">
+        <span className="absolute left-2.5 top-2.5 z-20">
           <HeartButton
             filled={savedPropertyId !== undefined}
             busy={heartBusy}
@@ -1233,7 +1253,7 @@ function PropertyCard({
         {/* Only once it is saved: the comparison reads stored snapshots, so there is nothing for
             it to show about a listing nobody has saved. */}
         {savedPropertyId !== undefined && (
-          <span className="absolute bottom-2.5 left-2.5">
+          <span className="absolute bottom-2.5 left-2.5 z-20">
             <CompareCheckbox
               checked={compareChecked}
               disabled={compareFull && !compareChecked}
@@ -1258,9 +1278,14 @@ function PropertyCard({
         </p>
         <FeatureChips listing={listing} max={3} />
 
+        {/* Kept, and raised above the overlay. The card being clickable is discoverable only
+            by trying it; a visible button says so without being tried. `tabIndex={-1}` because
+            the overlay already gives this card exactly one stop in the tab order, and two
+            links to the same place is one too many for a keyboard user. */}
         <Link
           href={`/analyse?listing=${listing.id}`}
-          className="btn-secondary mt-2 w-full !py-1.5 !text-[12px]"
+          tabIndex={-1}
+          className="btn-secondary relative z-20 mt-2 w-full !py-1.5 !text-[12px]"
         >
           View full analysis
         </Link>
@@ -1302,8 +1327,13 @@ function ListingRow({
   return (
     <article
       onMouseEnter={onSelect}
-      className={`card card-hover flex items-center gap-4 !p-3 ${selected ? "ring-2 ring-accent" : ""}`}
+      className={`card card-hover relative flex items-center gap-4 !p-3 ${selected ? "ring-2 ring-accent" : ""}`}
     >
+      <Link
+        href={`/analyse?listing=${listing.id}`}
+        aria-label={`${listing.bedrooms}-bed sample flat in ${districtName(listing.districtId)}, ${formatCompactMoney(verdict.acquisition.price)}, ${formatPercent(verdict.returns.netYield)} net yield — open the full report`}
+        className="absolute inset-0 z-10 rounded-card focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+      />
       <ListingPhoto rank={rank} className="h-16 w-20 shrink-0 rounded-card" />
 
       <div className="min-w-0 flex-1">
@@ -1329,7 +1359,7 @@ function ListingRow({
         </span>
       </div>
 
-      <div className="flex shrink-0 items-center gap-2">
+      <div className="relative z-20 flex shrink-0 items-center gap-2">
         {savedPropertyId !== undefined && (
           <CompareCheckbox
             checked={compareChecked}
@@ -1349,6 +1379,7 @@ function ListingRow({
         />
         <Link
           href={`/analyse?listing=${listing.id}`}
+          tabIndex={-1}
           className="btn-secondary !px-3 !py-1.5 !text-[12px]"
         >
           Analyse
