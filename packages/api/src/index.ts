@@ -1281,6 +1281,47 @@ ${area}`,
   })
 
   /**
+   * Every **real** observation held for one district, latest per metric.
+   *
+   * One request rather than five. `/market/latest` answers "this metric across all districts",
+   * which is what a choropleth wants; a market overview wants the transpose — all metrics for one
+   * district — and building it out of five calls to the other endpoint would be five round trips
+   * to assemble one panel.
+   *
+   * **It returns only what is genuinely in `market_observations`**, which is population and
+   * households from the 2021 Census and stock, completions and vacancy from the RVD. There is no
+   * median sale price, no days on market and no listings count, because Hong Kong publishes none
+   * of those per district — see the overview component for the list and the reasons. A metric with
+   * no row simply does not appear, rather than appearing as zero.
+   */
+  .get("/market/district/:districtId", async (c) => {
+    const districtId = c.req.param("districtId");
+    const db = c.get("db");
+
+    const rows = await db.execute(sql`
+      select distinct on (o.metric)
+        o.metric, o.value, o.period_start, o.period_months, o.source
+      from market_observations o
+      where o.district_id = ${districtId}
+      order by o.metric, o.period_start desc
+    `);
+
+    const observations = (rows as unknown as Record<string, unknown>[]).map((r) => ({
+      metric: String(r["metric"]),
+      value: Number(r["value"]),
+      periodStart: String(r["period_start"]),
+      periodMonths: Number(r["period_months"]),
+      source: String(r["source"]),
+    }));
+
+    return c.json({
+      districtId,
+      observations,
+      sources: [...new Set(observations.map((o) => o.source))],
+    });
+  })
+
+  /**
    * Free-text building search, and the one place this product acquires **real
    * per-building data**. Resolved live against the Government's Address Lookup Service
    * (see `address-lookup.ts` for why ALS rather than Lands Department footprints), then

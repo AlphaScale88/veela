@@ -16,6 +16,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { Choropleth } from "./choropleth";
 import { DistrictKpiSummary } from "./district-kpi-summary";
+import { DistrictOverview } from "./district-overview";
 import { DistrictMap, normaliseDistrictValues } from "./district-map";
 import { SeriesChart } from "./series-chart";
 
@@ -244,6 +245,12 @@ export function MarketExplorer(): React.JSX.Element {
 
       {/* The KPI tiles are all synthetic, so clicking one selects a synthetic metric —
           which correctly flips the banner above back to "Generated figures". */}
+      {/* The real figures first, then the demo series. The order is the disclosure: everything in
+          `DistrictOverview` is published by the RVD or the Census and carries its own period, while
+          `DistrictKpiSummary` below it drives the map from generated series and says so. Putting
+          the synthetic block first would have let it borrow the credibility of the real one. */}
+      <DistrictOverview districtId={districtId} districtName={districtName} />
+
       <DistrictKpiSummary districtId={districtId} districtName={districtName} onSelectMetric={setSelected} />
 
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
