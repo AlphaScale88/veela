@@ -26,6 +26,20 @@ declare namespace NodeJS {
     /** Where the Hono API lives. Unset in local development, where the app falls back to
      *  `http://localhost:3000`. */
     readonly EXPO_PUBLIC_API_URL?: string;
+
+    /**
+     * Supabase, for signing in. Both optional and both checked before use: without them the app
+     * still runs and the Analyse tab still works, because that flow needs no account — the same
+     * zero-configuration rule the web follows for these exact keys.
+     *
+     * **Adding a variable means adding it here.** This interface is deliberately a closed list
+     * rather than an index signature, so reading an undeclared variable is a compile error rather
+     * than silently `undefined` at runtime on a device. Omitting these two is what failed CI on
+     * eddc1be: *"Property 'EXPO_PUBLIC_SUPABASE_URL' does not exist on type 'ProcessEnv'"*. That
+     * is the guard working, not the guard being in the way.
+     */
+    readonly EXPO_PUBLIC_SUPABASE_URL?: string;
+    readonly EXPO_PUBLIC_SUPABASE_ANON_KEY?: string;
   }
 }
 
