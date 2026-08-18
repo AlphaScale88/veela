@@ -13,6 +13,126 @@ import { AppShell } from "../../../components/app-shell";
  * A Server Component, unusually for an app-shell page: nothing here is interactive or
  * user-specific, and `HK_RULE_SETS` is a plain import, not a fetch.
  */
+/**
+ * The glossary and the official-source list, moved here when `/resources` was removed.
+ *
+ * `/resources` carried three things: these terms, these links, and a copy of the stamp duty
+ * scales. **The third was already a duplicate of this page** — both read `HK_RULE_SETS`, so the
+ * scales existed twice with one object behind them. That is the argument for the merge: a reader
+ * asking "what does *saleable area* mean" and a reader asking "what is the duty on HK$9M" are the
+ * same reader, one paragraph apart, and splitting them across two pages meant the definitions sat
+ * somewhere the rules were not.
+ *
+ * Nothing was rewritten in the move. Terms that point at "Market Regulations" now point at the
+ * page they are on, which is the only edit.
+ */
+const GLOSSARY: readonly { readonly term: string; readonly definition: string }[] = [
+  {
+    term: "Net yield",
+    definition:
+      "Net income (rent, minus vacancy, management fees, rates, tax) divided by the total cash to acquire the property, before financing. The headline number on every report.",
+  },
+  {
+    term: "Gross yield",
+    definition: "Annual rent divided by price — the simplest, roughest read, before any cost is subtracted.",
+  },
+  {
+    term: "Cash-on-cash return",
+    definition:
+      "Net income after financing, divided by the cash actually invested (the deposit plus costs, not the full price) — the number that matters once a mortgage is in the picture.",
+  },
+  {
+    term: "Payback period",
+    definition:
+      "Years of net income needed to recover the cash invested. A longer payback isn't necessarily bad — it depends what else the report finds.",
+  },
+  {
+    term: "Stamp duty (AVD)",
+    definition:
+      "Ad Valorem Stamp Duty — a one-off tax on the purchase price, on a sliding scale that depends heavily on whether the buyer is a first-time Hong Kong permanent resident. The actual bands are at the top of this page.",
+  },
+  {
+    term: "Property Tax",
+    definition:
+      "Hong Kong's tax on rental income — 15% of the net assessable value (rent, less a 20% notional allowance for repairs). Not the same tax as Profits Tax or Salaries Tax.",
+  },
+  {
+    term: "Government rates",
+    definition:
+      "A recurring charge on the rateable value of a property, separate from — and much smaller than — stamp duty.",
+  },
+  {
+    term: "The 28-day rule (Cap. 349)",
+    definition:
+      "Letting a Hong Kong residential property for under 28 consecutive days without a guesthouse licence is a criminal offence, carrying up to HK$500,000 and three years' imprisonment. This is why Veela has no short-term-rental features.",
+  },
+  {
+    term: "Capital gains",
+    definition:
+      "Hong Kong has no capital gains tax on investment property. Frequent buying and selling can still be assessed as trading under Profits Tax — a risk the report flags, not computes.",
+  },
+  {
+    term: "Saleable area",
+    definition:
+      "The floor area you can actually use, measured to the inside of the walls. Hong Kong listings historically quoted gross floor area, which adds a share of lifts, lobbies and clubhouse — typically 20-30% larger. Since 2013 residential sales must quote saleable area, but older listings and casual conversation still mix them, and comparing a saleable figure with a gross one makes a flat look far better value than it is. Everything Veela computes uses saleable area.",
+  },
+  {
+    term: "Efficiency ratio",
+    definition:
+      "Saleable area divided by gross floor area. A high ratio means less of what you buy is corridor and clubhouse. Older buildings often beat newer ones here, which is part of why price per square foot alone is a poor comparison between developments.",
+  },
+  {
+    term: "Rateable value",
+    definition:
+      "The Rating and Valuation Department's estimate of the annual open-market rent of a property. Government rates are charged as a percentage of it, not of the purchase price. Veela estimates rates from your rent figure when you do not supply a rateable value, and the report says so — the real figure comes from the RVD and will differ.",
+  },
+  {
+    term: "Government rent",
+    definition:
+      "Separate from rates, and often confused with them. A charge on land held under a lease that requires it — commonly 3% of rateable value a year. Whether it applies depends on the lot's own lease terms, which is why it is not assumed for every property.",
+  },
+  {
+    term: "AVD Scale 1 and Scale 2",
+    definition:
+      "The two ad valorem stamp duty scales. Scale 2 is the lower one and applies to a Hong Kong permanent resident buying who owns no other residential property. Scale 1 is the flat higher rate that applies otherwise — buying a second property, or buying through a company. Which one you fall under is usually the single largest cost difference in a Hong Kong purchase, which is why the report asks about it before anything else.",
+  },
+  {
+    term: "Marginal relief",
+    definition:
+      "Where a stamp duty band changes, a small increase in price would otherwise cause a large jump in duty. Marginal relief caps the duty so that crossing a boundary never costs more than the extra price paid. Veela's scale table is tested for continuity at every one of these boundaries — the property that proves a transcription of the IRD table is correct rather than merely plausible.",
+  },
+  {
+    term: "BSD, SSD and NRSD",
+    definition:
+      "Buyer's Stamp Duty, Special Stamp Duty and New Residential Stamp Duty — the cooling measures removed in February 2024. They are modelled rather than deleted, because the rules are versioned by transaction date: a purchase dated while they applied still prices under them.",
+  },
+  {
+    term: "Vacancy rate",
+    definition:
+      "The share of the year a flat sits empty between tenants. A report assuming none is assuming perfect, uninterrupted letting, which no landlord experiences. Veela defaults to 4% — about two weeks a year — and raises a finding if you set it to zero.",
+  },
+  {
+    term: "Provisional and formal agreement",
+    definition:
+      "A Hong Kong purchase usually runs provisional agreement (with an initial deposit, commonly 3-5%), then a formal agreement within a couple of weeks (taking the deposit to around 10%), then completion. Stamp duty is generally payable within 30 days of the earlier chargeable agreement — a timing question worth putting to your solicitor rather than inferring from a calculator.",
+  },
+];
+
+/** The official sources everything on this page and in every report is checkable against. */
+const OFFICIAL_SOURCES: readonly { readonly label: string; readonly href: string }[] = [
+  { label: "Inland Revenue Department — stamp duty rates", href: "https://www.gov.hk/en/residents/taxes/stamp/stamp_duty_rates.htm" },
+  { label: "Inland Revenue Department — ad valorem duty FAQ", href: "https://www.ird.gov.hk/eng/faq/avd.htm" },
+  { label: "Rating and Valuation Department — property market statistics", href: "https://www.rvd.gov.hk/en/publications/property_market_statistics.html" },
+  { label: "Rating and Valuation Department — rates and Government rent", href: "https://www.rvd.gov.hk/en/public_services/index.html" },
+  { label: "Land Registry — monthly statistics", href: "https://www.landreg.gov.hk/en/monthly/agreement.htm" },
+  { label: "Land Registry — search fees", href: "https://www.landreg.gov.hk/en/services/search_fee.htm" },
+  { label: "Census and Statistics Department", href: "https://www.censtatd.gov.hk/en/" },
+  { label: "Estate Agents Authority — check an agent's licence", href: "https://www.eaa.org.hk/en-us/Information-Centre/Licensee-Search" },
+  { label: "Law Society of Hong Kong — find a solicitor", href: "https://www.hklawsoc.org.hk/en/Serve-the-Public/The-Law-List" },
+  { label: "Hong Kong Monetary Authority — monthly statistical bulletin", href: "https://www.hkma.gov.hk/eng/data-publications-and-research/statistics/monthly-statistical-bulletin/" },
+  { label: "Hotel and Guesthouse Accommodation Ordinance (Cap. 349)", href: "https://clic.org.hk/en/topics/landlord_tenant/thingsYouNeedToNote/convert_or_use_property_to_grant_short-term_leases" },
+];
+
 export default function MarketRegulationsPage(): React.JSX.Element {
   const rules = HK_RULE_SETS[HK_RULE_SETS.length - 1];
   if (rules === undefined) {
@@ -126,8 +246,27 @@ export default function MarketRegulationsPage(): React.JSX.Element {
         </Section>
       )}
 
+      <Section title="Terms this report uses">
+        <p className="text-sm leading-relaxed text-muted">
+          Moved here from the Resources page, which also carried a second copy of the stamp duty
+          scales above — both read the same rule set, so the definitions now sit next to the rules
+          they define rather than one page away.
+        </p>
+        <dl className="mt-4 divide-y divide-line overflow-hidden rounded-panel border border-line bg-surface">
+          {GLOSSARY.map(({ term, definition }) => (
+            <div key={term} className="px-4 py-3">
+              <dt className="text-[14px] font-semibold text-mist">{term}</dt>
+              <dd className="mt-1 text-sm leading-relaxed text-muted">{definition}</dd>
+            </div>
+          ))}
+        </dl>
+      </Section>
+
       <Section title="Sources">
-        <ul className="space-y-1 text-sm">
+        <p className="text-sm leading-relaxed text-muted">
+          The rule set on this page cites these directly:
+        </p>
+        <ul className="mt-2 space-y-1 text-sm">
           {rules.meta.sources.map((s) => (
             <li key={s}>
               <a
@@ -137,6 +276,27 @@ export default function MarketRegulationsPage(): React.JSX.Element {
                 className="font-mono text-xs underline decoration-line underline-offset-4 hover:text-mist"
               >
                 {s}
+              </a>
+            </li>
+          ))}
+        </ul>
+
+        <p className="mt-5 text-sm leading-relaxed text-muted">
+          And the wider set everything in the product is checkable against — regulators and
+          registers, not a curated list of providers. Veela vets nobody.
+        </p>
+        <ul className="mt-2 space-y-1.5 text-sm">
+          {/* Filtered against the rule set's own citations, so a URL never appears twice on one
+              page just because two lists happen to contain it. */}
+          {OFFICIAL_SOURCES.filter((o) => !rules.meta.sources.includes(o.href)).map((o) => (
+            <li key={o.href}>
+              <a
+                href={o.href}
+                target="_blank"
+                rel="noreferrer"
+                className="underline decoration-line underline-offset-4 hover:text-mist"
+              >
+                {o.label}
               </a>
             </li>
           ))}
@@ -159,11 +319,16 @@ function ScaleTable({ scale }: { readonly scale: StampDutyScale }): React.JSX.El
   const rows = describeBands(scale.bands);
   return (
     <div className="card overflow-x-auto p-0">
-      <caption className="sr-only">{scale.label}</caption>
+      {/* The label was a `<caption className="sr-only">` here, *outside* the table. A `<caption>`
+          must be the first child of its `<table>`; a browser relocates a stray one, so the
+          server-rendered HTML never matched the hydrated DOM and this page threw a hydration
+          error on every visit. It was also redundant with the visible label directly below it.
+          Removed, and the table names itself instead. Pre-existing, found by running this page
+          with the console captured while merging the Resources content into it. */}
       <p className="border-b border-line px-4 py-2.5 text-sm font-semibold text-mist">
         {scale.label}
       </p>
-      <table className="w-full text-sm">
+      <table className="w-full text-sm" aria-label={scale.label}>
         <thead>
           <tr className="border-b border-line bg-surfaceMuted text-left text-xs text-muted">
             <th scope="col" className="px-4 py-2 font-medium">Consideration</th>

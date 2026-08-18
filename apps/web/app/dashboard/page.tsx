@@ -5,7 +5,6 @@ import { useEffect, useState } from "react";
 
 import {
   AppShell,
-  BookIcon,
   FolderIcon,
   GearIcon,
   MapIcon,
@@ -125,12 +124,6 @@ export default function DashboardPage(): React.JSX.Element {
           icon={GearIcon}
           title="Manage"
           detail="Your account and how your data is used."
-        />
-        <Tile
-          href="/resources"
-          icon={BookIcon}
-          title="Resources"
-          detail="What net yield, cap rate and stamp duty scales actually mean, and where the numbers come from."
         />
       </div>
     </AppShell>

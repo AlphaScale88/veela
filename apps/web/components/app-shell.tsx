@@ -170,7 +170,6 @@ const SERVICES_LINKS: readonly NavLink[] = [
  */
 const TAIL_LINKS: readonly NavLink[] = [
   { href: "/account", label: "Settings", icon: GearIcon },
-  { href: "/resources", label: "Resources", icon: BookIcon },
 ];
 
 /** Home Valuation's glyph. It was drawn for Pricing, which has since left this nav; kept

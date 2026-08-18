@@ -2699,6 +2699,48 @@ yield silently computed over four of seven properties is a wrong number presente
 Verified at 1500px and 390px: no horizontal overflow, no console errors, 49 engine tests pass.
 Throwaway account deleted.
 
+## Resources removed, its content merged into Market Regulations (18/08/2026)
+
+Asked to remove Resources and dispatch its content where needed.
+
+`/resources` carried three things. **One was already a duplicate:** the stamp duty scales, which
+`/research/market-regulations` renders from the same `HK_RULE_SETS` object. Two pages, one source
+of truth, two copies of the same table — so the merge deleted work rather than moving it.
+
+The other two moved intact: the **20-term glossary** and the **12 official-source links**. Market
+Regulations was the right destination rather than the footer or the report, because a reader asking
+*"what does saleable area mean"* and a reader asking *"what is the duty on HK$9M"* are the same
+reader one paragraph apart, and the definitions were sitting on a different page from the rules
+they define. Nothing was rewritten; the only edits were terms that said "see Market Regulations"
+now pointing at the page they are on, and the Cap. 349 glossary entry picking up the corrected
+HK$500,000 / 3-year penalty.
+
+**The source list is deduplicated against the rule set's own citations** rather than concatenated.
+`rules.meta.sources` already prints the IRD URLs the scales come from, and the wider list contains
+one of them — so it is filtered, and the page shows twelve links with no repeats rather than
+thirteen with one.
+
+Removed from: the sidebar (`TAIL_LINKS`), the dashboard tile, and the account menu's "How it works",
+which now points at Market Regulations. **`/resources` 308s** to the new home, permanent because
+the page is not coming back — same reasoning as the Services moves.
+
+### A pre-existing hydration bug this surfaced
+
+Market Regulations threw **"Hydration failed because the server rendered HTML didn't match the
+client"** on every visit, and had presumably been doing so since it was built. Cause: `ScaleTable`
+rendered `<caption className="sr-only">` as a child of a `<div>`, *outside* its `<table>`. A
+`<caption>` must be the first child of a table, so the browser relocates a stray one — after which
+the hydrated DOM can never match the server HTML.
+
+It was also redundant: the visible label sits directly beneath it. Removed, and the table names
+itself with `aria-label` instead. **Found only because merging content into the page meant opening
+it in a browser with the console captured** — the page had been shipped, linked and never watched.
+
+Verified: `/resources` redirects and resolves 200 on the destination; all 20 terms present including
+*Saleable area*, *Marginal relief* and *Provisional and formal agreement*; 12 external source links
+with **no duplicate URLs**; both stamp duty scale tables still render; no Resources anywhere in the
+sidebar or on the dashboard; no horizontal overflow; **no console errors**.
+
 ## Working conventions
 - Dates DD/MM/YYYY. Currency: **HKD** for Hong Kong, **VND** for Vietnam, **EUR** for
   France — always state which, never a bare number. Keep a single reporting currency

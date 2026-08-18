@@ -33,6 +33,11 @@ const config: NextConfig = {
       { source: "/services/insurance", destination: "/insurance", permanent: true },
       { source: "/services/agent-finder", destination: "/agent-finder", permanent: true },
       { source: "/services/valuation", destination: "/home-valuation", permanent: true },
+      /* `/resources` was removed on 18/08/2026 and its content merged into Market Regulations,
+         which already rendered the same stamp duty scales from the same rule set. Permanent
+         rather than temporary for the same reason as the Services moves: the page is not coming
+         back, so the old URL's standing should transfer rather than the two competing. */
+      { source: "/resources", destination: "/research/market-regulations", permanent: true },
     ];
   },
 };

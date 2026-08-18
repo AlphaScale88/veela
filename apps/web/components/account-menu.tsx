@@ -26,7 +26,7 @@ import { BookmarkIcon, DocumentIcon } from "./icons";
  * line does link to `/pricing`, which is honest, because that page says plainly that the
  * subscription is not on sale yet.
  *
- * Every remaining item goes somewhere real: `/portfolio`, `/account`, `/resources`, `/pricing`.
+ * Every remaining item goes somewhere real: `/portfolio`, `/account`, Market Regulations, `/pricing`.
  *
  * ## The plan line is not decorative
  *
@@ -46,7 +46,7 @@ interface MenuLink {
 const LINKS: readonly MenuLink[] = [
   { href: "/portfolio", label: "My properties", icon: BookmarkIcon },
   { href: "/account", label: "Settings", icon: GearIcon },
-  { href: "/resources", label: "How it works", icon: DocumentIcon },
+  { href: "/research/market-regulations", label: "How it works", icon: DocumentIcon },
 ];
 
 export function AccountMenu(): React.JSX.Element | null {
