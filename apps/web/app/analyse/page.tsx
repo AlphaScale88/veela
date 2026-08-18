@@ -32,6 +32,7 @@ import {
 } from "../../components/last-search";
 import { ReportBrief } from "../../components/report-brief";
 import { SavedReports } from "../../components/saved-reports";
+import { HoldProjectionPanel } from "../../components/hold-projection";
 import { PropertyNotes } from "../../components/property-notes";
 import { PropertyPhotos } from "../../components/property-photos";
 import {
@@ -976,6 +977,32 @@ export default function AnalysePage(): React.JSX.Element {
 
             <div className="mt-6">
               <VerdictView verdict={verdict} />
+            </div>
+
+            {/**
+             * The hold projection, directly under the report it extends.
+             *
+             * Placed after the verdict rather than beside it because it answers a different
+             * question — the report is "is this worth buying today", this is "and what does year
+             * ten look like". Reading them the other way round invites treating a projection as
+             * the finding, which it is not.
+             *
+             * Financing comes from the draft, not the verdict: `Verdict` carries the first-year
+             * interest it computed, not the loan that produced it.
+             */}
+            <div className="mt-6">
+              <HoldProjectionPanel
+                verdict={verdict}
+                {...(draft.loanAmount > 0
+                  ? {
+                      financing: {
+                        loanAmountMinor: Math.round(draft.loanAmount * 100),
+                        annualInterestRate: draft.annualInterestRate / 100,
+                        termYears: draft.termYears,
+                      },
+                    }
+                  : {})}
+              />
             </div>
 
             {/**

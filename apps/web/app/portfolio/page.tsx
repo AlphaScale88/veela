@@ -9,6 +9,7 @@ import { useEffect, useState } from "react";
 import { AppShell } from "../../components/app-shell";
 import { useAuth } from "../../components/auth-provider";
 import { BuildingIcon } from "../../components/icons";
+import { PortfolioSummary } from "../../components/portfolio-summary";
 import { PropertyNotes } from "../../components/property-notes";
 import { PropertyPhotos } from "../../components/property-photos";
 import { removeStoredPhotos, signedUrls, type PropertyPhoto } from "../../lib/property-photos";
@@ -185,7 +186,17 @@ export default function PortfolioPage(): React.JSX.Element {
         </p>
       )}
 
-      <div className="mt-8 grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+      {/* Totals first. Every landlord tool in this price bracket opens on the portfolio rather
+          than on a list of individual properties, and /portfolio never once said what the whole
+          thing was worth or earned. Summed from the same stored snapshots the cards show, so the
+          two cannot disagree. */}
+      {rows !== null && rows.length > 0 && (
+        <div className="mt-8">
+          <PortfolioSummary rows={rows} />
+        </div>
+      )}
+
+      <div className="mt-6 grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
         {rows?.map((row) => (
           <PropertyCard
             key={row.property.id}

@@ -4,3 +4,4 @@ export { HK_RULES_2026, HK_RULE_SETS } from "./rules/hk.js";
 export { computeVerdict } from "./verdict.js";
 export type { PropertyInput, Verdict, Finding, Severity } from "./verdict.js";
 export * from "./mortgage.js";
+export * from "./projection.js";

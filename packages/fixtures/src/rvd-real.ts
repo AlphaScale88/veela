@@ -1656,3 +1656,64 @@ export function estimateMonthlyRent(
     period: found.period,
   };
 }
+
+/**
+ * Compound annual growth in the RVD price and rent indices over a given look-back, derived from
+ * the series above rather than typed in.
+ *
+ * **This exists because the number is contentious, not because it is convenient.** A hold
+ * projection is dominated by its growth assumption, and the assumption is entirely a function of
+ * which window you measure. On these series, as at June 2026: five years gives a price CAGR of
+ * about **−3.9%**, twenty years about **+6.5%**, thirty about **+3.5%**. Same market, opposite
+ * conclusions. Deriving every window from the data lets the UI show the reader the whole spread
+ * instead of one flattering figure, and means none of them can go stale.
+ *
+ * Returns `null` for a window the series is too short to cover, rather than silently measuring a
+ * shorter one.
+ */
+export interface GrowthWindow {
+  readonly years: number;
+  readonly from: string;
+  readonly to: string;
+  /** Decimal, e.g. 0.035 for 3.5% a year. */
+  readonly priceCagr: number | null;
+  readonly rentCagr: number | null;
+}
+
+function cagrOver(
+  series: readonly { readonly periodStart: string; readonly value: number }[],
+  years: number,
+): { from: string; to: string; cagr: number } | null {
+  const end = series[series.length - 1];
+  if (end === undefined) return null;
+  const startPeriod = `${Number(end.periodStart.slice(0, 4)) - years}-${end.periodStart.slice(5)}`;
+  const start = series.find((r) => r.periodStart === startPeriod);
+  if (start === undefined || start.value <= 0) return null;
+  return { from: start.periodStart, to: end.periodStart, cagr: (end.value / start.value) ** (1 / years) - 1 };
+}
+
+/** The look-backs offered to the reader. Five is included precisely because it is negative. */
+export const GROWTH_LOOKBACK_YEARS = [5, 10, 15, 20, 30] as const;
+
+export function rvdGrowthWindows(): readonly GrowthWindow[] {
+  return GROWTH_LOOKBACK_YEARS.map((years) => {
+    const price = cagrOver(RVD_PRICE_INDEX, years);
+    const rent = cagrOver(RVD_RENT_INDEX, years);
+    const anchor = price ?? rent;
+    return {
+      years,
+      from: anchor?.from ?? "",
+      to: anchor?.to ?? "",
+      priceCagr: price?.cagr ?? null,
+      rentCagr: rent?.cagr ?? null,
+    };
+  });
+}
+
+/**
+ * The default window: **the longest available**, on the reasoning that it is the one nobody can
+ * accuse of being chosen. A five-year default would say Hong Kong property loses value; a
+ * twenty-year default would say it compounds at 6.5%. Both are true of their window and neither
+ * is a fair default.
+ */
+export const DEFAULT_GROWTH_LOOKBACK_YEARS = 30;

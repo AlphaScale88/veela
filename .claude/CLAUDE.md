@@ -2613,6 +2613,92 @@ overflow, no console errors.
 redirects to `/login`, because the report is gated. The first attempt to verify this found "no
 photo on the report" for that reason and not because the feature was broken.
 
+## The two most-used features that were missing (18/08/2026)
+
+Asked what the most-used features are, and to build them. **Veela has no users, so it has no usage
+data** — that had to be said first, because the honest source is what comparable products put at
+their centre and charge for, not our own telemetry.
+
+Audited against the price bracket Veela actually sits in (§7 of the market study: Stessa, Landlord
+Studio, Lendlord, PropertyData). Already built: the report, area profile, alerts, compare, notes,
+photos, importer, market performance, valuation, mortgage stress test. **Genuinely missing and
+high-use:** a portfolio total, a hold projection, a PDF export, rent-vs-buy, and saved searches.
+
+Built the first two. Saved searches needs a listings feed we do not have. **PDF export and "5 Land
+Registry searches a month" are both advertised on the pricing page and neither exists** — worth
+knowing, and mitigated only by that page saying the subscription is not on sale.
+
+### 1. The hold projection — the fourth promised output, finally built
+
+The product set out to produce four things; *capital gain or loss scenarios* was the one never
+built. `packages/core/src/projection.ts`, 13 new tests, **49 total**.
+
+**The entire design problem is the growth rate**, because it is one invisible assumption that
+decides the answer. Derived from our own RVD series, as at June 2026:
+
+| Look-back | Price CAGR | Rent CAGR |
+|---|---|---|
+| 5 years | **−3.9%** | +2.8% |
+| 10 years | +1.6% | +2.2% |
+| 15 years | +3.7% | +2.8% |
+| 20 years | **+6.5%** | +4.2% |
+| 30 years | +3.5% | +1.9% |
+
+A five-year window says Hong Kong prices *fall*. A twenty-year window, measured from the 2006
+trough, says they compound at 6.5%. **Same market, opposite conclusions.** So:
+
+- `projectHold` takes the growth rates as **required arguments with no defaults** — a caller cannot
+  get a projection without stating what it assumed.
+- `rvdGrowthWindows()` in `@veela/fixtures` **derives every window from the real series**, so no
+  rate is typed in and none can go stale.
+- The UI makes the window **a control, not a constant**, and the default is the **longest** (30y)
+  because it is the one nobody can accuse of being chosen to flatter — deliberately not the 20-year
+  figure, which is the most attractive.
+
+Measured in the browser on one property with a fixed 10-year hold: total gain **HK$2.23M** on the
+30-year window, **HK$56k** on the 5-year, **HK$3.72M** on the 20-year. A 66× spread from the
+look-back alone. Watching that happen teaches more than any caveat could.
+
+**Invariants the tests pin, not policy.** The most important: **year one must equal the report it
+sits under** — growth compounds from the *end* of year one, because a projection whose first row
+contradicts the report above it reads as the report being wrong. Also: cumulative cash flow is the
+running total; equity is exactly value minus balance; a loan reaches zero *at* the end of its term
+and not a year early; payments stop mid-projection when the loan is repaid; falling prices produce
+a negative gain rather than flooring at zero; and `annualisedReturn` is `null` for a fully-financed
+purchase rather than a division by zero dressed as a percentage.
+
+**Two bugs found while writing the tests.** `loanBalanceAfter` is closed-form rather than a
+360-iteration loop, because the loop accumulates rounding error and leaves a loan that never quite
+reaches zero. And equity was rounding the *difference* of value and balance while the row displayed
+each separately — so the arithmetic on screen was a cent out. Now both are rounded first and
+subtracted, which is the property a reader checking the row actually needs. The failing test had to
+move from majors to **minor units** to assert it: in majors the comparison is `a/100 - b/100`
+against `(a-b)/100`, which float division makes unequal in the last bit.
+
+**Deliberately not modelled:** no capital gains tax (Hong Kong has none — a *named rule*, not a
+silent assumption), no rate path, no refinancing, no capex. Each would stack a second invisible
+assumption on the first.
+
+### 2. Portfolio totals — the thing every comparable tool opens on
+
+`/portfolio` listed properties one card at a time and never said what the portfolio was worth or
+earned. Now a summary band above the cards: combined price, monthly rent, annual net income,
+blended net yield, and how many are tracked.
+
+**The blended yield is weighted, and that is the point.** A mean of each property's yield flatters
+small flats: a HK$3M studio at 4.8% gross beside a HK$30M flat at 2.4% averages to something the
+portfolio does not earn. This sums income, sums value, and divides **once** — verified in the
+browser at **1.95%** blended net across exactly that pair, which is correctly nearer the expensive
+flat than a mean would be.
+
+**It recomputes nothing.** Every figure is summed from the same stored snapshots the cards show, so
+the totals cannot disagree with the rows beneath them. A property with no snapshot contributes its
+price and rent but is excluded from the yield, **and the count of those is printed** — a blended
+yield silently computed over four of seven properties is a wrong number presented as a right one.
+
+Verified at 1500px and 390px: no horizontal overflow, no console errors, 49 engine tests pass.
+Throwaway account deleted.
+
 ## Working conventions
 - Dates DD/MM/YYYY. Currency: **HKD** for Hong Kong, **VND** for Vietnam, **EUR** for
   France — always state which, never a bare number. Keep a single reporting currency
