@@ -1,6 +1,7 @@
 import { api, type Env } from "@veela/api";
 import { createClient, type Database } from "@veela/db";
 import { createServerClient } from "@supabase/ssr";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { Hono } from "hono";
 import { handle } from "hono/vercel";
 import { cookies } from "next/headers";
@@ -70,12 +71,52 @@ const lazyDb = new Proxy({} as Database, {
   has: (_target, prop) => Reflect.has(realDb(), prop),
 });
 
-async function currentUserId(): Promise<string | null> {
+/**
+ * Resolve the caller from an `Authorization: Bearer <jwt>` header.
+ *
+ * **The mobile app has no cookies.** `currentUserId` below reads the Supabase session out of the
+ * cookie jar, which is exactly right for the browser and useless for React Native — so every
+ * `/properties` call from the app was resolving to "anonymous" and 401ing. This is the other half
+ * of the door: same API, same RLS, a different way of presenting the same session.
+ *
+ * **The token is verified, never decoded and trusted.** `getUser(token)` asks Supabase whether the
+ * JWT is genuine and unexpired; reading its claims locally would accept anything shaped like a JWT,
+ * which is the difference between authentication and decoration. That costs a network round trip
+ * per request, and it is the correct cost.
+ */
+async function userIdFromBearer(
+  authorization: string | undefined,
+  url: string,
+  key: string,
+): Promise<string | null> {
+  const token = authorization?.match(/^Bearer\s+(.+)$/i)?.[1]?.trim();
+  if (token === undefined || token === "") return null;
+
+  /* A plain client, not the SSR one: there is no cookie jar involved and nothing to persist —
+     the token arrived in the request and dies with it. */
+  const supabase = createSupabaseClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  const {
+    data: { user },
+  } = await supabase.auth.getUser(token);
+  return user?.id ?? null;
+}
+
+async function currentUserId(authorization: string | undefined): Promise<string | null> {
   const url = process.env["NEXT_PUBLIC_SUPABASE_URL"];
   const key = process.env["NEXT_PUBLIC_SUPABASE_ANON_KEY"];
   // Unconfigured Supabase means nobody is signed in — not a crash. The anonymous
   // Analyse flow has to keep working.
   if (url === undefined || url === "" || key === undefined || key === "") return null;
+
+  /* Bearer first, because only a non-browser caller sends one: if a header is present it is a
+     deliberate act by the mobile app, whereas a stale cookie can be sitting in a jar unnoticed.
+     Falling through on a *failed* bearer would also silently downgrade a bad token to whatever
+     cookie happened to be there, which is worse than a clean 401. */
+  if (authorization !== undefined) {
+    return await userIdFromBearer(authorization, url, key);
+  }
 
   const cookieStore = await cookies();
   const supabase = createServerClient(url, key, {
@@ -96,7 +137,7 @@ const app = new Hono<Env>().basePath("/api");
 
 app.use("*", async (c, next) => {
   c.set("db", lazyDb);
-  c.set("userId", await currentUserId());
+  c.set("userId", await currentUserId(c.req.header("authorization")));
   await next();
 });
 

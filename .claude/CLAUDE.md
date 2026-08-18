@@ -2741,6 +2741,93 @@ Verified: `/resources` redirects and resolves 200 on the destination; all 20 ter
 with **no duplicate URLs**; both stamp duty scale tables still render; no Resources anywhere in the
 sidebar or on the dashboard; no horizontal overflow; **no console errors**.
 
+## The mobile app: auth, a real portfolio, and the server change it needed (19/08/2026)
+
+Asked to build the mobile app. It **did** build — 1,177 modules into a 3.76 MB Hermes bundle on the
+first try, verified with `expo export` before touching anything. The Analyse screen and Map were
+already real; the Portfolio was an honest stub whose own comment named the blocker. That blocker was
+item 2 on this file's "deliberately not built yet" list, so that is what got built.
+
+### The blocker was on the server, not the phone
+
+`currentUserId()` in the route handler read the Supabase session **out of the cookie jar**. Exactly
+right for a browser and useless for React Native, which has no cookies — so every `/properties` call
+from the app resolved to anonymous and 401ed. No amount of client work fixes that.
+
+The API now accepts `Authorization: Bearer <jwt>` as well as cookies. Three decisions in it:
+
+- **The token is verified, never decoded.** `getUser(token)` asks Supabase whether the JWT is
+  genuine and unexpired. Reading its claims locally would accept anything shaped like a JWT, which
+  is the difference between authentication and decoration. It costs a round trip and that is the
+  correct cost.
+- **Bearer wins when present, and a bad Bearer is a clean 401** rather than a fall-through to
+  cookies. Falling through would silently downgrade a rejected token to whatever cookie happened to
+  be in the jar, which is worse than failing.
+- **A plain client, not the SSR one** — there is no cookie jar and nothing to persist, so
+  `persistSession: false`.
+
+Verified against the running API with real tokens before any UI was written: no token → 401, garbage
+token → 401, valid token → 200, and `POST /properties` → 201 with a computed verdict that then
+appears in the authenticated list.
+
+### Session handling is hand-rolled, and here is the trade-off
+
+`lib/session.ts` talks to Supabase's two documented grants over plain `fetch` instead of pulling in
+`@supabase/supabase-js`. The phone needs exactly two things from Supabase — password → session, and
+refresh token → session — and the full client historically wants URL and stream polyfills under
+React Native for behaviour that is about forty lines here.
+
+**What we take on by doing that: we own refresh.** It happens on demand, when a request is about to
+go out and the token is within two minutes of expiry, plus once reactively if the API still says 401.
+No timers — a timer cannot fire while the app is asleep, and a request is the only thing that needs
+a valid token anyway. The 401 retry runs **once**: a loop would hammer the auth endpoint with a
+refresh token the server has already refused.
+
+Both grants were tested against real Supabase. Worth recording: **refresh rotates the refresh
+token** — a new one comes back and must be stored, which `persist()` does. A naive implementation
+that kept the original would work once and then fail forever.
+
+**Tokens are stored as three `SecureStore` keys, not one JSON blob.** `SecureStore` values are capped
+at 2 KB on Android and an access token alone is often close to a kilobyte, so a combined blob is a
+size limit waiting to be hit in production on the devices hardest to debug.
+
+### The portfolio, and one deliberate duplication
+
+Real list now: totals, then a card per property with its stored net yield, all from the same
+snapshots the web reads. The blended yield **sums income and sums value and divides once** — the same
+weighting argument as the web's summary, written in the same words on purpose, so the two surfaces
+cannot drift into disagreeing about what a portfolio yields.
+
+`SavedProperty` is hand-declared in `lib/api.ts` rather than imported from `@veela/db`: that package
+pulls Drizzle and a Postgres driver, neither of which belongs in a phone bundle. The wire shape is
+still pinned by `createPropertySchema` on the way in.
+
+### What is deliberately absent, and why
+
+- **No Google sign-in.** OAuth on native needs a redirect scheme in `app.json` and a deep-link
+  handler — a build-configuration change that cannot be verified from here. Email and password work
+  end to end; the screen says so.
+- **No sign-up.** Creating an account is where consent to the dated terms and privacy statement is
+  recorded, and that record is the one thing in this product that cannot be retrofitted. Reproducing
+  it loosely on a second surface would mean accounts with no record of what they agreed to. The
+  screen points at the web.
+
+### Two things found on the way
+
+- **`platforms` was undeclared in `app.json`**, so Expo offered a web target that cannot start —
+  `react-native-web` is not installed. Now `["ios", "android"]`, which is what the app actually
+  supports. A config claiming a capability it cannot honour is the same class of problem as a
+  pricing page advertising a missing feature.
+- **Typed routes are generated by `expo start`, not `expo export`.** `router.push("/sign-in")` failed
+  to typecheck against a stale `.expo/types/router.d.ts` even after a successful bundle. Starting the
+  dev server once regenerates it.
+
+**I could not run the app.** No emulator or device is available here, and the web target is not
+installed — so this is verified by: a clean iOS bundle (1,183 modules after the changes), a clean
+typecheck of every package including mobile, and the API and Supabase contracts exercised with real
+tokens against the running server. The screens themselves have not been seen rendering, and that
+should be said plainly rather than implied by the rest passing.
+
 ## Working conventions
 - Dates DD/MM/YYYY. Currency: **HKD** for Hong Kong, **VND** for Vietnam, **EUR** for
   France — always state which, never a bare number. Keep a single reporting currency

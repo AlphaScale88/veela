@@ -4,6 +4,8 @@ import { Tabs } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useState } from "react";
 
+import { AuthProvider } from "../lib/auth";
+
 import "../global.css";
 
 export default function RootLayout(): React.JSX.Element {
@@ -22,6 +24,7 @@ export default function RootLayout(): React.JSX.Element {
 
   return (
     <QueryClientProvider client={queryClient}>
+      <AuthProvider>
       <StatusBar style="light" />
       <Tabs
         screenOptions={{
@@ -40,7 +43,12 @@ export default function RootLayout(): React.JSX.Element {
         <Tabs.Screen name="index" options={{ title: "Analyse" }} />
         <Tabs.Screen name="map" options={{ title: "Map" }} />
         <Tabs.Screen name="portfolio" options={{ title: "Portfolio" }} />
+        {/* Reachable from the Portfolio tab, not a tab of its own — `href: null` keeps it out of
+            the bar. A permanent "Sign in" tab would sit there advertising itself long after
+            somebody had signed in. */}
+        <Tabs.Screen name="sign-in" options={{ title: "Sign in", href: null }} />
       </Tabs>
+      </AuthProvider>
     </QueryClientProvider>
   );
 }
