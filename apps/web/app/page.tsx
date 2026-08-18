@@ -313,8 +313,14 @@ function ShortLetLaw(): React.JSX.Element {
               There is no Airbnb calculator here, and there never will be.
             </h2>
             <p className="mt-5 max-w-prose leading-relaxed text-inverseMuted">
+              {/* HK$500,000 and three years, not the HK$200,000 and two years this said until
+                  18/08/2026. The penalties were raised under the new licensing regime and this
+                  page was quoting the superseded figures — confirmed against the Office of the
+                  Licensing Authority's own FAQ, which states the fine rose from $200,000 to
+                  $500,000 and imprisonment from 2 years to 3. Understating a criminal penalty is
+                  the same class of error as overstating a yield. */}
               Letting a Hong Kong flat for under 28 consecutive days without a guesthouse
-              licence is a criminal offence — up to HK$200,000 and two years&apos;
+              licence is a criminal offence — up to HK$500,000 and three years&apos;
               imprisonment. Tools built for the American market will happily model that
               income for you. Veela is a long-term rental yield product because that is
               the only legal one here.
