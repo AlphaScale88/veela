@@ -72,6 +72,33 @@ Read the middle column: **the yield opportunity peaked around mid-2025 and is cl
 
 **Derived:** H1-2026 at 40,810 annualises to **≈81,600 transactions** — about 30% above 2025 and nearly double 2023. That is an annualisation of six months, not a forecast; the second half of a Hong Kong year is not reliably like the first.
 
+### Who owns and who lets
+
+| Measure | Figure | Period | Source |
+|---|---|---|---|
+| Properties on the IRD's register, all types | 2,730,420 | 31 Mar 2025 | IRD Annual Report 2024-25, Schedule 7 |
+| Solely owned by individuals (rent, if any, reported in individual returns) | 1,279,976 (46.9%) | same | same |
+| **Explicitly classified as *letting*** (jointly owned / corporate, property-tax returns) | **116,042** | same | same |
+| Owned by corporations, property-tax exempt | 451,399 (16.5%) | same | same |
+| Property tax assessments raised | 731k → 759k → 762k → **781k** | 2021-22 → 2024-25 | IRD Annual Report, assessing figures |
+| Households **owning** their home | **48.6%**, down from 52.1% in 2011 | 2021 Census | C&SD, *Housing Characteristics of the HK Population* |
+| Households as **sole tenants** | **47.5%**, up from 43.9% in 2011 | same | same |
+| Median monthly rent, private flats | **HK$12,000** (+60% in ten years) | 2021 Census | same |
+| Median rent-to-income, private tenants | **31.4%**, up from 25.7% | same | same |
+
+**Two things here matter more than the headline stock number.**
+
+First, **the IRD does not publish a landlord count.** 116,042 is the only figure explicitly
+labelled *letting*, and it covers only jointly-owned and corporate-held property — sole owners
+report rent inside their individual return, so the 1.28M solely-owned bucket is not split between
+let and owner-occupied. **116,042 is a hard floor, not an estimate.** Property tax assessments
+(781k in 2024-25) are a broader activity proxy but count assessments, not landlords.
+
+Second, **ownership is falling and tenancy is rising** — 52.1% → 48.6% owner-occupied over a
+decade, with sole tenants going the other way. Rents up 60% in ten years against incomes that did
+not keep pace (rent-to-income 25.7% → 31.4%). That is the demand side of a rental market getting
+tighter, which is what makes a yield product relevant at all.
+
 **Supply is falling while demand rises.** Completions drop from 24,261 (2024) to a forecast 15,360 (2027) — a 37% fall — against transaction volume up 46% from 2023 to 2025. That is the mechanism behind the price recovery, and it is unlikely to reverse quickly.
 
 ---
@@ -132,31 +159,84 @@ This has not changed and is the reason the product is shaped as it is.
 
 **There is no bulk sale-and-purchase dataset.** This is the structural fact that decides Veela's architecture: sale prices are reachable one property at a time at HK$10, so a listings-style aggregator cannot be built here on public data. Hence the user-fed model.
 
-### 4.1 Centaline open data — verified, and the answer is "ask them"
+### 4.1 Centaline open data — the licence is explicit, and it excludes the data we want
 
-The single highest-value unknown coming into this study. What `hk.centanet.com/opendata2019` actually publishes:
+**Correction.** The first version of this study, circulated earlier today, concluded that
+Centaline's terms were *silent* on commercial use and that the position therefore had to be
+established by asking. That was wrong, and understated what is knowable. There **is** a formal
+licence; it is just not on the page that advertises the data.
 
-- **Stock:** 1.19 million private residential units, classified by building age and area, with turnover rates.
-- **Transactions:** approximately **1.4 million private residential transactions from 1995 onwards, including saleable area.**
-- **Census:** 2016 Population By-census data.
+The **Intellectual Property Rights Notice** at `census.centamap.com/en-US/CopyRight/IPRN`
+expressly grants permission to *"download, print, adapt, distribute, reproduce and/or hyperlink
+to the Specified Statistical Information and/or the Specified Boundaries free of charge for
+commercial and/or non-commercial purposes"* — subject to attribution in the visitor's copies
+**and in any subsequent copies made by recipients**, acknowledgement of the IPR owners, and clear
+marking of any modifications.
 
-**Licence position — this is the finding.** The page specifies **attribution**: cite Centaline Map as the source of the housing-market-area boundaries, and for statistics cite "Government Statistics Department and Centaline Map". It states **no fee**. And it says **nothing at all** about commercial use or redistribution.
+**But the grant is scoped, and the scope is the whole story:**
 
-That silence is not permission. A dataset published for reference with an attribution requirement and no licence grant cannot safely be embedded in a commercial product on the assumption that it is allowed.
+| Layer | Covered by the grant? | Commercial use |
+|---|---|---|
+| C&SD census / by-census statistics (2001, 2006, 2011, 2016, 2021) — *"Specified Statistical Information"* | **Yes** | **Permitted, free, with attribution** |
+| Boundary layers — Building Groups, Housing Market Areas, Large Subunit / Street Block Groups — *"Specified Boundaries"* | **Yes** | **Permitted, free, with attribution** |
+| **Stock: 1.19M private residential units** by age and area, with turnover rates | **No** | Written consent required |
+| **Transactions: ~1.4M records from 1995, with saleable area** | **No** | Written consent required |
+| Digital maps / mapping information | No | Separately Crown copyright (Lands Department) |
 
-**Recommendation:** write to Centaline and ask for written permission for commercial use, naming the datasets and the intended use. It is a short letter, it costs nothing, and it is the difference between a product built on 1.4 million real transactions and one built on 54 generated samples. **This is the highest-expected-value action available and it is not an engineering task.**
+Paragraph 5 of the Notice closes it explicitly: the permissions *"do not extend to the digital
+maps, the mapping information or any other contents … that are not the Specified Statistical
+Information or the Specified Boundaries."* Everything outside the grant falls under the baseline
+Centamap copyright notice, which prohibits reproduction, distribution, publication or editing in
+whole or in part without **written consent**. Paragraph 4 routes any other use to
+`webmaster@censtatd.gov.hk` (C&SD) and `info@centamail.com` (Centamap).
 
----
+Required attribution for the statistical layer, in Centaline's own wording:
+*"資料來源：政府統計處及中原地圖"* — "Data source: Census and Statistics Department and Centaline Map".
 
-## 5. Competition
+**There is no public API.** The download portal is a JavaScript application that renders nothing
+to an automated fetch, and its endpoints return 404 without session parameters.
 
-Verified: the Hong Kong market is served by **listing portals**, not investment analytics. Centanet/Centadata (Centaline), Midland, Spacious, 28Hse, Squarefoot and House730 all publish listings and — for the first two — transaction history per estate. Veela has tested five of them directly through its own listing importer, which is how we know that Centanet publishes price and bedrooms as structured data but no area; Squarefoot and 28Hse publish area and bedrooms but no price; Midland publishes a full hydration payload with price *and* rent as separate fields; and House730 and Spacious sit behind Cloudflare bot challenges that refuse even a real browser.
+**So the practical position is better than "unknown" in one direction and worse in the other:**
 
-**What this establishes:** nobody in this market is competing on *"tell me whether this specific flat is a good investment, with the tax computed correctly."* The portals compete on inventory. That is the gap Veela occupies.
+1. **Usable today, commercially, for free, with attribution:** the census statistics and the
+   Housing Market Area / Building Group boundaries. That second item is not trivial — Veela
+   currently has **no** real boundaries at all, which is why `/map` is proportional symbols
+   rather than a choropleth. This licence appears to permit exactly the layer that would fix it.
+2. **Not usable without a negotiated licence:** the 1.19M stock file and the 1.4M transaction
+   file — which are the two datasets that would turn the finder from a demo into a product.
 
-**What could not be verified** (the research agent failed twice on infrastructure): whether any Hong Kong proptech startup offers investor analytics, and published subscription prices for comparable tools elsewhere (Mashvisor, PropertyData, AirDNA) as a pricing benchmark. See §10.
+**Recommendation, revised:** treat the transaction and stock data as a **business-development
+conversation with an unknown price**, not as open data — email `info@centamail.com`. And
+separately, act on the boundaries now: they are licensed, free, and would materially improve the
+map.
 
----
+*One caveat, stated because it changes what to rely on:* that the restrictive notice governs the
+stock and transaction files is an inference from the IPR Notice's explicit scope limit, not a
+sentence anywhere saying so about those files by name. It is the safe reading, and it should still
+be confirmed in the same email.
+
+## 5. Competition — the white space is real, and so is the reason for it
+
+**Every Hong Kong property analytics tool found is free to consumers and funded by agency
+commission.** Nobody publishes a retail investor-analytics subscription price, because the
+portals give analytics away as customer acquisition for a brokerage.
+
+| Player | What it does | Targets investors? | Charges consumers? |
+|---|---|---|---|
+| Centadata (Centaline) | Land Registry + Centaline transaction records, price trends, floor plans | Indirectly; no investment tooling | **Free** — monetised via commission |
+| Centaline open data | Bulk stock / transaction / census downloads | Analysts and researchers | Census layer free; **no price published** for the rest |
+| Midland Realty | Transaction history, market insight, instant valuation, mortgage and affordability calculators, AI property recommendation | Lists investors among its users | **Free** — monetised via commission |
+| **Spacious Data** | Sells proprietary portal-behaviour data as market insight; co-publishes the RICS–Spacious HK Residential Market Survey, redistributed to financial-industry clients | **Yes — the closest real comparable**, but sells to institutions, not consumers | No subscription price published |
+| 28Hse / Squarefoot / House730 | Listing portals | No | Free to consumers; agent packages by enquiry only |
+
+**No Hong Kong proptech startup offering investor yield or returns analytics was found.** A sweep
+of the HK PropTech Association and proptech.hk surfaced smart-building, VR-tour and brokerage
+tooling and nothing investor-facing. That is a genuine white-space signal — but it is
+absence-of-evidence from a non-exhaustive search, not proof the space is empty.
+
+**Spacious is the only Hong Kong company found monetising property data as a product**, and it
+does so by selling to institutions rather than to the investors themselves. That is worth noting
+as a possible route as well as a competitor.
 
 ## 6. What Veela actually owns
 
@@ -169,27 +249,83 @@ Worth stating plainly, because it decides the strategy in §8.
 
 ---
 
-## 7. Willingness to pay — what we know and don't
+## 7. Willingness to pay — no evidence of our own, but the benchmarks are published
 
-Veela's published pricing: **Free**, **Investor HK$188/month**, **Pro HK$5,000/month** (10,000 API calls). No payment processor is configured, so nothing has ever been charged.
+Veela's published pricing: **Free**, **Investor HK$188/month**, **Pro HK$5,000/month** (10,000 API
+calls). No payment processor is configured, so nothing has ever been charged. **We have no
+willingness-to-pay evidence at all** — not one customer, not one priced conversation.
 
-**We have no willingness-to-pay evidence.** Not one customer, not one priced conversation. Everything in §8 is therefore a structural argument, not a validated one, and should be read as such. Benchmarks against comparable tools elsewhere could not be verified in this study.
+What can be checked is whether the two prices are defensible against comparable tools that *do*
+publish. They are:
 
----
+| Product | Entry /mo | Top self-serve /mo | API / enterprise |
+|---|---|---|---|
+| PropertyData (UK) | £14 | £60 | **published ladder £28 → £1,300** |
+| Landlord Studio | $12 | $28 | — |
+| Lendlord (UK) | £12 | £36 | — |
+| Stessa | $15 | $35 | — |
+| HouseCanary | $19 | $199 | $0.05–$6.00 per call, published |
+| **Mashvisor** | **$49.99** | $99.99 | listed, no price |
+| RentCast | $74 | $449 | enterprise, custom |
+| PropStream | $99 | $699 | custom |
+| DealMachine | $99/seat | $599 | not published |
+
+**HK$188/month is about US$24**, which sits squarely in the *landlord-tool* cluster — Lendlord,
+Stessa, Landlord Studio, HouseCanary Basic, PropertyData Basic. The tier above, for tools that do
+deal analysis rather than bookkeeping, starts at Mashvisor's **$49.99** and PropStream's **$99**.
+Veela does investment analysis, not bookkeeping. **On published comparables it looks under-priced,
+plausibly by about half.**
+
+**HK$5,000/month is about US$640**, and lands inside a published band rather than above the
+market: PropertyData's API brackets it at £384 and £780, DealMachine Scale at $599, PropStream
+Elite at $699. Above roughly $800/month the industry stops publishing and switches to
+contact-sales, so HK$5,000 is at the **top of the transparent market**, which is a reasonable
+place for a specialist rules engine to sit.
+
+*This is a benchmark, not demand.* It says the prices are not absurd. It says nothing about
+whether a Hong Kong investor will pay them.
 
 ## 8. Revenue: two models, and the arithmetic is not close
 
-### Consumer subscription
+### Consumer subscription - now with a real denominator
 
-The addressable flow is transactions, not stock: **62,832 in 2025**, annualising to ~81,600 in 2026. Someone buying a flat is in the market for a few months.
+The earlier version of this study guessed at conversion from total transactions. There is a better
+figure. **UBS put investors at roughly 20% of total transactions in 2025** (property analyst Mark
+Leung, reported in the South China Morning Post). Applied to a verified transaction count:
 
-**Scenario, with every assumption stated:** if 2% of 2025's buyers ever subscribed at HK$188/month for an average of six months —
+62,832 x 20% = **~12,570 investor purchases in 2025** *(derived; the 20% rests on a single press
+citation of an analyst, not a primary research note - treat it as indicative)*
 
-`62,832 × 2% × HK$188 × 6 = HK$1.42M per year`
+That is the buyer-side audience: **~12,600 a year**, not 63,000. It is a fifth of the market but a
+far better-qualified fifth, and it is the population for whom "does this actually yield anything"
+is the whole question.
 
-At 5% and twelve months it is `62,832 × 5% × HK$188 × 12 = HK$7.1M`. Both are scenarios, not forecasts; the 2% and 5% are illustrative and unvalidated.
+The holder-side audience is bounded below by the IRD's **116,042** explicitly-let properties, and
+plausibly far larger given that the 1.28M solely-owned bucket is not split.
 
-**The structural problem is unchanged.** Veela's honest answer in this market is usually "this yields 2–3%, which barely beats cash". Nobody renews a subscription to be told no. The Alerts feature (built 15 August) is the counter-argument — it gives a *holder* rather than a *buyer* a reason to stay — and it moves the target from ~63,000 annual buyers to a share of **1.29 million owned units**, which is a twenty-times-larger pool. That reframing is the strongest argument for the consumer tier, and it is still unvalidated.
+**Scenarios, assumptions stated:**
+
+| Basis | Assumption | Annual revenue |
+|---|---|---|
+| Buyers | 12,570 investor purchases, 5% convert, HK$188, 6 months | **HK$709k** |
+| Buyers | 12,570, 10% convert, HK$188, 6 months | **HK$1.42M** |
+| Holders | 116,042 let properties, 1% convert, HK$188, 12 months | **HK$2.62M** |
+| Holders | 116,042, 3% convert, HK$188, 12 months | **HK$7.85M** |
+
+The conversion rates are illustrative and unvalidated. What the table shows is structural: **the
+holder audience is worth more than the buyer audience even at a third of the conversion rate**,
+because it renews. That is the case for Alerts, and the case for pricing the consumer tier as a
+subscription rather than a per-report charge.
+
+It also says the consumer tier is a **single-digit-millions HKD** business at best on these
+assumptions - the same conclusion as the earlier review, now with a denominator behind it.
+
+**And a live counter-argument.** UBS's same commentary puts the average gross yield for mass
+residential at **3.7%**, with specific estates above 4.5%. Our own RVD Class A figure is 3.4% gross
+for the smallest flats. Gross is not net: after the 12% effective property tax, management fees,
+rates and vacancy, those become the 2-3% net that makes Veela's honest answer "this barely beats
+cash". **The gap between the 3.7% an agent quotes and the ~2.5% net a buyer actually gets is
+precisely the product's reason to exist** - and is a much sharper pitch than "compute your yield".
 
 ### The tax engine as an API
 
@@ -212,28 +348,51 @@ At 5% and twelve months it is `62,832 × 5% × HK$188 × 12 = HK$7.1M`. Both are
 
 ## 10. What this study could not establish
 
-Listed rather than estimated:
+Resolved since the first version: the Centaline licence (§4.1), pricing benchmarks (§7), the
+competitive picture (§5), tenure and the letting floor (§2), and investor share of transactions
+(§8). What is still open:
 
-- **Number of landlords / buy-to-let share of transactions.** No published figure found. This is the key denominator for sizing the consumer tier and it remains unknown.
-- **Share of purchases by non-permanent residents or companies** since the February 2024 abolition. Research was interrupted before this could be confirmed.
-- **Subscription prices for comparable tools** elsewhere, as a benchmark for HK$188/month.
-- **Whether any HK proptech competitor offers investor analytics**, and at what price.
-- **Whether Centaline permits commercial re-use** — the terms are silent, so this must be asked, not inferred.
-- **Owner-occupied vs rented split** of the 1.29M private units. RVD's own PDFs did not render to an automated fetch; the figure likely exists in the Hong Kong Property Review and should be read by hand.
-- **HKMA's rules from the primary circular.** The current LTV/DSR position here rests on secondary sources because hkma.gov.hk did not render.
-
----
+- **The number of private units actually rented out.** The IRD does not publish a landlord count
+  and the 1.28M solely-owned bucket is not split let/owner-occupied. 116,042 is a floor. Deriving
+  a figure from the 47.5% tenant share would be an unsourced calculation, so it has not been done.
+- **Number of multiple-property owners.** IRD Schedule 7 counts owners *per property*, not
+  properties per owner. No published statistic found.
+- **Whether Centaline's stock and transaction files carry a fee, and at what level.** Nothing
+  published; and that the restrictive notice governs them is a scope inference, not an explicit
+  statement about those files by name (§4.1).
+- **Spacious's actual data-product pricing**, and whether Spacious is still trading. Its site is
+  behind a bot challenge; a figure seen in a search snippet was not confirmed against the page and
+  is therefore not quoted here.
+- **The UBS 20% investor share** rests on one press citation of an analyst, not a primary research
+  note. It carries the §8 arithmetic and deserves a better source.
+- **HKMA's rules from the primary circular.** The LTV/DSR position in §3.4 rests on secondary
+  sources because hkma.gov.hk would not render to an automated fetch.
+- **Owner-occupied vs rented split of RVD's 1.29M private units** - likely in the Hong Kong
+  Property Review, whose PDFs did not render. Worth reading by hand.
+- **Agent-side package pricing** for the portals (28Hse, Squarefoot, House730, Midland) - all
+  enquiry-only, which is itself informative about how this market sells.
 
 ## 11. Recommendation
 
 In order, highest expected value first:
 
-1. **Write to Centaline for written commercial-use permission.** Zero cost, and it is the difference between real transaction data and generated samples. Not an engineering task.
+1. **Two separate Centaline actions, not one.** (a) Use the **census statistics and the Housing
+   Market Area / Building Group boundaries now** - they are expressly licensed for commercial use,
+   free, with attribution, and Veela currently has no real boundaries at all. (b) Email
+   `info@centamail.com` about the **stock and transaction files**, which sit outside that grant and
+   need a negotiated licence. Zero cost either way, and (a) needs nobody's permission.
 2. **Name an invoicing entity** in `/terms` and `/privacy`. Nothing can be charged until this exists; it gates every revenue scenario in §8.
 3. **Add the missing dated rule sets** (pre-Feb-2024 and Feb-2024 → Feb-2026). Today a user with a 2023 or 2025 purchase cannot be served at all, and the engine is the asset.
 4. **Correct the mortgage defaults** against the HKMA's own circular — 70% flat, no stress test — and only then consider clearing the `unverified` flag.
-5. **Sell the API to five brokers before building more consumer features.** February 2026's rate change is the pitch: every hard-coded stamp duty table in this city is currently wrong.
-6. **Do not build referrals or lead sales** without a solicitor's view on Cap. 511.
+5. **Sell the API to five brokers before building more consumer features.** February 2026's rate
+   change is the pitch: every hard-coded stamp duty table in this city is currently wrong.
+6. **Reconsider HK$188.** On published comparables (§7) it prices Veela as a bookkeeping tool when
+   it does deal analysis; the tier above starts near US$50. Raising it is not urgent, but it should
+   be a decision rather than an inheritance.
+7. **Lead with the gross-versus-net gap** in how the product is described. An agent quotes 3.7%
+   gross; the buyer gets roughly 2.5% net after the 12% effective property tax, fees, rates and
+   vacancy. Veela closes that gap, and that is a sharper sentence than "compute your yield".
+8. **Do not build referrals or lead sales** without a solicitor's view on Cap. 511.
 
 The strategic judgement has not changed since the earlier review: **the consumer product is the demonstration, and the tax engine is the business.** What has changed is that the market is recovering strongly, which widens the demonstration's audience while narrowing the yield story it tells — and that the top AVD band moved in February, which is the clearest possible argument for selling a versioned rules engine to people who currently maintain their own.
 
@@ -252,3 +411,9 @@ The strategic judgement has not changed since the earlier review: **the consumer
 - Estate Agents Ordinance (Cap. 511) — <https://www.elegislation.gov.hk/hk/cap511>
 - Centaline *Property Market Big Data* — <https://hk.centanet.com/opendata2019/en/>
 - Land Registry search fees and MMIM subscription — <https://www.landreg.gov.hk/en/services/search_fee.htm>
+- Centamap, *Intellectual Property Rights Notice* (the licence governing the census and boundary layers) - <http://census.centamap.com/en-US/CopyRight/IPRN>
+- Centamap proprietary rights notice - <http://www1.centamap.com/gc/o/b5/info.htm>
+- Inland Revenue Department, *Annual Report 2024-25*, Schedule 7 (property ownership classification) - <https://www.ird.gov.hk/dar/2024-25/table/en/schedules.pdf>
+- Census and Statistics Department, *Housing Characteristics of the Hong Kong Population*, 2021 Census - <https://www.census2021.gov.hk/doc/pub/21C_Articles_Housing.pdf>
+- UBS investor-share and gross-yield commentary, reported via South China Morning Post - <https://finance.yahoo.com/news/hong-kong-residential-property-markets-093000606.html>
+- Pricing benchmarks: PropertyData <https://propertydata.co.uk/pricing>, Mashvisor <https://www.mashvisor.com/pricing>, HouseCanary <https://www.housecanary.com/pricing>, Lendlord <https://lendlord.io/uk-plan>, Stessa <https://www.stessa.com/pricing/>, Landlord Studio <https://www.landlordstudio.com/pricing>, RentCast <https://www.rentcast.io/api>, PropStream <https://www.propstream.com/pricing>, DealMachine <https://www.dealmachine.com/pricing>
