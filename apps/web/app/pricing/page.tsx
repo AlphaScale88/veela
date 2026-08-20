@@ -84,7 +84,14 @@ export default function PricingPage(): React.JSX.Element {
             disabled={p.id === "investor" && !paymentsLive}
             note={
               p.id === "investor" && !paymentsLive
-                ? "Billing isn't built yet. The price is real and everything it unlocks already works — tell us if you'd pay it and you'll be first in line."
+                ? // Short, and still true. The previous version explained *why* at length —
+                  // no payment processor, no named invoicing entity — which is accurate and is
+                  // internal. A buyer reading a price list does not need our incorporation
+                  // status; they need to know they cannot buy today and what to do instead. The
+                  // full reasoning lives in CLAUDE.md, and the two unbuilt features carry their
+                  // own "not built yet" tags in the list above, so nothing honest is lost by
+                  // saying it in one sentence.
+                  "Billing isn't connected yet, so there is nothing to click. Tell us you'd pay this and you'll be first in line when it opens."
                 : undefined
             }
             href={p.id === "pro" ? "/developers" : "/analyse"}
@@ -165,13 +172,32 @@ function PlanCard({
       </div>
       <p className="mt-1.5 text-sm text-muted">{plan.blurb}</p>
 
+      {/* A planned feature is dimmed and labelled, never silently listed alongside the ones that
+          work. Two of the Investor tier's six do not exist — Land Registry searches and the PDF
+          — and the card previously said in its own footnote that "everything it unlocks already
+          works", which was simply untrue. On a page with a price on it that is the same class of
+          error as a fabricated figure. */}
       <ul className="mt-4 flex-1 space-y-2">
-        {plan.features.map((f) => (
-          <li key={f} className="flex gap-2 text-sm leading-relaxed">
-            <span aria-hidden="true" className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-accent" />
-            <span className="text-mist">{f}</span>
-          </li>
-        ))}
+        {plan.features.map((f) => {
+          const text = typeof f === "string" ? f : f.text;
+          const planned = typeof f !== "string";
+          return (
+            <li key={text} className="flex gap-2 text-sm leading-relaxed">
+              <span
+                aria-hidden="true"
+                className={`mt-[7px] h-1 w-1 shrink-0 rounded-full ${planned ? "bg-line" : "bg-accent"}`}
+              />
+              <span className={planned ? "text-muted" : "text-mist"}>
+                {text}
+                {planned && (
+                  <span className="ml-1.5 whitespace-nowrap rounded-full border border-line px-1.5 py-px font-mono text-[9px] uppercase tracking-[0.08em] text-muted">
+                    not built yet
+                  </span>
+                )}
+              </span>
+            </li>
+          );
+        })}
       </ul>
 
       {plan.monthlyQuota > 0 && (

@@ -2828,6 +2828,367 @@ typecheck of every package including mobile, and the API and Supabase contracts 
 tokens against the running server. The screens themselves have not been seen rendering, and that
 should be said plainly rather than implied by the rest passing.
 
+## Short-term against long-term yield — built 20/08/2026, **removed 21/08/2026**
+
+> **This feature no longer exists.** Asked the next day: *"if short term rental is not relevant in
+> HK then remove it"* — and removed, engine and all. `packages/core/src/letting.ts`, its 15 tests
+> and `components/letting-strategy.tsx` are deleted; the engine is back to 49 tests. The section
+> below is kept in full because **the decision to build it and the decision to remove it were both
+> deliberate, and the reasoning that survives is the product's position**: for an ordinary
+> unlicensed flat, long-term letting is the only lawful strategy, so it is the only one modelled.
+> What the removal settles is that the *licensed* case is not worth carrying either — a calculator
+> for the small minority who hold a Cap. 349 licence is not what this product is for, and dead code
+> that computes an income most readers cannot lawfully earn is worse than no code.
+>
+> Two knock-ons went with it: the landing page stopped claiming a short-term yield is "computed only
+> for licensed premises" (true only while that existed), and `district-overview.tsx`'s standing line
+> — *"there is no short-term figure to compute and none is shown anywhere in this product"* — is
+> **true again**, which is the cleanest possible confirmation that the product is back to one
+> coherent position.
+
+## The original build, kept for the record (20/08/2026)
+
+Asked directly to compute and display short-term (Airbnb) and long-term yield. **This is the
+request that runs into the hardest line in the product**, and the record of the two earlier
+refusals is what makes acting on it a decision rather than an erosion:
+
+- *"Not built: the Traditional/Airbnb strategy toggle"* — Cap. 349 makes letting under 28
+  consecutive days without a guesthouse licence a criminal offence, so *"the toggle stayed out
+  rather than being quietly added because the reference tool has one."*
+- The landing page said, in a display headline: **"There is no Airbnb calculator here, and there
+  never will be."**
+
+**The conflict was raised in two sentences before anything was built, and then the work was
+delivered** — because the refusal, restated precisely, does not actually forbid the feature.
+Short-term letting is not unlawful in itself; **it is unlawful without a licence**, and licensed
+guesthouses are an ordinary legal business. So the figure exists — it belongs to a licensee. What
+had to change was *who the calculation is for*, not whether it can be computed.
+
+### The licence gates the arithmetic, not a disclaimer under it
+
+`packages/core/src/letting.ts` takes `licensed: boolean` with **no default**, and returns
+`shortTerm: null` when it is false. The refusal lives in the **engine**, so no later UI change can
+accidentally put a short-term figure in front of somebody who has not said they hold a licence —
+the same reasoning that makes `projectHold` demand its growth rates as required arguments. The null
+is accompanied by `unlicensed: true`, so the panel can **explain** rather than render an empty box:
+*"the income would be unlawful to earn, so the calculation is refused rather than displayed with a
+warning."*
+
+### The comparison is more dangerous than either number, and that shaped the engine
+
+A long-term net yield in this product is **after** Hong Kong property tax. A licensed short-let
+operation is a **trade**, so property tax is the wrong instrument — profits tax is. Putting a
+**pre-tax** short-term figure beside a **post-tax** long-term one would flatter short-term by its
+entire tax bill, which is the single easiest way to mislead somebody here. So the engine models
+profits tax and `netYieldDifference` is only ever computed between two post-tax numbers.
+
+`HK_PROFITS_TAX_DEFAULT` is **flagged `unverified`** and the panel's *"confirm the tax treatment
+with an accountant"* line is **keyed off that flag** — identical to `HK_LENDING_DEFAULT`, and a
+test asserts the flag is still set, so clearing it without sourcing the rates would also silently
+delete the warning. Whether a given operation is assessed under profits tax at all depends on
+scale and structure, facts a calculator does not have.
+
+Both sides are **unlevered and share one denominator** (cash to acquire). The owner's fixed costs
+— building management fee, government rates, other annual costs — fall on **both** sides;
+`rentalIncomeTax` and `mortgageInterest` fall on neither, since profits tax replaces the first and
+both yields exclude the second.
+
+### There is no Hong Kong short-let data, so the two key fields start blank
+
+The long-term side can estimate a rent only because the RVD publishes market yields by Class.
+**Nobody publishes nightly rates or occupancy for Hong Kong.** So those two inputs have **no
+default** — a prefilled occupancy rate is exactly the plausible-looking invented number this
+product refuses everywhere else — and the panel says on screen, next to them, that the figures
+are the reader's and not ours. The cost fields (cleaning, platform commission, a manager's cut)
+*do* carry conventional defaults, because those are contract terms rather than market measurements.
+
+**The lawful alternative is shown to everybody, outside the gate**, because most readers do not
+hold a licence and the useful thing to tell them is that **a letting of 28 days or more needs
+none** — serviced monthly lettings to relocating staff are lawful and usually better paid than an
+ordinary two-year tenancy. That is a real strategy, not a consolation prize, and it is modelled on
+the long-term side by entering the higher rent and a vacancy rate that reflects the turnover.
+
+### The landing page had to change, and it was already contradicting itself
+
+Shipping this while the site still promised *"there never will be"* would make the product lie
+about itself — worse than either decision. The headline is now **"Short-term letting here is
+licensed, or it is a crime."**, and the body states that Veela computes a short-term yield **only
+for licensed premises** and will not run the calculation until you say you hold one.
+
+**Found while editing it: the same section quoted both the current and the superseded penalty at
+once.** The 18/08 correction updated the paragraph to HK$500,000 / three years and **missed the
+stat tile beside it**, which still read **HK$200k**. A page stating two different maximum fines
+for a criminal offence, three inches apart. Fixed, and the tile now carries a comment saying why.
+
+### 15 new engine tests, 64 total
+
+They pin invariants, never policy. The two that matter most: **an unlicensed short-let yields
+nothing** (not zero, not an estimate with a warning), and **the difference is between two post-tax
+yields**. Also: cleaning is charged per *stay* not per night (a fortnight-long booking is cleaned
+once), a blank average-stay cannot divide by zero, occupancy is clamped so 150% cannot invent
+nights, a loss is untaxed but not floored at zero, and every cost line reconciles to the profit
+before tax.
+
+**One real bug the tests caught.** The net yield was derived from the *unrounded* net income while
+the row displayed the rounded one — so a reader dividing the two numbers on screen would not get
+the percentage beside them. Rounded before subtracting now, the same lesson `projection.ts`
+learned about equity.
+
+### Verified in a browser, and the useful result
+
+Through a temporary harness (the report is login-gated), deleted afterwards. On a HK$9M / 550 sqft
+flat at HK$22,000 rent, against HK$1,200 a night at 70% occupancy: long-term **1.87%**, short-term
+**1.55%** — **short-term is worse**, once a manager's cut, cleaning and profits tax are counted.
+That is worth knowing: the feature does not exist to flatter short-term letting, and on realistic
+Hong Kong assumptions it frequently will not.
+
+Checked: the refusal before ticking, the seven fields after, both blank fields staying blank, the
+cost table reconciling, the comparison sentence, the accountant caveat, and the figure
+**disappearing again** when the licence is unticked. No horizontal overflow at 1400px or 390px, no
+console errors, 64 tests pass, production build clean.
+
+**Two things worth knowing for next time.** A route folder named `__harness-letting` **404s** —
+the App Router treats a leading underscore as a private folder, excluded from routing. And a
+Playwright click that lands **before hydration** toggles the DOM checkbox while React state stays
+`false`, which looks exactly like a broken control: the DOM read checked, the panel stayed shut,
+and a double-toggling label was suspected and wrongly blamed before the real cause was found. The
+suspicion is recorded in the component rather than deleted, because a plausible wrong diagnosis is
+worth as much to the next reader as the right one.
+
+## Rent by area, comparables, and a collector that holds a line (21/08/2026)
+
+Four requests in one sitting: show the average rent per area, show similar listings, "create and
+run an agent to scrape and collect data permanently from all reliable sources", and — separately —
+make the report photo a card-sized slideshow.
+
+### The research came first, because "average rent per area" is not one lookup
+
+**Hong Kong publishes no per-district private rent series. At all.** Established against
+data.gov.hk's own package API rather than assumed, and worth writing down because it is the third
+time this gap has been rediscovered:
+
+| Source | District-level? | Rents? |
+|---|---|---|
+| RVD district open data (10 domestic resources) | **Yes, 18 districts** | **No** — stock, completions, vacancy only |
+| RVD rent index (`rvd-real.ts`) | No, territory-wide | Yes, monthly |
+| RVD *Average Rents by Class*, annual | **By region — 3 areas** | **Yes, HK$/m²/month** |
+| Census 2021 district profiles | **Yes, 18 districts** | **Yes — but all tenures** |
+| Land Registry | n/a | No rents whatever, at any price |
+
+So two real geographic rent figures exist, and the build uses both:
+
+- **`packages/fixtures/src/rvd-rents.ts`** (new, fourth genuine module) — RVD's own
+  `1.1A(from_99).csv`, 1999–2025, five Classes × three regions. A true *private-market* rent, at
+  the finest real geography there is for one. Class B Kowloon 2025 is HK$371/m²/month, which for a
+  550 sq ft flat is **HK$18,957**.
+- **`packages/fixtures/src/census-real.ts`** (new, third genuine module) — Census 2021
+  `DC_21C.xlsx`, median monthly household rent by district, plus rent-to-income and the
+  housing-type shares.
+
+**Both generated by scripts, never typed** (`scripts/gen-rvd-rents.py`, `scripts/gen-census-real.py`)
+— eighteen districts times six figures is exactly the size at which a transcription error is both
+likely and invisible. Same reasoning as `rvdGrowthWindows()` deriving its rates from the series.
+
+### The Census figure is a trap, and the module is built to stop it
+
+Wong Tai Sin's median rent is **HK$2,430**. Central and Western's is **HK$15,070**. Almost none of
+that sixfold gap is the market: **half of Wong Tai Sin's households are in public rental housing**
+and 3% of Central and Western's are. Showing HK$2,430 to someone pricing a private flat would be
+among the most misleading things this product could do.
+
+So `publicRentalShare` sits in the same record and is not optional, `rentContext()` returns the
+number and a ready-made caveat sentence **together** so it is awkward to display one without the
+other, and the panel prints *"This is not a private market rent"* in bold above the explanation.
+The private-market figure sits directly above it for contrast. Verified on screen with exactly
+that district, because it is the worst case.
+
+**The alternative was spreading a territory-wide rent across eighteen districts to look precise.**
+That is the thing this codebase already refused when the same gap appeared for price indices.
+Three real regions beat eighteen invented ones.
+
+### The collector, and what it will not collect
+
+`scripts/ingest-official.mjs` — runs, verified against all five live sources, `--check` for CI.
+
+**It deliberately collects nothing from Centaline, Midland, Squarefoot, 28Hse, House730 or
+Spacious**, and the file says so at length rather than leaving the absence to be read as an
+oversight. "All reliable sources" cannot mean those: their terms prohibit bulk extraction, two of
+them answer a real browser with a Cloudflare challenge (tested, not assumed), and **the listing
+importer's Spacious bypass is not a precedent** — that exists for one page a user pasted, on a
+two-host allowlist, at the moment they ask. A crawler taking the whole catalogue on a timer is a
+different activity with a different name, whatever the transport looks like. Licensing stays open;
+a scheduled scraper does not.
+
+**It does two different jobs, on purpose.** Sources that move monthly get fetched and parsed.
+Sources that move *once a decade* get a committed snapshot plus a **drift check** — the Census
+file is compared by byte length, the RVD CSV by whether its latest year is still in the snapshot.
+A cron job re-deriving the 2021 Census every night would be pure motion; a check that the snapshot
+still matches what the department serves is what keeps it honest. The three known dead ends are
+listed in the file under *"do not go looking again"*.
+
+The database write is the one piece not built: `market_observations` has no `median_rent` metric
+and there is no `DATABASE_URL` here, so it reports what it would write rather than claiming to
+have written it.
+
+### Similar listings — the screening is real, the stock is not
+
+`components/similar-listings.tsx` ranks the fifty-four generated samples by district, then RVD
+size Class, then nearest price per square foot, and **prints why each row is there** ("same
+district · different size class"). Ranked rather than filtered: a hard filter returns nothing for
+a district with three samples, and an empty panel teaches less than four imperfect rows that admit
+how imperfect they are.
+
+Every yield comes from `listingToDraft` → `draftToCoreInput` → `computeVerdict` — the *same* chain
+the finder's cards use, imported rather than reimplemented, because this codebase has already had
+the bug where two call sites derived a listing's figures independently and the card disagreed with
+the report it opened. The disclosure sits **above** the rows, not below.
+
+### The photo, three sizes in two days
+
+Full-bleed 16:9 → 96px thumbnail → **card**. The first was over a thousand pixels tall on a wide
+screen; the second was too apologetic to justify the space. Now a 480px card with a five-photo
+slideshow, arrows, dots, arrow-key support and **no autoplay** (a carousel that advances by itself
+moves the page under somebody reading a tax figure).
+
+**A gallery makes a claim a single photo did not.** One labelled stock photo says "illustratively,
+a flat". Five in a slideshow says "five views of *this* flat" — false twice over. So the caption
+states the count and says they are **unrelated** interiors, different rooms in different buildings,
+none in Hong Kong. That sentence is the price of the feature.
+
+### Two things fixed in passing, both of which were the product contradicting itself
+
+- **The pricing card claimed "everything it unlocks already works".** It does not: Land Registry
+  searches and the PDF export are advertised and unbuilt. `plans.ts` now types a feature as either
+  a string or `{ text, planned: true }`, the card renders planned ones dimmed with a **"not built
+  yet"** tag. The note first spelled out both blockers — no payment processor, and no named
+  invoicing entity, the one only the founder can clear — and was **cut back to one sentence on
+  21/08/2026**: accurate, but a buyer reading a price list does not need our incorporation status.
+  It now says billing is not connected and how to get in line; the blockers stay recorded here,
+  and the unbuilt features keep their own tags, so nothing honest was lost with the length. On a page with a price on it, an advertised feature
+  that does not exist is a Trade Descriptions Ordinance (Cap. 362) question, not a copy preference.
+- **The More filters panel was pinned to the right edge** (`sm:left-auto` against `right-0`) while
+  the button that opens it sits at the far left of a 1400px bar. A popover a thousand pixels from
+  its own control reads as an unrelated overlay. The old comment justified it as "so it cannot run
+  off the viewport", which `max-w-[calc(100vw-2rem)]` already handles.
+
+### Verified
+
+64 engine tests, clean typecheck across all 8 packages, clean production build, and the panels
+checked in a browser at 1400px and 390px through a temporary harness (the report is login-gated) —
+harness deleted. Slideshow: 5 slides, 5 dots, opens on the clicked photo, advances and wraps.
+Rent panel: the three regional figures reconcile by hand (51.096 m² × HK$371 = HK$18,957), the
+Wong Tai Sin caveat renders, and a report with **no** district still shows all three regions rather
+than nothing. Comparables: four rows, three same-district, ranking as designed, price-per-square-foot
+spread correct. No horizontal overflow, no console errors.
+
+**Two things worth knowing.** `@veela/api`'s `dist/` bit again — the `plans.ts` type change
+typechecked green everywhere until `apps/web` failed on a stale `dist`, which is the trap this file
+already warns about twice. And a Server Component cannot pass a function to a Client Component, so
+the harness needed `"use client"`; the real `/analyse` page is already one, which is why
+`comparableNetYield` is fine there.
+
+## The landing page sells the service now, and a fetch error says something useful (21/08/2026)
+
+### The dark band stopped leading with a criminal penalty
+
+Shown the Cap. 349 section and asked for *"something more attractive to present our services"* —
+a fair critique of prime landing-page space. It was a full-width dark band headlined **"Short-term
+letting here is licensed, or it is a crime"**, with tiles reading *minimum let / maximum fine*. A
+page block whose largest words are about a crime, warning readers off something the product does
+not do.
+
+Rewritten as **"Built for Hong Kong, not adapted to it."** — the same section, now leading with
+what Veela actually offers: the ad valorem scales transcribed from the IRD and versioned by
+transaction date, property tax at 15% on 80%, no capital gains tax written as a *named Hong Kong
+rule* rather than baked into the maths, RVD series monthly back to 1993.
+
+**The Cap. 349 point survives as evidence rather than as the headline**, in one sentence: it is the
+sharpest single proof of knowing this market, since the feature every reference product leads with
+is the one that is criminal here without a licence. The full rule and the penalties live on Market
+Regulations, where somebody looking them up will be.
+
+**The tiles are facts checkable from this repository** — **49** engine tests, IRD scales, RVD from
+1993, zero invented figures. (It said 64 for about an hour: the short-let removal took 15 tests
+with it, and a stale count on a tile whose whole purpose is being checkable is the same class of
+error as a stale price on the pricing page. Caught by re-running the suite after the removal.) The
+reference products fill this slot with *"Trusted by 50,000+ investors"*; Veela has no users, so any
+number of that shape would be invented. Same rule `FactBar` already follows on the service pages,
+and for somebody deciding whether to trust a stamp duty figure, "tested at every band boundary" is
+the stronger claim anyway.
+
+### "Failed to fetch" was reaching the reader
+
+Reported with a screenshot: a building lookup showed the single red line **"Failed to fetch"** under
+the reader's own address. That is the browser's raw `TypeError` when a request never reaches the
+server — and it names no cause, suggests nothing to do, and sitting beneath *their* property it
+reads as a defect in their data rather than a dropped connection. (It fired because the dev server
+was down mid-rebuild, which is incidental; the defect is that the string was ever shown.)
+
+**This exact failure had already been fixed once**, on the report's submit path, where a dropped
+connection surfaced as the identical words. It was never fixed in `neighbourhood-panel.tsx` — which
+is the argument for `describeFetchFailure()` being a named function rather than a `catch` block
+written afresh at each call site.
+
+**The distinction it draws is transport versus upstream.** A `TypeError` from `fetch` means the
+request did not arrive, so retrying is the sensible move and the message says so — *"usually the
+connection rather than the address. Nothing you have entered has been lost."* Anything else came
+back **from our own handler** (Overpass refusing, a bad coordinate) and is passed through unchanged,
+because the handler knows things this function does not. Keyed on the **type**, never the message
+text: browsers word it differently ("Failed to fetch", "NetworkError…", "Load failed").
+
+A **Try again** button sits beside it, because telling somebody to try again with nothing to press
+is an instruction to reload the page and lose the form.
+
+**Verified with a forced outage**, not a mocked 500 — Playwright aborting the request at the
+transport layer, which is the only way to produce the real `TypeError`. A 500 comes back from the
+handler and takes the other branch. Message correct, no raw string, retry present, and pressing it
+with the network restored loaded the data.
+
+*Worth knowing for the next test:* `[role="alert"]` is not a safe selector for "our error is on
+screen". Next.js mounts its own permanently-empty `__next-route-announcer__` with that role on every
+page, so a `state: "detached"` wait on it never resolves and looks like a failed retry. It was not.
+
+## A map beside the photographs, and the zoom that decides what it claims (21/08/2026)
+
+Asked to put the slideshow on the right and a map on the left, to use the empty half of the row.
+Straightforward layout — `lg:grid-cols-2`, two equal 500px columns at 1500px, stacking on a phone —
+and one real question underneath it: **a map of what?**
+
+**Map left, photographs right**, deliberately: the location is the fact, the pictures are
+illustration, and on a left-to-right page the fact goes first. They stack in that order below `lg`
+for the same reason.
+
+### `ReportLocationMap` renders one of two different things, and says which
+
+- **A real position** — coordinates a listing published, or the building the reader picked — gets a
+  **dot at zoom 16**, and a caption saying so. A true statement about a real place.
+- **Everything else** gets the **district centroid at zoom 13**, marked with a soft *ring* rather
+  than a dot, captioned **"Wong Tai Sin — the district, not the flat."**
+
+**The second case is the whole design.** A sample listing has no address *by construction* — no
+building name, no street, no unit, a rule this file has held since the fixtures were written. A
+tight pin beside one would assert a specific location for a flat that does not exist, and this
+codebase already knows that "a wrong pin on a real map reads as data, never as the parsing bug it
+is". An invented pin reads exactly the same way.
+
+So the fix is not to hide the map, it is to **zoom it out to the level the data supports**. The
+district is real; `DISTRICT_CENTRES` is genuine geography accurate to a few hundred metres, which is
+fine for "this district is here" and useless for an address — precisely the claim the caption makes.
+**Zoom carries the claim**, and the marker shape carries it a second time: a ring stands for an area,
+a dot for a point.
+
+Returns `null` with neither, and the slideshow then keeps the whole row rather than sitting beside a
+hole. Behind `hasMapsKey`, like every other map here — no key, no map, and the report is unharmed.
+
+**Verified in a browser at 1500px and 390px**, both cases on one harness (deleted): the district map
+draws Wong Tai Sin at 13 with the ring, the precise map draws Mong Kok at 16 with the dot, both
+captions render, columns are equal at 500px, they stack map-above-photos on a phone, no horizontal
+overflow, no console errors.
+
+*Worth knowing:* `canvas` is not a reliable "did the map draw" probe — Google served **raster
+tiles**, so the map was fully rendered with no `<canvas>` on the page at all. The screenshot is what
+settled it, which is the argument for looking at one rather than asserting from a selector count.
+
 ## Working conventions
 - Dates DD/MM/YYYY. Currency: **HKD** for Hong Kong, **VND** for Vietnam, **EUR** for
   France — always state which, never a bare number. Keep a single reporting currency
@@ -2982,13 +3343,20 @@ loaded.
 **Short-term letting is a criminal offence in Hong Kong without a licence.** Under the
 [Hotel and Guesthouse Accommodation Ordinance (Cap. 349)](https://clic.org.hk/en/topics/landlord_tenant/thingsYouNeedToNote/convert_or_use_property_to_grant_short-term_leases),
 any letting under **28 consecutive days** requires a hotel/guesthouse licence. Operating
-unlicensed carries fines up to **HK$200,000 and two years' imprisonment**, and the Home
+unlicensed carries fines up to **HK$500,000 and three years' imprisonment** — this said
+HK$200,000 and two years until 20/08/2026, which were the superseded figures; the current ones
+are confirmed against the Office of the Licensing Authority's own FAQ, and **understating a
+criminal penalty is the same class of error as overstating a yield**. The Home
 Affairs Department runs a team dedicated to finding unlicensed listings online.
 
 Consequence: Mashvisor's Airbnb calculator, short-vs-long-term comparison and dynamic
 pricing — a large share of their product — **have no legal market here.** Veela in Hong
 Kong is a **long-term rental yield** product, not an STR arbitrage product. Do not port
 that half of the feature set.
+*(Refined 20/08/2026, not reversed: "no legal market" is too strong stated flatly — there is a
+**licensed** market, and a short-vs-long comparison now exists for exactly that case, gated on
+the licence. Dynamic pricing is still out, for the separate reason that it needs nightly-rate
+data Hong Kong does not publish. See "Short-term against long-term yield" below.)*
 
 ### Official sources
 
@@ -3209,7 +3577,9 @@ not a difference of degree.
 `CurrencyCode = 'vnđ'` — a single hard-coded currency — and housing types `condotel` and
 `shophouse`. It also carries `PropertyAdsType = 'short_term_rental'`, and **short-term
 letting is a criminal offence in Hong Kong without a licence** (Cap. 349, up to
-HK$200,000 and two years). That feature is not merely unused here; it must not ship.
+HK$500,000 and three years). That feature is not merely unused here; it must not ship —
+an unlicensed short-term-rental listing type is precisely the thing that cannot exist in a
+Hong Kong product, licensed premises or not.
 
 **4. Two of the nine backend folders are empty, including the one that matters.**
 `property-service` contains a bare `.git` and no code; `node-core` is empty;

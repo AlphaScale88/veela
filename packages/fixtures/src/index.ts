@@ -34,3 +34,28 @@ export * from "./geo.js";
  * its own module so the genuine series is easy to find among the invented ones.
  */
 export * from "./rvd-real.js";
+
+/**
+ * Real Census 2021 figures **per district** — median rent, rent-to-income, and the
+ * housing-type shares. Third of the three genuine modules here.
+ *
+ * This is the one that closes the gap the `DEMO_NOTICE` above complains about for rents:
+ * RVD publishes domestic rents only by size **Class**, territory-wide, and its
+ * district-level open data is stock, completions and vacancy only — verified against
+ * data.gov.hk's own resource list, not assumed. The Census is where a real *per-district*
+ * rent figure actually exists.
+ *
+ * **Read `census-real.ts`'s own comment before displaying `medianMonthlyRentHkd`.** It is
+ * every renting household including public rental housing, so in a district that is half
+ * subsidised it is nowhere near a private market rent, and it must never appear without
+ * `publicRentalShare` beside it.
+ */
+export * from "./census-real.js";
+
+/**
+ * Real RVD **average rents per square metre, by Class and by region** — the only official rent
+ * figure with any geographic breakdown that this project has found. See its own comment for why
+ * three regions is the finest real geography available for rents, and why inventing eighteen
+ * would have been the wrong answer.
+ */
+export * from "./rvd-rents.js";

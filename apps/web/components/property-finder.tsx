@@ -821,12 +821,18 @@ export function PropertyFinder({ districtQuery, view }: Props): React.JSX.Elemen
          * is mostly whitespace), its body capped at 60vh and scrolling internally so the tabs
          * and the footer stay put however long a tab is.
          *
-         * Right-aligned on desktop so it cannot run off the viewport, full-width below `sm`
-         * where 40rem would not fit anyway.
+         * **Anchored under its own button, not to the right edge — changed 20/08/2026.** It was
+         * `sm:left-auto` against a `right-0`, which pinned 40rem of panel to the far right of a
+         * 1400px bar while the button that opened it sat at the far left. A popover that appears
+         * a thousand pixels away from the control that opened it reads as an unrelated overlay,
+         * and the reader has to find the connection. The original note said right-aligned "so it
+         * cannot run off the viewport" — which the `max-w-[calc(100vw-2rem)]` already handles,
+         * and which was the wrong trade anyway: the button is the leftmost thing in the bar, so
+         * left is where the panel belongs. Full-width below `sm`, where 40rem would not fit.
          */
         <div
           id="finder-more-filters"
-          className="absolute left-0 right-0 top-full z-40 mt-2 overflow-hidden rounded-panel border border-line bg-surface shadow-lift sm:left-auto sm:w-[40rem] sm:max-w-[calc(100vw-2rem)]"
+          className="absolute left-0 right-0 top-full z-40 mt-2 overflow-hidden rounded-panel border border-line bg-surface shadow-lift sm:right-auto sm:w-[40rem] sm:max-w-[calc(100vw-2rem)]"
         >
           <div role="tablist" aria-label="Filter groups" className="flex gap-1 border-b border-line px-3 pt-2">
             {MORE_TABS.map((t) => (

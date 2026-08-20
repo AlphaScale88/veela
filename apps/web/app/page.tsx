@@ -26,7 +26,7 @@ export default function HomePage(): React.JSX.Element {
       <Provenance />
       <Answers />
       <HowItWorks />
-      <ShortLetLaw />
+      <LocalKnowledge />
       <Pricing />
       <ClosingCta />
     </>
@@ -295,59 +295,91 @@ function HowItWorks(): React.JSX.Element {
   );
 }
 
-function ShortLetLaw(): React.JSX.Element {
+function LocalKnowledge(): React.JSX.Element {
   return (
-    /* Contained rather than full-bleed — every other section on the page is now a
-       bounded card, and an edge-to-edge dark band would read as a leftover from a
-       different design system rather than a deliberate contrast section. Same dark
-       surface, same content, just given the same rounded-card treatment as everything
-       around it. */
+    /* Contained rather than full-bleed — every other section on the page is a bounded card, and
+       an edge-to-edge dark band would read as a leftover from a different design system. Same
+       dark surface for contrast, same rounded-card treatment as everything around it. */
     <section className="band">
       <div className="col">
         <div className="grid gap-14 rounded-hero bg-inverse p-8 text-inverseText shadow-card sm:p-12 lg:grid-cols-[1.3fr_1fr] lg:items-start">
           <div>
             <p className="font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-inverseMuted">
-              Cap. 349 · Hotel and Guesthouse Accommodation Ordinance
+              One market, known properly
             </p>
-            <h2 className="mt-4 max-w-[18ch] font-display text-display-2 font-semibold">
-              There is no Airbnb calculator here, and there never will be.
+            <h2 className="mt-4 max-w-[20ch] font-display text-display-2 font-semibold">
+              Built for Hong Kong, not adapted to it.
             </h2>
             <p className="mt-5 max-w-prose leading-relaxed text-inverseMuted">
-              {/* HK$500,000 and three years, not the HK$200,000 and two years this said until
-                  18/08/2026. The penalties were raised under the new licensing regime and this
-                  page was quoting the superseded figures — confirmed against the Office of the
-                  Licensing Authority's own FAQ, which states the fine rose from $200,000 to
-                  $500,000 and imprisonment from 2 years to 3. Understating a criminal penalty is
-                  the same class of error as overstating a yield. */}
-              Letting a Hong Kong flat for under 28 consecutive days without a guesthouse
-              licence is a criminal offence — up to HK$500,000 and three years&apos;
-              imprisonment. Tools built for the American market will happily model that
-              income for you. Veela is a long-term rental yield product because that is
-              the only legal one here.
+              Most property tools are American products with the currency swapped. They will
+              cheerfully price a flat here against rules that do not apply, and income that is not
+              lawful to earn. Veela does one market and does it properly: the{" "}
+              <strong className="text-inverseText">ad valorem scales transcribed from the Inland
+              Revenue Department</strong>{" "}
+              and versioned by transaction date, so a 2023 purchase still prices under 2023&apos;s
+              rules. Property tax at 15% on 80% of rent. No capital gains tax — written as a Hong
+              Kong rule with a name, not baked into the maths. Rent and price series from the
+              Rating and Valuation Department, monthly, back to 1993.
+            </p>
+            <p className="mt-4 max-w-prose leading-relaxed text-inverseMuted">
+              {/* The Cap. 349 point earns its place as *evidence* rather than as the headline it
+                  used to be: the feature every reference product leads with is the one that is
+                  criminal here without a licence. One sentence, not a whole dark band warning
+                  readers about something this product does not do.
+
+                  This paragraph briefly claimed a short-term yield was computed "only for
+                  licensed premises", which was true for the day that calculator existed. It was
+                  removed on 21/08/2026 — see CLAUDE.md — so the claim went with it. The full rule
+                  and the penalties live on Market Regulations, where somebody looking them up
+                  will be. */}
+              It is also why there is no Airbnb tab, and never will be. Letting under 28
+              consecutive days without a guesthouse licence is a criminal offence here, so{" "}
+              <strong className="text-inverseText">long-term letting is the only strategy on the
+              table</strong>{" "}
+              — not a preference, and not a gap in the product. It is the only lawful one for an
+              ordinary flat, so it is the only one we model.
             </p>
           </div>
 
+          {/* Facts checkable from this repository, not trust signals we cannot support. The
+              reference products fill this slot with "50,000+ investors"; Veela has no users, so
+              any number of that shape would be invented — the same reasoning that governs
+              `FactBar` on the service pages. For somebody deciding whether to trust a stamp duty
+              figure, "tested at every band boundary" is the stronger claim anyway. */}
           <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-panel border border-inverseLine bg-inverseLine">
-            <div className="bg-inverse p-5">
-              <dt className="font-mono text-[10px] uppercase tracking-[0.12em] text-inverseMuted">
-                Minimum let
-              </dt>
-              <dd className="tnum mt-1.5 font-display text-[28px] font-semibold tracking-[-0.02em]">
-                28 days
-              </dd>
-            </div>
-            <div className="bg-inverse p-5">
-              <dt className="font-mono text-[10px] uppercase tracking-[0.12em] text-inverseMuted">
-                Maximum fine
-              </dt>
-              <dd className="tnum mt-1.5 font-display text-[28px] font-semibold tracking-[-0.02em]">
-                HK$200k
-              </dd>
-            </div>
+            {/* 49, not the 64 this said for an hour — removing the short-let calculator took its 15
+                  tests with it. A stale count here is the same class of error as a stale price on
+                  the pricing page, and this tile exists precisely to be checkable. */}
+            <Fact label="Engine tests" value="49" note="Every duty band boundary" />
+            <Fact label="Duty scales" value="IRD" note="Transcribed, not approximated" />
+            <Fact label="RVD series" value="1993" note="Monthly, to this month" />
+            <Fact label="Invented figures" value="Zero" note="In any real report" />
           </dl>
         </div>
       </div>
     </section>
+  );
+}
+
+function Fact({
+  label,
+  value,
+  note,
+}: {
+  readonly label: string;
+  readonly value: string;
+  readonly note: string;
+}): React.JSX.Element {
+  return (
+    <div className="bg-inverse p-5">
+      <dt className="font-mono text-[10px] uppercase tracking-[0.12em] text-inverseMuted">
+        {label}
+      </dt>
+      <dd className="tnum mt-1.5 font-display text-[28px] font-semibold tracking-[-0.02em]">
+        {value}
+      </dd>
+      <dd className="mt-1 text-[12px] leading-relaxed text-inverseMuted">{note}</dd>
+    </div>
   );
 }
 

@@ -29,3 +29,6 @@ desktop.ini
 # clone learns which keys exist. `.env*` was swallowing it, so the repo had no env template at
 # all and every key had to be discovered from source.
 !.env.example
+
+# Downloaded source files for scripts/gen-*.py — re-fetchable, never committed
+.cache/

@@ -2,7 +2,7 @@
 
 import type { User } from "@supabase/supabase-js";
 import { computeVerdict, HK_RULE_SETS, type Verdict } from "@veela/core";
-import { DEMO_DISTRICTS, DEMO_LISTINGS } from "@veela/fixtures";
+import { DEMO_DISTRICTS, DEMO_LISTINGS, type DemoListing } from "@veela/fixtures";
 import { createPropertySchema, type CreatePropertyInput, type ImportedListing } from "@veela/types";
 import {
   criticalCount,
@@ -13,7 +13,7 @@ import {
   standingColor,
 } from "@veela/ui";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { AppShell } from "../../components/app-shell";
 import { useAiChat } from "../../components/ai-chat-provider";
@@ -33,6 +33,10 @@ import {
 import { ReportBrief } from "../../components/report-brief";
 import { SavedReports } from "../../components/saved-reports";
 import { HoldProjectionPanel } from "../../components/hold-projection";
+import { ListingSlideshow } from "../../components/listing-slideshow";
+import { ReportLocationMap } from "../../components/report-location-map";
+import { AreaRentPanel } from "../../components/area-rent";
+import { SimilarListings } from "../../components/similar-listings";
 import { PropertyNotes } from "../../components/property-notes";
 import { PropertyPhotos } from "../../components/property-photos";
 import {
@@ -45,8 +49,6 @@ import {
   type FormProblem,
 } from "../../components/property-form";
 import {
-  LISTING_PHOTO_ALT,
-  listingPhotoPath,
   listingToDraft,
   photoNumberForListing,
 } from "../../components/property-finder";
@@ -157,6 +159,49 @@ export default function AnalysePage(): React.JSX.Element {
    * number instead, and a link without one falls back to something stable for that listing.
    */
   const [listingPhoto, setListingPhoto] = useState<number | null>(null);
+  /**
+   * The district and the listing this report came from, when it came from one.
+   *
+   * Kept as state rather than re-derived from the draft, because a `Draft` carries a district
+   * *label* inside a free-text property label and nothing machine-readable. Deriving a district
+   * from the coordinates instead was considered and rejected already elsewhere in this codebase:
+   * the centroids are accurate to a few hundred metres and Hong Kong's districts are large with
+   * contested edges, so nearest-centroid confidently mislabels anything near a boundary.
+   *
+   * So it is null for a report typed in by hand, and the panels that need it degrade rather than
+   * guess — the rent panel still shows all three regions, which needs only the size.
+   */
+  const [reportDistrict, setReportDistrict] = useState<{
+    readonly id: string;
+    readonly name: string;
+    readonly region: string;
+  } | null>(null);
+  const [reportListingId, setReportListingId] = useState<string | null>(null);
+
+  /**
+   * A comparable's net yield, through the production engine.
+   *
+   * `listingToDraft` -> `draftToCoreInput` -> `computeVerdict` is the *same* chain the finder's
+   * cards use, imported rather than reimplemented. This codebase has already had the bug where
+   * two call sites derived a listing's figures independently and the card disagreed with the
+   * report it opened; the fix then was one shared function, and this is that function.
+   *
+   * Memoised on nothing, because it is called for four listings on a page that only re-renders
+   * when the draft changes, and `computeVerdict` on four cash purchases is microseconds. A
+   * `useMemo` keyed on the comparable set would cost more to read than it saves.
+   */
+  const comparableNetYield = useCallback((listing: DemoListing): number | null => {
+    const districtLabel =
+      DEMO_DISTRICTS.find((d) => d.id === listing.districtId)?.nameEn ?? listing.districtId;
+    try {
+      return computeVerdict(draftToCoreInput(listingToDraft(listing, districtLabel)), HK_RULE_SETS)
+        .returns.netYield;
+    } catch {
+      /* A rule set that does not cover the fixture's transaction date throws, and one unpriceable
+         comparable must not blank the panel — the alert engine takes the same line. */
+      return null;
+    }
+  }, []);
   /**
    * A location attached by hand, via the building search below.
    *
@@ -383,8 +428,12 @@ export default function AnalysePage(): React.JSX.Element {
           ? photoParam
           : photoNumberForListing(listing.id),
       );
-      const districtLabel =
-        DEMO_DISTRICTS.find((d) => d.id === listing.districtId)?.nameEn ?? listing.districtId;
+      const district = DEMO_DISTRICTS.find((d) => d.id === listing.districtId);
+      const districtLabel = district?.nameEn ?? listing.districtId;
+      setReportListingId(listing.id);
+      if (district !== undefined) {
+        setReportDistrict({ id: district.id, name: district.nameEn, region: district.region });
+      }
       // The same function `property-finder.tsx` uses to price the card in the first
       // place — not a second guess at its assumptions. See that file's doc comment for
       // why re-deriving them here would risk the report disagreeing with the card.
@@ -948,31 +997,38 @@ export default function AnalysePage(): React.JSX.Element {
             </div>
 
             {/**
-             * The picture the reader clicked, carried through so the report is recognisably the
-             * same listing.
+             * Where it is, and what it looks like — side by side.
              *
-             * **The caption is not decoration.** These flats are fabricated and the photograph is
-             * stock, so the report has to say so where the picture is, not only in a banner
-             * further up the page — the same standard the finder's cards already meet. It is the
-             * one kind of photography the report allows besides the reader's own, and only
-             * because it is labelled as illustrating nothing.
+             * The slideshow used to sit alone at `max-w-[30rem]`, leaving the right half of the
+             * report empty. A map fills it and earns its place: *where* and *what* are the two
+             * questions a photograph half-answers, and a reader asks them together.
+             *
+             * **Map left, photos right**, which is deliberate rather than arbitrary: the location
+             * is the fact, the photographs are illustration, and on a left-to-right page the fact
+             * should come first. Below `lg` they stack in that same order for the same reason.
+             *
+             * The map renders a real pin only when there are real coordinates; otherwise a
+             * district ring, captioned as such — `report-location-map.tsx` has the argument, which
+             * is that a tight pin beside a deliberately address-less sample listing would assert a
+             * location for a flat that does not exist. It returns `null` when it has neither, and
+             * the slideshow then keeps the whole row rather than sitting beside a hole.
+             *
+             * The first slide is still the photo the reader clicked — `slideshowPhotos()` — so the
+             * report and the card cannot disagree about which image belongs to which listing.
              */}
             {listingPhoto !== null && (
-              <figure className="mt-6 overflow-hidden rounded-hero border border-line shadow-card">
-                {/* eslint-disable-next-line @next/next/no-img-element -- already sized and
-                    compressed to what this renders; next/image would add a pipeline over files
-                    that need no resizing. */}
-                <img
-                  src={listingPhotoPath(listingPhoto)}
-                  alt={LISTING_PHOTO_ALT}
-                  className="aspect-[16/9] w-full bg-surfaceMuted object-cover"
-                />
-                <figcaption className="bg-surfaceMuted px-4 py-2.5 text-xs leading-relaxed text-muted">
-                  Stock interior — <strong className="text-mist">illustrative only, not this
-                  property</strong>. This is a generated sample listing, so there is no real flat
-                  to photograph. Save a property of your own and you can attach your own pictures.
-                </figcaption>
-              </figure>
+              <div className="mt-6 grid items-start gap-4 lg:grid-cols-2">
+                {hasMapsKey && (
+                  <ReportLocationMap
+                    latitude={placeLatitude}
+                    longitude={placeLongitude}
+                    districtId={reportDistrict?.id ?? null}
+                    districtName={reportDistrict?.name ?? null}
+                    label={placeLabel}
+                  />
+                )}
+                <ListingSlideshow firstPhoto={listingPhoto} />
+              </div>
             )}
 
             <div className="mt-6">
@@ -1002,6 +1058,46 @@ export default function AnalysePage(): React.JSX.Element {
                       },
                     }
                   : {})}
+              />
+            </div>
+
+            {/**
+             * What rent looks like in this area, from the only two official sources that publish
+             * a geographic rent figure at all. See `area-rent.tsx` for the research: Hong Kong
+             * has no per-district private rent series, so this is RVD by size Class and region
+             * (real, private-market) beside the Census district median (real, but every renting
+             * household including public housing, which is why the share is printed with it).
+             *
+             * Placed after the strategy comparison because it answers "is the rent I typed in
+             * plausible" — a question about the input, best asked once the outputs have been read.
+             */}
+            <div className="mt-6">
+              <AreaRentPanel
+                saleableAreaSqft={draft.saleableAreaSqft > 0 ? draft.saleableAreaSqft : null}
+                districtId={reportDistrict?.id ?? null}
+                districtName={reportDistrict?.name ?? null}
+                regionLabel={reportDistrict?.region ?? null}
+                monthlyRentHkd={draft.monthlyRent > 0 ? draft.monthlyRent : null}
+              />
+            </div>
+
+            {/**
+             * Comparables, last, because they are the weakest data on the page and the report
+             * should not open on them: the catalogue is the generated sample stock, since there is
+             * no real comparables feed to draw on. The *screening* is real and the yields come
+             * from the same engine — `netYieldFor` routes each listing through `listingToDraft`
+             * and `computeVerdict`, exactly as the finder's cards do, so a comparable's yield and
+             * the report it links to cannot disagree.
+             */}
+            <div className="mt-6">
+              <SimilarListings
+                subject={{
+                  districtId: reportDistrict?.id ?? null,
+                  priceMinor: Math.round(draft.price * 100),
+                  saleableAreaSqft: draft.saleableAreaSqft > 0 ? draft.saleableAreaSqft : null,
+                  ...(reportListingId !== null ? { excludeListingId: reportListingId } : {}),
+                }}
+                netYieldFor={comparableNetYield}
               />
             </div>
 

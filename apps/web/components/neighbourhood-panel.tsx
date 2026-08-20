@@ -285,6 +285,36 @@ interface Props {
   readonly prefetching?: boolean;
 }
 
+/**
+ * A failure a reader can act on, rather than the exception that caused it.
+ *
+ * **Reported from the running app: a building lookup showed the single line "Failed to fetch".**
+ * That is the browser's own `TypeError` when a request never reaches the server at all — the dev
+ * server was down at the time — and printing it raw has three problems. It names no cause, it
+ * suggests nothing to do, and sitting under the reader's own address it reads as a defect in
+ * *their* property rather than a dropped connection.
+ *
+ * The same defect was already fixed once on the report's submit path, where a dropped connection
+ * surfaced as the identical string. It was never fixed here, which is the argument for having a
+ * named function rather than a `catch` block per call site.
+ *
+ * The distinction that matters is **transport versus upstream**. A `TypeError` from `fetch` means
+ * the request did not arrive: the reader's connection, or the server being down, and retrying is
+ * the sensible move. Anything else came *back* from our own handler — Overpass refusing, a bad
+ * coordinate — and those messages are already written for a reader and are passed through
+ * unchanged, because the handler knows things this function does not.
+ */
+function describeFetchFailure(cause: unknown): string {
+  /* `TypeError` is what every browser throws when the request cannot be made at all. The message
+     text differs by browser ("Failed to fetch", "NetworkError…", "Load failed"), so the type is
+     what to key on, never the string. */
+  if (cause instanceof TypeError) {
+    return "Could not reach Veela to look this up — that is usually the connection rather than the address. Nothing you have entered has been lost; try again in a moment.";
+  }
+  if (cause instanceof Error && cause.message.trim() !== "") return cause.message;
+  return "Could not load the neighbourhood for this building.";
+}
+
 export function NeighbourhoodPanel({
   latitude,
   longitude,
@@ -359,7 +389,7 @@ export function NeighbourhoodPanel({
       if (!res.ok) throw new Error(body || `Request failed (${res.status})`);
       setData(JSON.parse(body) as NeighbourhoodData);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not load the neighbourhood.");
+      setError(describeFetchFailure(cause));
     } finally {
       setPending(false);
     }
@@ -410,9 +440,19 @@ export function NeighbourhoodPanel({
       )}
 
       {error !== null && (
-        <p role="alert" className="mt-3 text-xs leading-relaxed text-negative">
-          {error}
-        </p>
+        /* A retry button beside the message, because "try again in a moment" with nothing to
+           press is an instruction to reload the page and lose the form. */
+        <div role="alert" className="mt-3 flex flex-wrap items-start gap-x-3 gap-y-1.5">
+          <p className="flex-1 text-xs leading-relaxed text-negative">{error}</p>
+          <button
+            type="button"
+            onClick={() => void load()}
+            disabled={pending}
+            className="btn-secondary shrink-0 !py-1 !text-[12px]"
+          >
+            {pending ? "Trying…" : "Try again"}
+          </button>
+        </div>
       )}
 
       {data !== null && (

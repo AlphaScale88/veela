@@ -64,7 +64,13 @@ export interface Plan {
   readonly priceHkdCents: number;
   readonly interval: "month" | null;
   readonly blurb: string;
-  readonly features: readonly string[];
+  /**
+   * A plain string is a feature that works today. `{ planned: true }` is one that does not exist
+   * yet and must render as such — see the Investor tier. Union rather than a parallel
+   * `plannedFeatures` array so a feature cannot be listed as both, or moved in one place and
+   * forgotten in the other.
+   */
+  readonly features: readonly (string | { readonly text: string; readonly planned: true })[];
   /** API calls per calendar month. 0 means the tier has no API access at all. */
   readonly monthlyQuota: number;
   /** Requests per minute, the burst guard. Independent of the monthly quota: a month's
@@ -102,9 +108,14 @@ export const PLANS: Readonly<Record<PlanId, Plan>> = {
     features: [
       "Everything in Free, for as many properties as you like",
       "Property alerts — told when market rents, prices or the stamp duty rules move against a saved report",
-      "Verified Land Registry searches: 5 a month included",
+      // Two of these do not exist yet, and are marked rather than removed — they are what the
+      // price is *for*, and quietly deleting them would misdescribe the tier in the other
+      // direction. `planned: true` is what stops the card claiming they work: advertising an
+      // unbuilt feature on a page with a price on it is a Trade Descriptions Ordinance
+      // (Cap. 362) question, not a copy preference.
+      { text: "Verified Land Registry searches: 5 a month included", planned: true },
       "Re-run any saved report against today's rules, any time",
-      "A dated PDF of any report, as computed on the day",
+      { text: "A dated PDF of any report, as computed on the day", planned: true },
       "Written plain-English summary on every report",
     ],
     monthlyQuota: 0,
