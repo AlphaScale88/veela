@@ -123,13 +123,22 @@ const OFFICIAL_SOURCES: readonly { readonly label: string; readonly href: string
   { label: "Inland Revenue Department — stamp duty rates", href: "https://www.gov.hk/en/residents/taxes/stamp/stamp_duty_rates.htm" },
   { label: "Inland Revenue Department — ad valorem duty FAQ", href: "https://www.ird.gov.hk/eng/faq/avd.htm" },
   { label: "Rating and Valuation Department — property market statistics", href: "https://www.rvd.gov.hk/en/publications/property_market_statistics.html" },
-  { label: "Rating and Valuation Department — rates and Government rent", href: "https://www.rvd.gov.hk/en/public_services/index.html" },
+  { label: "Rating and Valuation Department — rates and Government rent", href: "https://www.rvd.gov.hk/en/our_services/rates.html" },
   { label: "Land Registry — monthly statistics", href: "https://www.landreg.gov.hk/en/monthly/agreement.htm" },
   { label: "Land Registry — search fees", href: "https://www.landreg.gov.hk/en/services/search_fee.htm" },
   { label: "Census and Statistics Department", href: "https://www.censtatd.gov.hk/en/" },
-  { label: "Estate Agents Authority — check an agent's licence", href: "https://www.eaa.org.hk/en-us/Information-Centre/Licensee-Search" },
+  /* Two of these were dead until 21/08/2026, found by fetching every outbound link on the site
+     rather than by anyone clicking: the EAA search had moved to `/en-us/Licence-list`, and the
+     HKMA bulletin path had gained a `data-and-` segment. Both returned a plain 404, and a source
+     list is the worst place in this product to carry one — the whole claim of the page is
+     "check us against the primary source", which a 404 quietly withdraws.
+
+     Replacements were confirmed by title, not just by status: "Licence list" and "Monthly
+     Statistical Bulletin". Worth re-running `scripts/check-links.mjs` after any Budget or site
+     redesign. */
+  { label: "Estate Agents Authority — check an agent's licence", href: "https://www.eaa.org.hk/en-us/Licence-list" },
   { label: "Law Society of Hong Kong — find a solicitor", href: "https://www.hklawsoc.org.hk/en/Serve-the-Public/The-Law-List" },
-  { label: "Hong Kong Monetary Authority — monthly statistical bulletin", href: "https://www.hkma.gov.hk/eng/data-publications-and-research/statistics/monthly-statistical-bulletin/" },
+  { label: "Hong Kong Monetary Authority — monthly statistical bulletin", href: "https://www.hkma.gov.hk/eng/data-publications-and-research/data-and-statistics/monthly-statistical-bulletin/" },
   { label: "Hotel and Guesthouse Accommodation Ordinance (Cap. 349)", href: "https://clic.org.hk/en/topics/landlord_tenant/thingsYouNeedToNote/convert_or_use_property_to_grant_short-term_leases" },
 ];
 

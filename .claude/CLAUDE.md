@@ -3189,6 +3189,91 @@ overflow, no console errors.
 tiles**, so the map was fully rendered with no `<canvas>` on the page at all. The screenshot is what
 settled it, which is the argument for looking at one rather than asserting from a selector count.
 
+## Every page and every link, tested — and the four things it found (21/08/2026)
+
+Asked to test the whole app and fix all broken links. `scripts/check-links.mjs` is the tool that
+came out of it, committed rather than thrown away, because "are the links still good" is a question
+that recurs after every Budget and every government site redesign.
+
+    pnpm dev                                  # in another terminal
+    node scripts/check-links.mjs              # pages, links, console errors
+    node scripts/check-links.mjs --external   # also fetch every outbound link
+    node scripts/check-links.mjs --ci         # exit 1 on any failure
+
+**Result: 43 pages, no 404s, no console errors, no failures.** Four real defects on the way there,
+and not one of them was a dead `href`.
+
+### 1. A hydration failure on every page carrying a chart
+
+`/map` and `/research/market-performance` threw **"Hydration failed because the server rendered
+HTML didn't match the client"** on every visit. Cause: **React 19 treats `<title>` as document
+metadata and hoists it into `<head>`**, and inside an `<svg>` the server pass and the client pass
+disagree about whether to do it. All four charts did it — `series-chart`, `class-yield-chart`,
+`territory-index-chart`, `choropleth`.
+
+Fixed the way the stray `<caption>` on Market Regulations was fixed: **`role="img"` plus
+`aria-label`**, which is the recommended pattern for a graphic anyway, needs no generated id, and
+cannot be hoisted anywhere. `useId` came out of three of the four files with it.
+
+Found only by crawling with the console captured. The pages had been shipped, linked and looked at
+plenty of times.
+
+### 2. `/services` was unreachable
+
+The page returned 200 and **nothing anywhere linked to it**. The sidebar's Services group header is
+a toggle *button*, not a link, so the four leaves were reachable by opening the group and the index
+was reachable by nothing at all. An unreachable page is a broken link with the arrow pointing the
+other way.
+
+Fixed by leading the group with `{ href: "/services", label: "All services" }`, which mirrors My
+Workspace exactly — `/portfolio` is that group's own first sub-link — so the shell now has one
+pattern for a group with an index instead of two.
+
+### 3. Four dead outbound links, in the worst possible place
+
+All four sat in source lists whose entire claim is *"check us against the primary source"* — which
+a 404 quietly withdraws.
+
+| Was | Now |
+|---|---|
+| `eaa.org.hk/en-us/Information-Centre/Licensee-Search` | `eaa.org.hk/en-us/Licence-list` |
+| `hkma.gov.hk/.../statistics/monthly-statistical-bulletin/` | `.../data-and-statistics/monthly-statistical-bulletin/` |
+| `rvd.gov.hk/en/public_services/index.html` | `rvd.gov.hk/en/our_services/rates.html` |
+| `iir.ia.org.hk/en/` | `iir.ia.org.hk/` |
+
+**Every replacement was confirmed by page title, not just by status code** — "Licence list",
+"Monthly Statistical Bulletin", "Register of Licensed Insurance Intermediaries". The last one is
+the instructive case: `iir.ia.org.hk` is an Angular app whose language is a *client-side* route, so
+`/en/` never reaches it and renders a real "The page cannot be found" — verified in a browser,
+because a status code alone cannot tell an SPA shell from a working page.
+
+`clic.org.hk` failed once with `fetch failed` and answered 200 on retry. **Not counted and not
+"fixed"** — a third-party timeout says more about the network than the link, and the checker
+reports those separately from failures for exactly that reason.
+
+### What the checker cannot see, which is why it asserts as well as crawls
+
+**Collapsed disclosures are not in the DOM.** A shut sidebar group renders no children, so a crawl
+starting anywhere else cannot see its leaves — which is precisely how `/services` stayed orphaned
+without anyone noticing. Two answers, both in the script:
+
+- `ORPHAN_CANDIDATES` — routes that exist and *must* be reachable, asserted directly rather than
+  inferred from a crawl.
+- The crawler **opens collapsed navigation groups** before reading links, scoped to `nav`/`aside`.
+  A first version clicked *every* `[aria-expanded="false"]` and became unusably slow: a report page
+  carries eight amenity-count buttons and a service page five FAQ items, none containing links, and
+  each failed click waited out its own timeout. Only navigation hides routes, so only navigation is
+  opened. Crawl coverage went 38 pages → 43 with the groups open.
+
+`EXPECTED_REDIRECTS` pins the five deliberate ones (`/resources` and the four old `/services/*`),
+because a 200 there would mean a move silently regressed.
+
+**One self-inflicted wound worth recording:** the fix to the Insurance Authority link was first
+written as a JSX comment *inside* the `<a>` tag's attribute list, which is a syntax error. The
+checker caught it immediately and unmistakably — one page crawled, a 500, and every reachability
+assertion failing at once. A link checker that also compiles the app turns out to be a build check
+with better error messages.
+
 ## Working conventions
 - Dates DD/MM/YYYY. Currency: **HKD** for Hong Kong, **VND** for Vietnam, **EUR** for
   France — always state which, never a bare number. Keep a single reporting currency

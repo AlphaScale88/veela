@@ -86,7 +86,7 @@ export default function AgentFinderPage(): React.JSX.Element {
         subtitle="Agents will find you — Hong Kong has no shortage. The question worth answering is whether the one in front of you is licensed, who they actually act for, and what their form commits you to."
       >
         <a
-          href="https://www.eaa.org.hk/en-us/Information-Centre/Licensee-Search"
+          href="https://www.eaa.org.hk/en-us/Licence-list"
           target="_blank"
           rel="noreferrer"
           className="btn-primary inline-flex !px-6 !py-3 !text-[14px]"

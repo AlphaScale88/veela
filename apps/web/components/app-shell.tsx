@@ -152,6 +152,14 @@ const WORKSPACE_LINKS: readonly NavLink[] = [
 /** Services — the same expandable-group treatment My Workspace gets, because it is the other
  *  place with several related leaves rather than one destination. */
 const SERVICES_LINKS: readonly NavLink[] = [
+  /* `/services` leads the group, which is how it becomes reachable at all.
+     Found by crawling the app: the page existed, returned 200, and **nothing anywhere linked to
+     it** — the group header is a toggle button rather than a link, so the index was orphaned
+     while its four leaves were fine. An unreachable page is a broken link with the arrow pointing
+     the other way.
+     This mirrors My Workspace exactly, where "Saved Properties" (`/portfolio`) is the group's own
+     first sub-link, so the shell now has one pattern for a group with an index instead of two. */
+  { href: "/services", label: "All services", icon: LayersIcon },
   { href: "/mortgage", label: "Mortgage", icon: WalletIcon },
   { href: "/insurance", label: "Insurance", icon: ShieldIcon },
   { href: "/agent-finder", label: "Agent Finder", icon: BadgeIcon },

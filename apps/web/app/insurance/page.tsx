@@ -113,8 +113,12 @@ export default function InsurancePage(): React.JSX.Element {
       <Faq items={FAQ} />
 
       <section className="mx-auto mt-12 max-w-2xl text-center">
+        {/* The register root, not `/en/`. That path returned a real 404 rendering "The page
+            cannot be found" — it is an Angular app whose language is a client-side route, so a
+            direct hit never reaches it. Confirmed in a browser, not just by status code: the
+            root loads "Register of Licensed Insurance Intermediaries". */}
         <a
-          href="https://iir.ia.org.hk/en/"
+          href="https://iir.ia.org.hk/"
           target="_blank"
           rel="noreferrer"
           className="btn-secondary inline-flex !px-6 !py-2.5 !text-[14px]"

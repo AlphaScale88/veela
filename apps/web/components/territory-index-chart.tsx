@@ -2,7 +2,7 @@
 
 import { formatPeriod, type RvdIndexPoint } from "@veela/fixtures";
 import { tokens, viz } from "@veela/ui";
-import { useId, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 /**
  * Same visual grammar as `SeriesChart` — same viewBox, gridlines, crosshair, end-label
@@ -27,7 +27,6 @@ interface Props {
 }
 
 export function TerritoryIndexChart({ label, points, color = viz.demand }: Props): React.JSX.Element {
-  const titleId = useId();
   const svgRef = useRef<SVGSVGElement>(null);
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
 
@@ -76,18 +75,18 @@ export function TerritoryIndexChart({ label, points, color = viz.demand }: Props
       {/* Scroll rather than shrink on a phone — a 720-unit viewBox squeezed to 330px
           renders its axis labels at about 5px. See class-yield-chart.tsx. */}
       <div className="-mx-1 overflow-x-auto px-1">
+      {/* `aria-label` rather than an `<svg><title>`: React 19 hoists `<title>` as
+          document metadata and server and client disagree inside an `<svg>`, which is a
+          hydration failure. Full reasoning in `series-chart.tsx`. */}
       <svg
         ref={svgRef}
         viewBox={`0 0 ${W} ${H}`}
         role="img"
-        aria-labelledby={titleId}
+        aria-label={`${label}, ${formatPeriod(points[0]?.periodStart ?? "")} to ${formatPeriod(last?.periodStart ?? "")}`}
         className="h-auto w-full min-w-[560px] touch-pan-x"
         onPointerMove={handleMove}
         onPointerLeave={() => setHoverIndex(null)}
       >
-        <title id={titleId}>
-          {label}, {formatPeriod(points[0]?.periodStart ?? "")} to {formatPeriod(last?.periodStart ?? "")}
-        </title>
 
         {geom.ticks.map((t) => (
           <g key={t}>

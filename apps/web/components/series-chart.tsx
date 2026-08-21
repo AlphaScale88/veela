@@ -8,7 +8,7 @@ import {
   type DemoPoint,
 } from "@veela/fixtures";
 import { tokens, viz } from "@veela/ui";
-import { useId, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 /**
  * One metric, one series, over time — so no legend box: the title says what is
@@ -34,7 +34,6 @@ interface Props {
 export function SeriesChart({ metric, points, districtName }: Props): React.JSX.Element {
   const meta = DEMO_METRICS[metric];
   const color = meta.side === "supply" ? viz.supply : viz.demand;
-  const titleId = useId();
   const svgRef = useRef<SVGSVGElement>(null);
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
 
@@ -95,19 +94,25 @@ export function SeriesChart({ metric, points, districtName }: Props): React.JSX.
       {/* Scroll rather than shrink on a phone — a 720-unit viewBox squeezed to 330px
           renders its axis labels at about 5px. See class-yield-chart.tsx. */}
       <div className="-mx-1 overflow-x-auto px-1">
+      {/* `aria-label`, not an `<svg><title>` — and this is a real hydration bug, not a style
+          preference. React 19 treats `<title>` as document metadata and hoists it into `<head>`;
+          inside an `<svg>` the server pass and the client pass disagree about whether to do that,
+          which threw **"Hydration failed because the server rendered HTML didn't match the
+          client"** on every page carrying this chart. Found by crawling the app with the console
+          captured, not by reading the markup.
+
+          Exactly the same shape as the stray `<caption>` bug on Market Regulations, and the same
+          fix: `role="img"` plus `aria-label` is the recommended pattern for a graphic anyway, it
+          needs no generated id, and it cannot be hoisted anywhere. */}
       <svg
         ref={svgRef}
         viewBox={`0 0 ${W} ${H}`}
         role="img"
-        aria-labelledby={titleId}
+        aria-label={`${meta.label} for ${districtName}, ${formatPeriod(points[0]?.periodStart ?? "")} to ${formatPeriod(last?.periodStart ?? "")}`}
         className="h-auto w-full min-w-[560px] touch-pan-x"
         onPointerMove={handleMove}
         onPointerLeave={() => setHoverIndex(null)}
       >
-        <title id={titleId}>
-          {meta.label} for {districtName}, {formatPeriod(points[0]?.periodStart ?? "")} to{" "}
-          {formatPeriod(last?.periodStart ?? "")}
-        </title>
 
         {/* Gridlines: hairline, solid, one step off surface, recessive. */}
         {geom.ticks.map((t) => (

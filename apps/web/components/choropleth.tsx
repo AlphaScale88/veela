@@ -8,7 +8,7 @@ import {
   type DemoMetric,
 } from "@veela/fixtures";
 import { sequentialBin, tokens, viz } from "@veela/ui";
-import { useId, useState } from "react";
+import { useState } from "react";
 
 /**
  * Choropleth — magnitude across geography, so the colour job is **sequential**: one
@@ -34,7 +34,6 @@ export function Choropleth({
   onSelect,
 }: Props): React.JSX.Element {
   const [hovered, setHovered] = useState<string | null>(null);
-  const titleId = useId();
   const meta = DEMO_METRICS[metric];
 
   const numbers = [...values.values()];
@@ -60,16 +59,16 @@ export function Choropleth({
       </figcaption>
 
       <div className="relative overflow-hidden rounded-hero border border-line shadow-card">
+        {/* `aria-label` rather than an `<svg><title>`: React 19 hoists `<title>` as
+            document metadata and server and client disagree inside an `<svg>`, which is a
+            hydration failure. Full reasoning in `series-chart.tsx`. */}
         <svg
           viewBox="0 0 100 100"
           role="img"
-          aria-labelledby={titleId}
+          aria-label={`${meta.label} across Hong Kong's 18 districts, schematic layout`}
           className="h-auto w-full"
           style={{ background: viz.surface }}
         >
-          <title id={titleId}>
-            {meta.label} across Hong Kong&apos;s 18 districts, schematic layout
-          </title>
 
           {DEMO_DISTRICTS.map((d) => {
             const value = values.get(d.id);

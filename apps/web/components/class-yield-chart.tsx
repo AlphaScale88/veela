@@ -9,7 +9,7 @@ import {
   type RvdClassKey,
 } from "@veela/fixtures";
 import { tokens, viz } from "@veela/ui";
-import { useId, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 /**
  * Real gross rental yields by RVD Class, on one plot.
@@ -52,7 +52,6 @@ export function ClassYieldChart(): React.JSX.Element {
   const [hidden, setHidden] = useState<ReadonlySet<RvdClassKey>>(new Set());
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
-  const titleId = useId();
 
   const months = RANGES.find((r) => r.id === rangeId)?.months ?? 120;
   const periods = useMemo(() => RVD_YIELD_PERIODS.slice(-months), [months]);
@@ -155,19 +154,18 @@ export function ClassYieldChart(): React.JSX.Element {
           treatment the data tables already get. `touch-pan-x` so a horizontal drag scrolls
           the container while the crosshair still tracks a tap. */}
       <div className="-mx-1 overflow-x-auto px-1">
+      {/* `aria-label` rather than an `<svg><title>`: React 19 hoists `<title>` as
+          document metadata and server and client disagree inside an `<svg>`, which is a
+          hydration failure. Full reasoning in `series-chart.tsx`. */}
       <svg
         ref={svgRef}
         viewBox={`0 0 ${W} ${H}`}
         role="img"
-        aria-labelledby={titleId}
+        aria-label={`Gross rental yield by flat class, ${formatPeriod(periods[0] ?? "")} to ${formatPeriod(periods[periods.length - 1] ?? "")}`}
         className="h-auto w-full min-w-[560px] touch-pan-x"
         onPointerMove={handleMove}
         onPointerLeave={() => setHoverIndex(null)}
       >
-        <title id={titleId}>
-          Gross rental yield by flat class, {formatPeriod(periods[0] ?? "")} to{" "}
-          {formatPeriod(periods[periods.length - 1] ?? "")}
-        </title>
 
         {geom.ticks.map((t) => (
           <g key={t}>
