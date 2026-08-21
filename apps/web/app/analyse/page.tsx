@@ -501,6 +501,11 @@ export default function AnalysePage(): React.JSX.Element {
     const stashed = sessionStorage.getItem(DRAFT_STASH_KEY);
     if (stashed === null) return;
     sessionStorage.removeItem(DRAFT_STASH_KEY);
+    /* When the URL carries a listing, that branch rebuilds this draft from the same
+       `listingToDraft` **and** restores the photo and district the stash never held — so it is
+       the authoritative source and this one must not fight it. Dropping the key and returning
+       leaves one effect submitting instead of two racing over `reportGated`. */
+    if (new URLSearchParams(window.location.search).has("listing")) return;
     try {
       setDraft(JSON.parse(stashed) as Draft);
       setReportGated(true); // re-armed so the effect below retries once the session lands
@@ -582,7 +587,20 @@ export default function AnalysePage(): React.JSX.Element {
 
     if (authConfigured && user === null) {
       sessionStorage.setItem(DRAFT_STASH_KEY, JSON.stringify(submitted));
-      window.location.assign("/login?next=/analyse");
+      /**
+       * Back to the URL they were **actually on**, query string included — not a bare
+       * `/analyse`.
+       *
+       * Found by walking the app as a logged-out visitor: clicking a sample listing on the
+       * free Finder sends you here, and `next=/analyse` dropped the `?listing=` on the way.
+       * The figures survived in the stash, so the bug was quiet — you came back to a report
+       * with the right numbers and **no photographs, no location map, and no district**, since
+       * all three are set only by the `?listing=` branch. The rent panel then had no region to
+       * highlight and the comparables no district to rank by, which is precisely the context
+       * that makes them worth reading.
+       */
+      const back = window.location.pathname + window.location.search;
+      window.location.assign(`/login?next=${encodeURIComponent(back)}`);
       return;
     }
     setReportGated(false);

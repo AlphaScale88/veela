@@ -109,7 +109,15 @@ interface NavLink {
 
 const NAV_LINKS: readonly NavLink[] = [
   { href: "/dashboard", label: "Dashboard", icon: GridIcon },
-  { href: "/finder", label: "Search", icon: SearchIcon },
+  /* "Finder", not "Search" — one page must not have two names.
+     Found by walking the app as a new user: `/finder` was called **Search** by this sidebar,
+     **Finder** by the marketing header, and "Find a property worth analysing" by its own
+     heading. Three names for one destination, and the two navigation labels are the ones that
+     matter: a reader who arrives via the header and later looks for it in the sidebar has no
+     reason to think Search is the same place. The label was inherited from the reference
+     product's own sidebar, which is a reason to have considered it and not a reason to keep it
+     when this product already calls the page something else in the nav a stranger meets first. */
+  { href: "/finder", label: "Finder", icon: SearchIcon },
   { href: "/assistant", label: "AI Assistant", icon: SparkleIcon },
   { href: "/map", label: "Market Explorer", icon: MapIcon },
 ];

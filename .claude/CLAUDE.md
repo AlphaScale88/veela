@@ -3274,6 +3274,73 @@ checker caught it immediately and unmistakably — one page crawled, a 500, and 
 assertion failing at once. A link checker that also compiles the app turns out to be a build check
 with better error messages.
 
+## Walked the app as four users, and what that found (21/08/2026)
+
+Asked to simulate users and judge how easy the app is to understand and navigate. Four personas
+with real goals, driven in a browser, **clicking only what was visible** — no typed URLs, no
+knowledge of routes. If a persona could not get somewhere by reading the page, that was the
+finding.
+
+### Three real defects, two of them invisible from the code
+
+**1. A logged-out reader lost their listing at the login wall.** `/finder` is ungated on purpose —
+fabricated listings are marketing for the report. Click a card and `submit()` sends you to
+`/login?next=/analyse`, which **drops the `?listing=`**. The figures survived (the sessionStorage
+stash), so the bug was quiet: you came back to a report with the right numbers and **no
+photographs, no location map and no district**, because all three are set only by the `?listing=`
+branch. The rent panel then had no region to highlight and the comparables no district to rank by
+— exactly the context that makes them worth reading. `next` now carries
+`window.location.pathname + search`, and the stash effect stands down when the URL has a listing so
+the two do not race over `reportGated`.
+
+**2. `?next=` was an open redirect** — found while fixing the first, not reported. `/login` handed
+the raw parameter to `window.location.assign`, so `/login?next=https://evil.example` would bounce
+somebody through Veela's own correctly-certificated login form and off-site the moment they
+authenticate. That is the classic phishing setup. `safeNext()` whitelists *shape* rather than
+blacklisting strings — must start `/`, must not start `//` or `/\` (browsers normalise the
+backslash) — so a new way of writing an absolute URL fails closed. Verified against four hostile
+values; all fall back to `/portfolio`, and a legitimate path still survives.
+
+**3. One page had two navigation names.** `/finder` was **Search** in the product sidebar and
+**Finder** in the marketing header. Two navigations of one product disagreeing about what a
+destination is called, and a reader who arrives via the header has no reason to think Search is the
+same place. The label was inherited from the reference product's sidebar. Now "Finder" in both.
+
+### Two suspicions that were wrong, and are worth recording as such
+
+- **"The landing CTA does not navigate."** It does — `Analyse a property` → `/analyse`,
+  `Explore the map` → `/map`. The persona script had clicked before hydration.
+- **"The Finder's map opens on Shenzhen."** It does not. The first screenshot was cropped at the
+  viewport fold and showed only the map's top edge; shooting the pane itself shows the whole
+  territory correctly framed with all 54 pins. **Nearly "fixed" a map that was not broken** — the
+  reason to screenshot the element rather than the page.
+
+### Observations left alone, deliberately
+
+- **Nine of eighteen nav labels differ from the heading of the page they open** — "Analyse a
+  property" → *"Is this property worth it?"*, "Market Explorer" → *"Supply and demand, by
+  district"*. That is editorial voice, and a punchy `h1` is a real design choice; it is only a
+  defect when the nav gives a destination a *different name* rather than a different sentence,
+  which is why only the Search/Finder case was changed. The remaining near-miss is "Saved
+  Properties" → *"My properties"*; flagged, not touched.
+- **`/finder` carries two search boxes** — a district filter in the top bar and a real-building
+  lookup in the body — and the page opens by explaining that they are not the same thing. When a
+  layout needs a paragraph to disambiguate two adjacent controls, that is worth knowing even if the
+  copy is honest.
+- **Clicking a Services item leaves the product shell**, sidebar and all, because those four pages
+  render with the marketing header on purpose. Correct for a stranger arriving from a search
+  result, a discontinuity for someone already inside the app.
+
+### What could not be walked
+
+**The logged-in half.** There is no test account password to hand, and creating one burns the free
+tier's signup-email quota. So the report itself, the portfolio, alerts and compare were checked
+structurally rather than as a user — said plainly rather than implied by the rest passing.
+
+Verified after the changes: 48 pages crawled (up from 43, the renamed nav opening more), no broken
+links, no console errors, 49/49 tests, clean typecheck across all 8 packages, clean production
+build.
+
 ## Working conventions
 - Dates DD/MM/YYYY. Currency: **HKD** for Hong Kong, **VND** for Vietnam, **EUR** for
   France — always state which, never a bare number. Keep a single reporting currency

@@ -13,6 +13,33 @@ import { useAuth } from "../../components/auth-provider";
  * inline gate embedded in `/analyse`'s report (`components/login-form.tsx`'s own doc
  * comment explains why that one can't redirect the same way).
  */
+/**
+ * `?next=` is attacker-controlled, and this page hands it straight to
+ * `window.location.assign` — so it has to be a path on this site or it is an **open redirect**.
+ *
+ * `/login?next=https://evil.example` would otherwise bounce somebody through Veela's own login
+ * form and out to another site the moment they authenticate, which is the classic phishing setup:
+ * the victim sees a genuine, correctly-certificated Veela login, types real credentials, and lands
+ * somewhere else entirely. Noticed while fixing the round trip that *populates* this parameter,
+ * not by a report.
+ *
+ * Three things are refused, and the third is the one people forget:
+ * - anything that is not rooted at `/` (`https://…`, `javascript:…`, a bare `evil.com`)
+ * - `//host`, which browsers read as protocol-relative and therefore off-site
+ * - `/\host` and `/\\host`, since a backslash is normalised to a slash by several browsers
+ *
+ * Anything refused falls back to the same default an absent parameter gets. Deliberately a
+ * whitelist of shape rather than a blacklist of strings: a new way to write an absolute URL
+ * should fail closed.
+ */
+function safeNext(raw: string | null): string {
+  const fallback = "/portfolio";
+  if (raw === null || raw === "") return fallback;
+  if (!raw.startsWith("/")) return fallback;
+  if (raw.startsWith("//") || raw.startsWith("/\\")) return fallback;
+  return raw;
+}
+
 export default function LoginPage(): React.JSX.Element {
   const { user, configured } = useAuth();
   const [next, setNext] = useState("/portfolio");
@@ -20,7 +47,7 @@ export default function LoginPage(): React.JSX.Element {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    setNext(params.get("next") ?? "/portfolio");
+    setNext(safeNext(params.get("next")));
     if (params.get("error") === "auth_failed") setAuthFailed(true);
   }, []);
 
