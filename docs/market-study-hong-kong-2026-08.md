@@ -140,19 +140,26 @@ The effect on an HK$8M flat bought by a second-property buyer today: Veela repor
 
 Corrected on 22 August 2026. Three tests now pin it: all three buyer profiles pay the same duty on a current date, the two scales are asserted to be the same table, and the flat 15% assertions were moved onto a 2023-dated transaction where they are the law.
 
-### 3.4 Mortgage rules — our defaults are stale
+### 3.4 Mortgage rules — our defaults were stale
 
-Current HKMA position, from its countercyclical macroprudential measures:
+HKMA position from its countercyclical macroprudential measures, against what Veela shipped:
 
-| Rule | Current | Veela's shipped default | Verdict |
+| Rule | Current | Veela's default until 24/08/2026 | Verdict |
 |---|---|---|---|
-| LTV cap, residential | **70% flat**, regardless of value or self-occupation (from 16 Oct 2024) | 70% up to HK$30M, 60% above | **stale** |
+| LTV cap, residential | **70% flat**, regardless of value or self-occupation (from 16 Oct 2024) | 70% up to HK$30M, 60% above | **was stale** |
 | Debt-servicing ratio | **50%** | 50% | correct |
-| Stress test (+2pp) | **suspended** since 28 Feb 2024 | applied, with a 60% stressed-DSR ceiling | **stale** |
+| Stress test (+2pp) | **suspended** since 28 Feb 2024 | applied, and capping the loan | **was stale** |
 
-Veela flags these `unverified: true` and shows a "confirm with a bank" caveat keyed off that flag, so the product is honest about not knowing. It can now be made *right*: the effect today is that Veela tells some buyers they may not qualify using a value-banded cap and a stress test the regulator no longer imposes.
+Veela flagged these `unverified: true` and showed a "confirm with a bank" caveat keyed off that flag, so the product was honest about not knowing. Both stale rules erred in the same direction — telling a buyer they could borrow **less** than the regulator allows:
 
-*Recommendation:* update the defaults, but cite the HKMA circular itself. This study's sources for the mortgage rules are secondary — the HKMA's own pages did not render to an automated fetch, and a lending policy shown to a user should rest on the primary document.
+- **The banded cap cost a luxury buyer four million dollars of headroom.** On a HK$40M flat Veela capped the loan at HK$24M against an actual HK$28M, i.e. it demanded HK$4M more deposit than the rules require.
+- **The withdrawn stress test kept capping the income-based limit.** At a HK$80k monthly income the ceiling was HK$7.45M against HK$7.58M — smaller in proportion, because at 4% the stressed 60% DSR sits close to the contractual 50% one, but wrong for a reason no longer in force.
+
+> **Closed on 24 August 2026** (recommendation 11.4). Both corrected, `unverified` cleared, and three tests now pin the shape against the cited source: that the LTV cap has no value band, that the stress test is *recorded as suspended* rather than deleted, and that suspending it raises what the income allows.
+>
+> Two things this fix found that the table above did not say. **The page was framed around the wrong question** — its headline asked "Would the stress test let this through?", a test suspended two and a half years earlier, and it computed the borrowing limit from it. The framing was the bug; the numbers were downstream of it. And **the caveat was keyed off `unverified`**, so clearing that flag — the very thing this recommendation asked for — would have silently deleted the whole disclaimer from the page, including the half about a bank lending inside a ceiling at its own discretion, which no amount of sourcing makes untrue. That half is now unconditional.
+
+*On sourcing:* the HKMA's own pages still do not render to an automated fetch, so the defaults cite the **Government Information Services releases** carrying the same announcements — `info.gov.hk` 16/10/2024 for the LTV and DSR, 28/02/2024 for the stress-test suspension. Those are the Government's own press channel and quote the measures verbatim, but they are not the HKMA's circular to authorised institutions, which is a letter and is not published. Worth noting rather than glossing: the figures are quoted, not paraphrased, but the primary instrument itself remains unread.
 
 ---
 
@@ -377,8 +384,10 @@ competitive picture (§5), tenure and the letting floor (§2), and investor shar
   is therefore not quoted here.
 - **The UBS 20% investor share** rests on one press citation of an analyst, not a primary research
   note. It carries the §8 arithmetic and deserves a better source.
-- **HKMA's rules from the primary circular.** The LTV/DSR position in §3.4 rests on secondary
-  sources because hkma.gov.hk would not render to an automated fetch.
+- **HKMA's rules from the primary circular.** Improved but not closed: §3.4 now quotes the
+  Government Information Services releases of 16/10/2024 and 28/02/2024 verbatim rather than
+  secondary commentary, but hkma.gov.hk still would not render, and the circular to authorised
+  institutions is a letter that is not published at all.
 - **Owner-occupied vs rented split of RVD's 1.29M private units** - likely in the Hong Kong
   Property Review, whose PDFs did not render. Worth reading by hand.
 - **Agent-side package pricing** for the portals (28Hse, Squarefoot, House730, Midland) - all
@@ -395,7 +404,7 @@ In order, highest expected value first:
    need a negotiated licence. Zero cost either way, and (a) needs nobody's permission.
 2. **Name an invoicing entity** in `/terms` and `/privacy`. Nothing can be charged until this exists; it gates every revenue scenario in §8.
 3. ~~**Add the missing dated rule sets** (pre-Feb-2024 and Feb-2024 → Feb-2026).~~ **Done 22/08/2026** — five sets, not two, covering 22/02/2023 onwards; and it surfaced the flat-15% error in §3.3a.
-4. **Correct the mortgage defaults** against the HKMA's own circular — 70% flat, no stress test — and only then consider clearing the `unverified` flag.
+4. ~~**Correct the mortgage defaults** against the HKMA's own circular — 70% flat, no stress test — and only then consider clearing the `unverified` flag.~~ **Done 24/08/2026** — and it found that the page's headline question, not just its numbers, was about a test suspended in February 2024. See §3.4.
 5. **Sell the API to five brokers before building more consumer features.** February 2026's rate
    change is the pitch: every hard-coded stamp duty table in this city is currently wrong.
 6. **Reconsider HK$188.** On published comparables (§7) it prices Veela as a bookkeeping tool when

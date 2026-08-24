@@ -1793,6 +1793,50 @@ wrong acquisition total for exactly the users the sets exist to serve. And the
 28/02/2024 they are the same table, so the old unconditional warning was inventing a cost that no
 longer exists.
 
+## The mortgage page was asking about a suspended test (24/08/2026)
+
+Market study recommendation 4. `HK_LENDING_DEFAULT` shipped a value-banded LTV cap (70% to
+HK$30M, 60% above) and applied the +2-point stress test to the income limit. The banding was
+removed by the HKMA on **16/10/2024** and the stress test suspended on **28/02/2024**; both
+defaults had been wrong for roughly two years, and both in the direction of telling a buyer they
+could borrow less than the rules allow — HK$24M against HK$28M on a HK$40M flat, which is HK$4M
+of deposit that is not required.
+
+Now: one LTV band at 70% with no threshold, and `stressTestSuspendedSince: "2024-02-28"`.
+
+### Worth knowing
+
+**Suspension is recorded, not encoded as `stressPoints: 0`.** "There is no test" and "the test
+adds nothing" are different statements and only the first is true, so the margin survives and
+reinstating the test is a one-field change — the same treatment the tax engine gives BSD and SSD.
+The stressed payment is still computed and still shown, because a rate rise would still cost
+that; it simply no longer caps the loan. `passesStressTest` is `null` while suspended, and the UI
+must not render `null` as a verdict — it reads as a refusal. `withinDsr` is the live test.
+
+**The framing was the bug, not the numbers.** The page's headline asked "Would the stress test let
+this through?" and its benefit cards called +2 points "what a bank actually checks". Correcting
+two constants under that copy would have left the page confidently answering a question that
+stopped existing in February 2024. Hero, cards, FAQ and the result panel all moved to the
+servicing limit.
+
+**Clearing `unverified` would have deleted the disclaimer.** The whole caveat block was wrapped in
+`{HK_LENDING_DEFAULT.unverified && ...}`, so doing what the recommendation asked — sourcing the
+figures and clearing the flag — would have silently removed it, including the part saying a bank
+lends inside the HKMA's ceiling at its own discretion. Sourcing a cap does not make it an offer.
+That sentence is now unconditional and only the "these are working assumptions" clause is keyed
+off the flag.
+
+**DSR is compared in cents with a one-unit tolerance**, matching `withinLtv`. Borrowing exactly
+`maxLoanByIncome` puts the payment precisely on the ceiling, where a strict float comparison is
+decided by a half-cent of rounding — and it lands on "refused" often enough to tell a borrower
+their own computed maximum is refused.
+
+**Still not from the primary instrument.** hkma.gov.hk does not render to an automated fetch, so
+the source line cites the Government Information Services releases of 16/10/2024 and 28/02/2024,
+which carry the measures verbatim. The HKMA's circular to authorised institutions is a letter and
+is not published. `maxTermYears: 30` remains market practice rather than a rule, which is why
+`unverified` stays a per-policy flag rather than being deleted.
+
 ## Consent at signup, pricing on the landing page, and a monthly tier (16/08/2026)
 
 ### Terms and privacy are now accepted and recorded

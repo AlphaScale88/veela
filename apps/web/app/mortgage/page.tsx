@@ -15,8 +15,8 @@ import { BenefitCards, FactBar, Faq, ServiceHero } from "../../components/servic
 
 const BENEFITS = [
   {
-    title: "The test that decides it",
-    caption: "Your payment re-run at +2 points, which is what a bank actually checks.",
+    title: "The rules as they stand",
+    caption: "70% loan-to-value, flat, and a 50% servicing limit — with the source on screen.",
     icon: GaugeIcon,
   },
   {
@@ -37,12 +37,12 @@ const FAQ = [
     a: "No. Comparable products run this page as a lead funnel — you fill in a form and a lender calls. Veela has vetted nobody, takes no referral fee and passes your details to no one. Approach banks directly or use a broker you chose yourself, then compare their number against this one.",
   },
   {
-    q: "What is the stress test, and why does it matter more than the rate?",
-    a: "Hong Kong lenders check you could still afford the payment if rates rose — conventionally by two percentage points — and that your debt-servicing ratio stays inside their limit under that scenario. Plenty of applications clear the payment at today's rate and fail the stressed one, which is why this page leads with it.",
+    q: "Isn't there a stress test?",
+    a: "There was, and for years it was the test that decided Hong Kong applications: banks checked you could still afford the payment if rates rose two percentage points. The HKMA suspended that requirement on 28 February 2024. What binds now is the debt-servicing ratio at your actual rate — 50% of income, every debt counted. This page still shows the +2-point payment, because a rate rise would still cost you that, but it no longer caps what you can borrow.",
   },
   {
     q: "Are the caps here the real HKMA numbers?",
-    a: "Treat them as working assumptions, not current guidance. Loan-to-value caps and servicing limits have been revised repeatedly, and banks apply their own income assessment on top. That is exactly why every one of them is shown on screen and editable — put in what your bank quotes and the answer becomes yours rather than ours.",
+    a: "Yes, as of August 2026, and the source is named on screen: 70% loan-to-value regardless of the property's value or whether you will live in it, and a 50% servicing limit, both from the Government's announcement of 16 October 2024. Two things remain assumptions — the 30-year maximum term, which is market practice rather than a supervisory rule, and more importantly what any particular bank will lend inside those ceilings. Every field stays editable for that second reason.",
   },
   {
     q: "Why does my income cap look so different from the LTV cap?",
@@ -65,19 +65,28 @@ const FAQ = [
  * borrower to a lender for a fee is also a different regulated activity from computing a
  * number, and this stays firmly on the computing side.
  *
- * What is genuinely useful and entirely honest is the arithmetic: the LTV cap for the price
- * band, the payment, the payment **if rates rose two points**, and whether the resulting
- * debt-servicing ratio would clear. That is what actually decides a Hong Kong application, and
- * it is what most buyers discover late.
+ * What is genuinely useful and entirely honest is the arithmetic: the LTV cap, the payment, the
+ * payment **if rates rose two points**, and whether the resulting debt-servicing ratio clears
+ * the limit. That last one is what actually decides a Hong Kong application, and it is what most
+ * buyers discover late.
  *
- * ## Every policy number is on screen and editable
+ * ## The stress test is no longer the answer to "would this get through"
  *
- * The HKMA has revised loan-to-value caps and servicing limits repeatedly. Hardcoding a cap we
- * cannot cite would be exactly the "unsourced rate is a bug" failure this codebase refuses —
- * with a worse consequence than usual, since the wrong answer tells someone they qualify when
- * they do not. So the policy is `HK_LENDING_DEFAULT`, it is flagged `unverified`, the UI shows
- * every value, and the reader can change any of them. The maths is certain; the policy is
- * declared.
+ * This page used to lead with the +2-point stress test, because for years that was the test that
+ * sank applications. The HKMA suspended it on 28/02/2024, and the copy here said otherwise until
+ * 24/08/2026 — asking a headline question about a test that no longer exists, and computing the
+ * borrowing limit from it, which understated what a reader could borrow.
+ *
+ * The stressed payment is still shown. A rate rise would still cost that, and a buyer who can
+ * only afford the loan at exactly today's rate should see it. It is presented as a sensitivity,
+ * which is what it now is, rather than as a gate.
+ *
+ * ## Every policy number is still on screen and editable
+ *
+ * The caps are now transcribed from the Government's own announcements rather than assumed, so
+ * `unverified` is clear — but they stay editable, because the HKMA sets a ceiling and a bank
+ * lends inside it at its own discretion. A supervisory maximum is not an offer, and that caveat
+ * is now unconditional on the page instead of keyed off a flag that could be cleared.
  */
 
 const M = 100;
@@ -102,6 +111,8 @@ export default function MortgagePage(): React.JSX.Element {
       ltvBands: [{ upToMinor: null, maxLtv: maxLtvPct / 100 }],
       maxDsr: maxDsrPct / 100,
       maxStressedDsr: Math.min(1, maxDsrPct / 100 + 0.1),
+      // `stressTestSuspendedSince` is inherited from the default, so editing the margin changes
+      // the sensitivity shown and does not quietly reinstate a cap the regulator withdrew.
       stressPoints,
     }),
     [maxLtvPct, maxDsrPct, stressPoints],
@@ -121,15 +132,17 @@ export default function MortgagePage(): React.JSX.Element {
     [price, loan, rate, term, income, otherDebt, policy],
   );
 
-  const pass = a.passesStressTest;
+  // The live test. `passesStressTest` is null while the HKMA's requirement is suspended, and
+  // rendering null as a verdict would read as a refusal.
+  const pass = a.withinDsr;
 
   return (
     <div className="col py-12 sm:py-16">
       <ServiceHero
         eyebrow="Services · Mortgage"
         icon={BankIcon}
-        title="Would the stress test let this through?"
-        subtitle="Hong Kong banks do not just check you can afford today's payment. They check you could still afford it if rates rose — and that test, not the headline rate, is what most applications actually turn on."
+        title="How much would a bank actually lend?"
+        subtitle="Two ceilings decide it: 70% of the price, and a monthly payment that fits inside half your income once every other debt is counted. The +2-point stress test that used to sink Hong Kong applications was suspended in February 2024 — still worth knowing, no longer a gate."
       />
 
       <BenefitCards items={BENEFITS} />
@@ -163,17 +176,18 @@ export default function MortgagePage(): React.JSX.Element {
           </Section>
 
           <Section
-            title="The bank's rules"
-            hint="Shown because they are assumptions, not facts. Change them to whatever your bank quotes."
+            title="The rules"
+            hint="The first two are the HKMA's current ceilings. Change them to whatever your bank quotes — it may lend inside them, never outside."
           >
             <Field label="Max loan-to-value" value={maxLtvPct} onChange={setMaxLtvPct} unit="%" />
             <Field label="Max debt-servicing ratio" value={maxDsrPct} onChange={setMaxDsrPct} unit="%" />
             <Field
-              label="Stress test adds"
+              label="Rate-rise sensitivity"
               value={stressPoints}
               onChange={setStressPoints}
               unit="points"
               step={0.5}
+              hint="Not a cap — the HKMA suspended the stress test in February 2024. Shown so you can see what a rise would cost."
             />
           </Section>
         </div>
@@ -189,7 +203,7 @@ export default function MortgagePage(): React.JSX.Element {
                     : "bg-negative/10"
               }`}
             >
-              <div className="eyebrow">The stress test</div>
+              <div className="eyebrow">The servicing limit</div>
               <p className="mt-1 font-display text-[24px] font-semibold tracking-[-0.02em]">
                 {pass === null
                   ? "Add an income"
@@ -201,9 +215,16 @@ export default function MortgagePage(): React.JSX.Element {
                 {pass === null
                   ? "Without an income only the loan-to-value cap can be checked."
                   : pass
-                    ? `At ${rate}% and again at ${(rate + stressPoints).toFixed(1)}%, the payment stays inside the servicing limits.`
-                    : `At ${(rate + stressPoints).toFixed(1)}% the payment breaches the servicing limit. Borrow less, extend the term, or raise the deposit.`}
+                    ? `At ${rate}% the payment and your other debts stay inside ${maxDsrPct}% of income.`
+                    : `At ${rate}% the payment and your other debts breach ${maxDsrPct}% of income. Borrow less, extend the term, or raise the deposit.`}
               </p>
+              {!a.stressTestApplied && a.stressedDsr !== null && (
+                <p className="mt-1.5 text-xs leading-relaxed text-muted">
+                  The +{stressPoints}pt stress test has been suspended since 28/02/2024 and does
+                  not cap this. At that rate the ratio would be{" "}
+                  {formatPercent(a.stressedDsr, 1)}.
+                </p>
+              )}
             </div>
 
             <dl className="grid grid-cols-2 gap-px border-y border-line bg-line">
@@ -217,7 +238,7 @@ export default function MortgagePage(): React.JSX.Element {
                 value={a.dsr === null ? "—" : formatPercent(a.dsr, 1)}
               />
               <Stat
-                label="Stressed ratio"
+                label={a.stressTestApplied ? "Stressed ratio" : "Ratio if rates rose"}
                 value={a.stressedDsr === null ? "—" : formatPercent(a.stressedDsr, 1)}
               />
               <Stat label="Deposit needed" value={formatCompactMoney(a.downPayment)} />
@@ -255,17 +276,23 @@ export default function MortgagePage(): React.JSX.Element {
             </div>
           </div>
 
-          {/* Obligatory, and keyed off the policy's own `unverified` flag rather than being a
-              sentence someone might tidy away later. */}
-          {HK_LENDING_DEFAULT.unverified && (
-            <p className="mt-3 rounded-card border border-caution/40 bg-caution/10 px-4 py-3 text-xs leading-relaxed text-muted">
-              <strong className="text-mist">Confirm the rules before relying on this.</strong> The
-              caps above are working assumptions, not a transcription of current HKMA guidance —
-              they have been revised repeatedly, and banks apply their own income assessment on
-              top. Source given as {HK_LENDING_DEFAULT.source} ({HK_LENDING_DEFAULT.asOf}). This is
-              a calculator, not a mortgage offer, and not financial advice.
-            </p>
-          )}
+          {/* Unconditional. This used to be keyed off `unverified`, which meant clearing that
+              flag would have silently removed the whole caveat from the page — including the
+              half of it that has nothing to do with whether the caps are sourced. */}
+          <p className="mt-3 rounded-card border border-caution/40 bg-caution/10 px-4 py-3 text-xs leading-relaxed text-muted">
+            <strong className="text-mist">A ceiling is not an offer.</strong> The caps above are
+            the HKMA's supervisory maximums — {HK_LENDING_DEFAULT.source}. A bank lends inside
+            them at its own discretion, using its own income assessment, and may lend less. This
+            is a calculator, not a mortgage offer, and not financial advice.
+            {HK_LENDING_DEFAULT.unverified && (
+              <>
+                {" "}
+                <strong className="text-mist">
+                  The figures themselves are working assumptions and need confirming.
+                </strong>
+              </>
+            )}
+          </p>
         </aside>
       </div>
 

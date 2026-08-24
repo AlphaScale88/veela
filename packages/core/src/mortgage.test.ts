@@ -12,13 +12,22 @@ import {
 /**
  * Tests for the mortgage arithmetic.
  *
- * They pin the **maths**, never the policy. `HK_LENDING_DEFAULT` is explicitly marked
- * unverified and is expected to change whenever the HKMA moves; a test asserting "the cap is
- * 70%" would fail for the right reason and be deleted for the wrong one. So the policy-shaped
+ * Mostly they pin the **maths**: a test asserting "the cap is 70%" would fail for the right
+ * reason the next time the HKMA moves and be deleted for the wrong one, so the policy-shaped
  * tests pass a policy in and check the calculator honours it.
+ *
+ * The exception, added 24/08/2026, is the group at the bottom that pins the *shape* of
+ * `HK_LENDING_DEFAULT` against its cited source — that the LTV cap has no value band, and that
+ * the stress test is recorded as suspended. Those are not policy predictions; they are the two
+ * things that were silently wrong for two years, undetected for the same reason the stamp-duty
+ * flat 15% was: nothing asserted them. A future HKMA change should edit these tests *and* the
+ * source line together, which is the point of them.
  */
 
 const M = 100; // minor units per dollar
+
+/** A policy with the stress test back in force, for the arithmetic that only applies then. */
+const STRESSED_POLICY = { ...HK_LENDING_DEFAULT, stressTestSuspendedSince: null };
 
 test("monthly payment matches the standard amortisation formula", () => {
   // HK$4,000,000 at 4% over 25 years — the textbook case, ~HK$21,113/month.
@@ -81,7 +90,7 @@ test("income binds when it is tighter than the LTV cap", () => {
   );
 });
 
-test("the stress test uses the raised rate, so it is always the harder test", () => {
+test("the stressed figures are still computed while the test is suspended", () => {
   const a = assessMortgage({
     priceMinor: 10_000_000 * M,
     loanMinor: 6_000_000 * M,
@@ -89,17 +98,40 @@ test("the stress test uses the raised rate, so it is always the harder test", ()
     termYears: 25,
     monthlyIncomeMinor: 80_000 * M,
   });
-  assert.ok(toMajor(a.stressedPayment) > toMajor(a.payment), "+2 points costs more");
+  assert.equal(a.stressTestApplied, false, "suspended under the shipped default");
+  assert.ok(toMajor(a.stressedPayment) > toMajor(a.payment), "+2 points still costs more");
   assert.ok(a.stressedDsr !== null && a.dsr !== null && a.stressedDsr > a.dsr);
+  assert.equal(a.passesStressTest, null, "not asked is not the same as failed");
 });
 
-test("a comfortable borrower passes and a stretched one fails", () => {
+test("a comfortable borrower clears the servicing limit and a stretched one does not", () => {
   const comfortable = assessMortgage({
     priceMinor: 8_000_000 * M,
     loanMinor: 4_000_000 * M,
     annualRate: 0.04,
     termYears: 25,
     monthlyIncomeMinor: 120_000 * M,
+  });
+  assert.equal(comfortable.withinDsr, true);
+
+  const stretched = assessMortgage({
+    priceMinor: 8_000_000 * M,
+    loanMinor: 5_600_000 * M,
+    annualRate: 0.04,
+    termYears: 25,
+    monthlyIncomeMinor: 45_000 * M,
+  });
+  assert.equal(stretched.withinDsr, false);
+});
+
+test("with the stress test in force it decides the same two borrowers", () => {
+  const comfortable = assessMortgage({
+    priceMinor: 8_000_000 * M,
+    loanMinor: 4_000_000 * M,
+    annualRate: 0.04,
+    termYears: 25,
+    monthlyIncomeMinor: 120_000 * M,
+    policy: STRESSED_POLICY,
   });
   assert.equal(comfortable.passesStressTest, true);
 
@@ -109,8 +141,27 @@ test("a comfortable borrower passes and a stretched one fails", () => {
     annualRate: 0.04,
     termYears: 25,
     monthlyIncomeMinor: 45_000 * M,
+    policy: STRESSED_POLICY,
   });
   assert.equal(stretched.passesStressTest, false);
+});
+
+test("suspending the stress test raises what the income allows", () => {
+  const base = {
+    priceMinor: 100_000_000 * M, // huge, so the LTV cap cannot bind
+    loanMinor: 1_000 * M,
+    annualRate: 0.04,
+    termYears: 25,
+    monthlyIncomeMinor: 100_000 * M,
+  };
+  const suspended = assessMortgage(base);
+  const stressed = assessMortgage({ ...base, policy: STRESSED_POLICY });
+
+  assert.ok(suspended.maxLoanByIncome !== null && stressed.maxLoanByIncome !== null);
+  assert.ok(
+    toMajor(suspended.maxLoanByIncome) > toMajor(stressed.maxLoanByIncome),
+    "a withdrawn test must not keep capping the loan",
+  );
 });
 
 test("existing debt reduces borrowing capacity", () => {
@@ -150,9 +201,36 @@ test("the income cap is the exact inverse of the payment formula", () => {
     termYears: 25,
     monthlyIncomeMinor: income,
   });
+  assert.ok(atMax.dsr !== null);
+  assert.ok(
+    Math.abs(atMax.dsr - HK_LENDING_DEFAULT.maxDsr) < 0.005,
+    `DSR should sit on the ceiling, got ${atMax.dsr}`,
+  );
+  assert.equal(atMax.withinDsr, true, "exactly at the limit still clears");
+});
+
+test("the income cap inverts against the stressed ceiling when the test applies", () => {
+  const income = 100_000 * M;
+  const a = assessMortgage({
+    priceMinor: 100_000_000 * M,
+    loanMinor: 1_000 * M,
+    annualRate: 0.04,
+    termYears: 25,
+    monthlyIncomeMinor: income,
+    policy: STRESSED_POLICY,
+  });
+  assert.ok(a.maxLoanByIncome !== null);
+  const atMax = assessMortgage({
+    priceMinor: 100_000_000 * M,
+    loanMinor: Math.round(toMajor(a.maxLoanByIncome) * M),
+    annualRate: 0.04,
+    termYears: 25,
+    monthlyIncomeMinor: income,
+    policy: STRESSED_POLICY,
+  });
   assert.ok(atMax.stressedDsr !== null);
   assert.ok(
-    Math.abs(atMax.stressedDsr - HK_LENDING_DEFAULT.maxStressedDsr) < 0.005,
+    Math.abs(atMax.stressedDsr - STRESSED_POLICY.maxStressedDsr) < 0.005,
     `stressed DSR should sit on the ceiling, got ${atMax.stressedDsr}`,
   );
   assert.equal(atMax.passesStressTest, true, "exactly at the limit still passes");
@@ -189,10 +267,30 @@ test("down payment and total interest are consistent with the loan", () => {
   );
 });
 
-test("the shipped default policy is flagged unverified", () => {
-  // Not a style check. The UI keys its "confirm these with a bank" caveat off this flag, so
-  // silently clearing it would remove the warning from the page.
-  assert.equal(HK_LENDING_DEFAULT.unverified, true);
+test("the shipped default policy cites a source and a date", () => {
+  // The flag is no longer set, because the caps are transcribed from the Government's own
+  // announcements. The page's "not a mortgage offer" caveat is now unconditional rather than
+  // keyed off this, so clearing it cannot remove a warning from the screen.
+  assert.equal(HK_LENDING_DEFAULT.unverified, false);
   assert.ok(HK_LENDING_DEFAULT.source.length > 0);
   assert.ok(/^\d{4}-\d{2}$/.test(HK_LENDING_DEFAULT.asOf));
+});
+
+test("the LTV cap has no value band, per the 16/10/2024 measures", () => {
+  // "...regardless of the value of the property and whether it is for self-occupation."
+  // The banded 70/60 cap this replaced was withdrawn in October 2024 and shipped here until
+  // 24/08/2026, understating what a buyer above HK$30M could borrow by a tenth of the price.
+  assert.equal(HK_LENDING_DEFAULT.ltvBands.length, 1, "one band, no threshold");
+  assert.equal(HK_LENDING_DEFAULT.ltvBands[0]?.upToMinor, null);
+  for (const price of [5_000_000, 30_000_000, 35_000_000, 120_000_000]) {
+    assert.equal(maxLtvFor(HK_LENDING_DEFAULT, price * M), 0.7, `flat at HK$${price}`);
+  }
+});
+
+test("the stress test is recorded as suspended, not deleted", () => {
+  // Same treatment as BSD and SSD in the tax engine: the margin survives so reinstating the
+  // test is one field, but while the date is set it must not cap anyone's loan.
+  assert.equal(HK_LENDING_DEFAULT.stressTestSuspendedSince, "2024-02-28");
+  assert.equal(HK_LENDING_DEFAULT.stressPoints, 2, "the margin is kept for reinstatement");
+  assert.ok(HK_LENDING_DEFAULT.maxStressedDsr > HK_LENDING_DEFAULT.maxDsr);
 });

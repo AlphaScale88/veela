@@ -5,18 +5,22 @@
  * ## The parameters are inputs, not constants, and that is the whole design
  *
  * Hong Kong's loan-to-value caps, debt-servicing ratio limits and the stress-test margin are
- * set by the HKMA and **have been revised repeatedly** — the caps were relaxed in 2024 and
- * again since. This codebase treats an unsourced rate as a bug, and hardcoding a cap I cannot
- * cite would be exactly that, with a worse failure mode than usual: a borrower told they
- * qualify when they do not.
+ * set by the HKMA and **have been revised repeatedly** — twice in 2024 alone.
  *
- * So every policy number is a **parameter with a stated default that the UI shows and lets you
- * change**, and `LendingPolicy` carries the date and source of whatever it was set from. The
- * arithmetic below is certain; the policy is declared. That split is the same one the verdict
- * engine already makes between `computeVerdict` (arithmetic) and `HK_RULE_SETS` (dated rules) —
- * the difference is that stamp duty is published as a table we transcribed, while lending
- * policy is a supervisory guideline a bank applies with discretion, so it can never be more
- * than an indication here.
+ * The defaults below are now transcribed from the Government's own announcements rather than
+ * assumed (see `HK_LENDING_DEFAULT`), but they stay **parameters the UI shows and lets you
+ * change**, for a reason that survives being able to cite them: the HKMA sets a ceiling, and a
+ * bank lends inside it at its own discretion, using its own income assessment. A supervisory
+ * maximum is not an offer. So `LendingPolicy` carries the source and date of whatever it was
+ * set from, the arithmetic below is certain, and the policy is declared.
+ *
+ * That split is the same one the verdict engine makes between `computeVerdict` (arithmetic) and
+ * `HK_RULE_SETS` (dated rules), with one deliberate difference: the rule sets are **dated and
+ * versioned** because stamp duty is a fact about a transaction that already happened, so an
+ * analysis of a 2023 purchase needs 2023's table. Lending policy is a *forward-looking*
+ * constraint — the question is always "what could I borrow now" — so there is one current
+ * policy rather than a timeline of them. A borrower analysing a mortgage they already hold
+ * enters its actual terms instead.
  *
  * **This is a calculator, not a mortgage offer, and not advice.** Banks price individually, use
  * their own income assessment, and are not bound by anything computed here.
@@ -32,10 +36,22 @@ export interface LendingPolicy {
   readonly ltvBands: readonly { readonly upToMinor: number | null; readonly maxLtv: number }[];
   /** Debt-servicing ratio ceiling at the contractual rate — all monthly debt ÷ monthly income. */
   readonly maxDsr: number;
-  /** DSR ceiling under the stress scenario. Higher, because the payment is larger. */
+  /** DSR ceiling under the stress scenario. Higher, because the payment is larger.
+   *  Retained while the test is suspended so reinstating it is a one-field change. */
   readonly maxStressedDsr: number;
   /** Rate increase the stress test applies, in percentage points. */
   readonly stressPoints: number;
+  /**
+   * The date the HKMA suspended the interest-rate stress test, or `null` while it is in force.
+   *
+   * Recorded rather than expressed as `stressPoints: 0`, for the same reason the tax engine
+   * records BSD and SSD as suspended instead of deleting them: "there is no test" and "the test
+   * adds nothing" are different statements, and only the first is true. The stressed payment is
+   * still computed and still worth showing as a sensitivity — a borrower should know what +2
+   * points costs — but while this is set it must not cap the loan, because denying someone
+   * credit on a test the regulator withdrew is the failure this field exists to prevent.
+   */
+  readonly stressTestSuspendedSince: string | null;
   /** Longest term banks will normally write. */
   readonly maxTermYears: number;
   /** Where these came from, and when — shown on screen next to the result. */
@@ -47,26 +63,45 @@ export interface LendingPolicy {
 }
 
 /**
- * Defaults, **explicitly marked unverified**.
+ * The current HKMA position, transcribed from the Government's own announcements.
  *
- * These are plausible working numbers for a Hong Kong residential mortgage, not transcriptions
- * of a current HKMA circular. They exist so the calculator has somewhere to start; the UI shows
- * every one of them, lets the reader change it, and says plainly that they must be confirmed
- * with a bank or against the HKMA's current guidelines. Do not remove `unverified` without
- * actually checking the source.
+ * Both figures below were **stale until 24/08/2026** and wrong in the direction that talks a
+ * borrower out of a loan they would in fact be granted:
+ *
+ * - The LTV cap was value-banded, 70% up to HK$30M and 60% above. That was the position from
+ *   28/02/2024 until 16/10/2024, when banding was removed altogether.
+ * - The stress test was applied, and capped the income-based loan. It has been suspended since
+ *   28/02/2024.
+ *
+ * `maxTermYears` is the one number here still not from a circular — 30 years is market practice
+ * across HK lenders, not a supervisory limit — which is why `unverified` is a per-policy flag
+ * and the UI keeps every field editable.
+ *
+ * Sources (the HKMA's own pages do not render to an automated fetch; these are the Government
+ * Information Services releases carrying the same announcements verbatim):
+ * - LTV 70% flat and DSR 50%, in force 16/10/2024: *"The maximum loan-to-value (LTV) ratio for
+ *   all residential properties will be set at 70 per cent, regardless of the value of the
+ *   property and whether it is for self-occupation."*
+ *   https://www.info.gov.hk/gia/general/202410/16/P2024101600258.htm
+ * - Stress test suspended, in force 28/02/2024: *"The HKMA therefore considers it appropriate to
+ *   suspend the interest rate stress testing requirement for property mortgage lending that
+ *   assumes a 200-basis-point rise."*
+ *   https://www.info.gov.hk/gia/general/202402/28/P2024022800267.htm
  */
 export const HK_LENDING_DEFAULT: LendingPolicy = {
-  ltvBands: [
-    { upToMinor: 3_000_000_000, maxLtv: 0.7 },
-    { upToMinor: null, maxLtv: 0.6 },
-  ],
+  // One band, no threshold: "regardless of the value of the property".
+  ltvBands: [{ upToMinor: null, maxLtv: 0.7 }],
   maxDsr: 0.5,
   maxStressedDsr: 0.6,
   stressPoints: 2,
+  stressTestSuspendedSince: "2024-02-28",
   maxTermYears: 30,
-  source: "HKMA supervisory guidance on residential mortgage lending",
+  source:
+    "HKMA countercyclical macroprudential measures, 16/10/2024 (LTV 70% flat, DSR 50%) and 28/02/2024 (stress test suspended)",
   asOf: "2026-08",
-  unverified: true,
+  // The caps are cited. What a bank will actually lend inside them is not, and the UI says so
+  // unconditionally rather than keying that sentence off this flag.
+  unverified: false,
 };
 
 /** The LTV cap that applies at this price. */
@@ -113,11 +148,21 @@ export interface MortgageAssessment {
   readonly requestedLoan: Money;
   readonly withinLtv: boolean;
   readonly payment: Money;
-  /** Payment if the rate rose by `stressPoints`. */
+  /** Payment if the rate rose by `stressPoints`. Computed whether or not the test applies. */
   readonly stressedPayment: Money;
   readonly dsr: number | null;
   readonly stressedDsr: number | null;
+  /** Whether the contractual DSR clears the limit. **This is the live test.** */
+  readonly withinDsr: boolean | null;
+  /**
+   * The regulatory stress test's result, or `null` when it does not apply — either because no
+   * income was supplied or because the HKMA has suspended it. `null` means "not asked", never
+   * "failed", and the UI must not render it as a verdict.
+   */
   readonly passesStressTest: boolean | null;
+  /** False while `policy.stressTestSuspendedSince` is set. Lets the UI label the +2pt figures
+   *  as a sensitivity rather than as a gate. */
+  readonly stressTestApplied: boolean;
   /** Deposit implied by the requested loan. */
   readonly downPayment: Money;
   readonly totalInterest: Money;
@@ -126,10 +171,13 @@ export interface MortgageAssessment {
 /**
  * Assess a requested loan against a policy.
  *
- * The income-based cap is derived from the **stressed** payment, not the contractual one,
- * because that is the binding test in practice: a loan that passes at today's rate and fails at
- * +2 points is not approved. Solving the payment formula backwards for principal is exact —
- * no search loop — so the answer is reproducible rather than approximately right.
+ * The income-based cap is derived from whichever tests actually apply. While the stress test is
+ * in force that means the **stressed** payment, because a loan that passes at today's rate and
+ * fails at +2 points is not approved; while it is suspended the contractual payment is the only
+ * ceiling, and using the stressed one anyway would understate what a borrower can have.
+ *
+ * Solving the payment formula backwards for principal is exact — no search loop — so the answer
+ * is reproducible rather than approximately right.
  */
 export function assessMortgage(input: {
   readonly priceMinor: number;
@@ -160,23 +208,46 @@ export function assessMortgage(input: {
 
   const income = input.monthlyIncomeMinor ?? 0;
   const otherDebt = input.otherMonthlyDebtMinor ?? 0;
+  const stressTestApplied = policy.stressTestSuspendedSince === null;
 
   let dsr: number | null = null;
   let stressedDsr: number | null = null;
+  let withinDsr: boolean | null = null;
   let passesStressTest: boolean | null = null;
   let maxLoanByIncomeMinor: number | null = null;
 
   if (income > 0) {
     dsr = (payment + otherDebt) / income;
     stressedDsr = (stressedPayment + otherDebt) / income;
-    passesStressTest = dsr <= policy.maxDsr && stressedDsr <= policy.maxStressedDsr;
 
     // Room left for a mortgage payment under each ceiling, then the principal that produces it.
     const roomNormal = income * policy.maxDsr - otherDebt;
     const roomStressed = income * policy.maxStressedDsr - otherDebt;
     const byNormal = principalFor(roomNormal, input.annualRate, term);
-    const byStressed = principalFor(roomStressed, input.annualRate + policy.stressPoints / 100, term);
-    maxLoanByIncomeMinor = Math.max(0, Math.min(byNormal, byStressed));
+
+    /*
+     * Compared in cents against the room, not as a ratio against the ceiling, and with the same
+     * one-minor-unit tolerance `withinLtv` uses.
+     *
+     * Borrowing exactly `maxLoanByIncome` puts the payment precisely on the ceiling, so a strict
+     * float comparison there is a coin toss decided by a half-cent of rounding in the loan
+     * amount — and it lands on "no" often enough to tell a borrower at their computed maximum
+     * that their computed maximum is refused.
+     */
+    withinDsr = payment <= roomNormal + 1;
+
+    if (stressTestApplied) {
+      passesStressTest = withinDsr && stressedPayment <= roomStressed + 1;
+      const byStressed = principalFor(
+        roomStressed,
+        input.annualRate + policy.stressPoints / 100,
+        term,
+      );
+      maxLoanByIncomeMinor = Math.max(0, Math.min(byNormal, byStressed));
+    } else {
+      // Suspended. The stressed figures above stay as a sensitivity; they do not bind.
+      maxLoanByIncomeMinor = Math.max(0, byNormal);
+    }
   }
 
   const maxLoanMinor =
@@ -198,7 +269,9 @@ export function assessMortgage(input: {
     stressedPayment: cur(stressedPayment),
     dsr,
     stressedDsr,
+    withinDsr,
     passesStressTest,
+    stressTestApplied,
     downPayment: cur(Math.max(0, input.priceMinor - input.loanMinor)),
     totalInterest: cur(Math.max(0, payment * Math.round(term * 12) - input.loanMinor)),
   };
