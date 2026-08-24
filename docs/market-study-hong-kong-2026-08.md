@@ -128,6 +128,18 @@ Under the **Estate Agents Ordinance (Cap. 511)**, estate agency work requires an
 
 **But it is also a gap.** There have been at least three distinct duty regimes since 2023 (pre-Feb-2024, Feb-2024 → Feb-2026, and Feb-2026 →). Veela holds **one** rule set. A user analysing a 2023 or 2025 purchase cannot be served at all today. Given the Alerts feature exists specifically to catch "the rules moved", this is the highest-value small fix in the product.
 
+> **Closed on 22 August 2026** (recommendation 11.3). Five dated rule sets now cover 22/02/2023 onwards. Building them found that the count was **five regimes, not three** — the Scale 2 value bands moved twice on their own (the fixed HK$100 band went from HK$3M to HK$4M on 26/02/2025) and the 2023 Policy Address halved BSD and NRSD on 25/10/2023 before the February 2024 abolition. It also found a live error in the current rule set, described in §3.3a.
+
+### 3.3a The correction this study did not catch: the flat 15% outlived its abolition
+
+The paragraph above says Veela's engine "is correct and current". On the AVD Scale 2 table it was. On the *other* scale it was not.
+
+Veela charged a buyer who already owned residential property, or bought through a company, a **flat 15%** — AVD Part 1 of Scale 1, the rate that applied until 25/10/2023. That rate was halved to 7.5% in October 2023 and then aligned to the Scale 2 rates on 28/02/2024. The IRD's own rate table has published a single column headed "Rates at Scale 2 or Part 1 of Scale 1" ever since.
+
+The effect on an HK$8M flat bought by a second-property buyer today: Veela reported **HK$1,200,000** of stamp duty against an actual **HK$240,000**. A fivefold overstatement of the single largest acquisition cost, on the product's core number, in the direction that talks a buyer out of a sound deal. It was accompanied by a `critical` finding telling the user the concession they had missed was "often the single largest avoidable cost in the transaction" — advice about a concession that no longer exists to miss.
+
+Corrected on 22 August 2026. Three tests now pin it: all three buyer profiles pay the same duty on a current date, the two scales are asserted to be the same table, and the flat 15% assertions were moved onto a 2023-dated transaction where they are the law.
+
 ### 3.4 Mortgage rules — our defaults are stale
 
 Current HKMA position, from its countercyclical macroprudential measures:
@@ -382,7 +394,7 @@ In order, highest expected value first:
    `info@centamail.com` about the **stock and transaction files**, which sit outside that grant and
    need a negotiated licence. Zero cost either way, and (a) needs nobody's permission.
 2. **Name an invoicing entity** in `/terms` and `/privacy`. Nothing can be charged until this exists; it gates every revenue scenario in §8.
-3. **Add the missing dated rule sets** (pre-Feb-2024 and Feb-2024 → Feb-2026). Today a user with a 2023 or 2025 purchase cannot be served at all, and the engine is the asset.
+3. ~~**Add the missing dated rule sets** (pre-Feb-2024 and Feb-2024 → Feb-2026).~~ **Done 22/08/2026** — five sets, not two, covering 22/02/2023 onwards; and it surfaced the flat-15% error in §3.3a.
 4. **Correct the mortgage defaults** against the HKMA's own circular — 70% flat, no stress test — and only then consider clearing the `unverified` flag.
 5. **Sell the API to five brokers before building more consumer features.** February 2026's rate
    change is the pitch: every hard-coded stamp duty table in this city is currently wrong.

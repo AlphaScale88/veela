@@ -81,6 +81,12 @@ export interface Verdict {
     readonly price: Money;
     readonly stampDuty: Money;
     readonly stampDutyScale: string;
+    /**
+     * Buyer's Stamp Duty. Zero for every transaction on or after 28/02/2024, when it
+     * was abolished — but a real 15% for a non-permanent resident buying in 2023, which
+     * is why it is a line of its own rather than folded into `stampDuty`.
+     */
+    readonly buyerStampDuty: Money;
     readonly agencyFee: Money;
     readonly legalFees: Money;
     readonly total: Money;
@@ -130,7 +136,12 @@ function pickRules(
 
   const chosen = applicable[0];
   if (chosen === undefined) {
-    throw new Error(`No rule set covers transaction date ${date}`);
+    const earliest = [...ruleSets]
+      .map((r) => r.meta.effectiveFrom)
+      .sort()[0];
+    throw new Error(
+      `No rule set covers transaction date ${date}. Rules are held from ${earliest} onwards.`,
+    );
   }
   return chosen;
 }
@@ -180,9 +191,22 @@ export function computeVerdict(
     : rules.stampDuty.other;
   const stampDuty = evaluateScale(scaleUsed, input.price);
 
+  // ---- Buyer's Stamp Duty: charged on top of AVD, and only in the periods where it
+  // was live. Payable by anyone who is not a Hong Kong permanent resident, which
+  // includes every corporate buyer.
+  const bsd = rules.additionalDuties.find((d) => d.id === "hk-bsd");
+  const liableToBsd = !input.buyer.isPermanentResident || input.buyer.purchasingViaCompany;
+  const buyerStampDuty =
+    bsd !== undefined && !bsd.suspended && liableToBsd
+      ? scale(input.price, bsd.rate)
+      : zero(cur);
+
   const agencyFee = input.costs.agencyFee ?? zero(cur);
   const legalFees = input.costs.legalFees ?? zero(cur);
-  const acquisitionTotal = sum([input.price, stampDuty, agencyFee, legalFees], cur);
+  const acquisitionTotal = sum(
+    [input.price, stampDuty, buyerStampDuty, agencyFee, legalFees],
+    cur,
+  );
 
   // ---- annual operating ----
   const grossRent = scale(input.monthlyRent, 12);
@@ -241,13 +265,28 @@ export function computeVerdict(
   // ---- findings: the "potential problems" half of the verdict ----
   const findings: Finding[] = [];
 
-  if (!qualifiesForConcession) {
+  // Since 28/02/2024 both scales are the same table, so there is no concession to
+  // miss and saying otherwise would invent a cost. Compare the scales rather than
+  // assuming the two differ.
+  const concessionExists =
+    rules.stampDuty.firstTimeResident.id !== rules.stampDuty.other.id;
+
+  if (!qualifiesForConcession && concessionExists) {
     findings.push({
       id: "stamp-duty-full-rate",
       severity: "critical",
       title: `Stamp duty at the full rate: ${scaleUsed.label}`,
       detail:
         "You do not qualify for the first-time-buyer concession, so duty is charged on the whole consideration rather than the concessionary scale. This is often the single largest avoidable cost in the transaction — check whether the purchase can be structured to qualify before committing.",
+    });
+  }
+
+  if (buyerStampDuty.amount > 0 && bsd !== undefined) {
+    findings.push({
+      id: "buyer-stamp-duty",
+      severity: "critical",
+      title: `${bsd.label} at ${(bsd.rate * 100).toFixed(1)}% on top of AVD`,
+      detail: `A buyer who is not a Hong Kong permanent resident paid ${bsd.label} in addition to ad valorem duty on this date. It was abolished on 28/02/2024 — the same purchase today would not carry it.`,
     });
   }
 
@@ -357,6 +396,7 @@ export function computeVerdict(
       price: input.price,
       stampDuty,
       stampDutyScale: scaleUsed.label,
+      buyerStampDuty,
       agencyFee,
       legalFees,
       total: acquisitionTotal,

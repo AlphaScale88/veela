@@ -30,16 +30,43 @@ function baseInput(overrides: Partial<PropertyInput> = {}): PropertyInput {
   };
 }
 
-test("first-time permanent resident gets the concessionary scale", () => {
+/** The same flat bought before the cooling measures went, when the buyer's profile still mattered. */
+const IN_2023 = { transactionDate: "2023-06-15" } as const;
+
+test("HK$8M sits in the 3.00% band, whoever the buyer is today", () => {
   const v = computeVerdict(baseInput(), HK_RULE_SETS);
-  // HK$8M sits in the 3.00% band: 240,000.
   assert.equal(toMajor(v.acquisition.stampDuty), 240_000);
-  assert.match(v.acquisition.stampDutyScale, /first-time/i);
+  assert.match(v.acquisition.stampDutyScale, /Scale 2/);
 });
 
-test("owning another property triggers the flat 15% and a critical finding", () => {
+/**
+ * Since 28/02/2024 residency and existing holdings stop changing the duty: the IRD
+ * publishes one column for "Scale 2 or Part 1 of Scale 1". Charging the old flat 15%
+ * to a second-property buyer would overstate the duty fivefold, so all three buyer
+ * profiles are pinned to the same number.
+ */
+test("today, owning another property or buying via a company costs the same duty", () => {
+  const profiles = [
+    { isPermanentResident: true, ownsOtherResidentialProperty: true, purchasingViaCompany: false },
+    { isPermanentResident: false, ownsOtherResidentialProperty: false, purchasingViaCompany: false },
+    { isPermanentResident: true, ownsOtherResidentialProperty: false, purchasingViaCompany: true },
+  ];
+  for (const buyer of profiles) {
+    const v = computeVerdict(baseInput({ buyer }), HK_RULE_SETS);
+    assert.equal(toMajor(v.acquisition.stampDuty), 240_000, JSON.stringify(buyer));
+    assert.equal(toMajor(v.acquisition.buyerStampDuty), 0, "BSD was abolished on 28/02/2024");
+    assert.equal(
+      v.findings.find((f) => f.id === "stamp-duty-full-rate"),
+      undefined,
+      "there is no concession to lose, so nothing should claim there is",
+    );
+  }
+});
+
+test("in 2023, owning another property triggered the flat 15% and a critical finding", () => {
   const v = computeVerdict(
     baseInput({
+      ...IN_2023,
       buyer: {
         isPermanentResident: true,
         ownsOtherResidentialProperty: true,
@@ -54,18 +81,57 @@ test("owning another property triggers the flat 15% and a critical finding", () 
   assert.equal(finding.severity, "critical");
 });
 
-test("buying through a company also loses the concession", () => {
+/**
+ * A non-permanent resident buying in 2023 paid AVD at the flat 15% *and* 15% BSD on
+ * top — HK$2.4M on an HK$8M flat, against HK$240k for the same purchase today. Getting
+ * this wrong is the reason the historical rule sets exist at all.
+ */
+test("in 2023 a non-permanent resident also paid 15% Buyer's Stamp Duty", () => {
   const v = computeVerdict(
     baseInput({
+      ...IN_2023,
       buyer: {
-        isPermanentResident: true,
+        isPermanentResident: false,
         ownsOtherResidentialProperty: false,
-        purchasingViaCompany: true,
+        purchasingViaCompany: false,
       },
     }),
     HK_RULE_SETS,
   );
   assert.equal(toMajor(v.acquisition.stampDuty), 1_200_000);
+  assert.equal(toMajor(v.acquisition.buyerStampDuty), 1_200_000);
+  assert.ok(v.findings.some((f) => f.id === "buyer-stamp-duty"));
+});
+
+test("BSD halved to 7.5% between 25/10/2023 and 28/02/2024", () => {
+  const v = computeVerdict(
+    baseInput({
+      transactionDate: "2023-12-01",
+      buyer: {
+        isPermanentResident: false,
+        ownsOtherResidentialProperty: false,
+        purchasingViaCompany: false,
+      },
+    }),
+    HK_RULE_SETS,
+  );
+  assert.equal(toMajor(v.acquisition.buyerStampDuty), 600_000);
+  assert.equal(toMajor(v.acquisition.stampDuty), 600_000, "AVD Part 1 of Scale 1 halved too");
+});
+
+/** The 2025 Budget raised the fixed HK$100 band, and only that. */
+test("an HK$3.5M flat pays HK$100 in 2025 but not in 2024", () => {
+  const cheap = { price: money(3_500_000, "HKD") } as const;
+  const in2024 = computeVerdict(
+    baseInput({ ...cheap, transactionDate: "2024-06-01" }),
+    HK_RULE_SETS,
+  );
+  const in2025 = computeVerdict(
+    baseInput({ ...cheap, transactionDate: "2025-06-01" }),
+    HK_RULE_SETS,
+  );
+  assert.ok(toMajor(in2024.acquisition.stampDuty) > 100);
+  assert.equal(toMajor(in2025.acquisition.stampDuty), 100);
 });
 
 test("gross yield is rent over price, ignoring costs", () => {

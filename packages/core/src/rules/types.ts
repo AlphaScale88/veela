@@ -69,14 +69,31 @@ export interface CapitalGainsRule {
   readonly note?: string;
 }
 
-/** A duty that exists in law but may be currently suspended. */
-export interface SuspendableDuty {
+/**
+ * A duty charged **on top of** AVD: BSD, SSD, NRSD. Each was live for part of the
+ * period the engine now covers and abolished on 28/02/2024, so the same structure has
+ * to express both states — a rule set for a 2023 purchase carries them live, one for
+ * today carries them suspended. Deleting them would make historical dates unanswerable.
+ */
+export interface AdditionalDuty {
   readonly id: string;
   readonly label: string;
+  /** Flat rate on the consideration. For a duty with holding-period bands, the headline rate. */
   readonly rate: number;
   readonly suspended: boolean;
   readonly suspendedSince?: IsoDate;
+  /**
+   * Special Stamp Duty is charged on the **seller** at a rate that falls with how long
+   * they held. Present only for duties that work that way.
+   */
+  readonly holdingPeriodBands?: readonly HoldingPeriodBand[];
   readonly note: string;
+}
+
+/** `upToMonths` is the inclusive upper bound of the holding period; null means "and beyond". */
+export interface HoldingPeriodBand {
+  readonly upToMonths: number | null;
+  readonly rate: number;
 }
 
 export interface JurisdictionRules {
@@ -87,7 +104,11 @@ export interface JurisdictionRules {
     /** Scale for everyone else — additional property, non-resident, corporate. */
     readonly other: StampDutyScale;
   };
-  readonly suspendedDuties: readonly SuspendableDuty[];
+  /**
+   * BSD, SSD and NRSD, live or suspended. Read `suspended` before charging anything —
+   * the list is present in every rule set precisely so that the state is explicit.
+   */
+  readonly additionalDuties: readonly AdditionalDuty[];
   readonly rentalIncomeTax: RentalIncomeTaxRule;
   readonly capitalGains: CapitalGainsRule;
   /** Annual government rates as a fraction of rateable value, if applicable. */

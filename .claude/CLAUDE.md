@@ -1779,11 +1779,19 @@ Bands render by kind — flat, percentage, marginal relief — rather than being
 
 ### Worth knowing
 
-**`HK_RULE_SETS` currently holds one rule set, effective 2026-02-26.** So the rules-changed
-alert is correct code that cannot fire yet, and any property with an earlier transaction date
-cannot be computed at all (`No rule set covers transaction date …`). The alert path catches that
-and skips rather than turning the page into an error console. Both resolve when the next Budget
-adds a second dated set — but a user importing a 2023 purchase hits it today.
+**`HK_RULE_SETS` holds five dated rule sets covering 22/02/2023 onwards** (22/02/2023,
+25/10/2023, 28/02/2024, 26/02/2025, 26/02/2026), added 22/08/2026 on the market study's
+recommendation 3. The rules-changed alert can now fire, and a 2023 or 2025 purchase computes.
+`hk.test.ts` asserts the five periods tile the timeline with no gap and no overlap; a date before
+22/02/2023 is still rejected, now with a message naming the earliest date held.
+
+Two things the historical sets changed beyond adding tables. **Buyer's Stamp Duty is now
+computed**, not merely displayed: a non-permanent resident buying in 2023 paid 15% BSD on top of
+a 15% flat AVD, and adding the rule sets without charging it would have produced a confidently
+wrong acquisition total for exactly the users the sets exist to serve. And the
+`stamp-duty-full-rate` finding now fires only when the two scales actually differ — since
+28/02/2024 they are the same table, so the old unconditional warning was inventing a cost that no
+longer exists.
 
 ## Consent at signup, pricing on the landing page, and a monthly tier (16/08/2026)
 

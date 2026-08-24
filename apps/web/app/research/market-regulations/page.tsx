@@ -199,7 +199,7 @@ export default function MarketRegulationsPage(): React.JSX.Element {
               </tr>
             </thead>
             <tbody>
-              {rules.suspendedDuties.map((d) => (
+              {rules.additionalDuties.map((d) => (
                 <tr key={d.id} className="border-b border-line/60">
                   <th scope="row" className="px-4 py-2.5 text-left font-normal text-mist">
                     {d.label}
@@ -207,7 +207,10 @@ export default function MarketRegulationsPage(): React.JSX.Element {
                   <td className="tnum px-4 py-2.5 text-right text-muted">
                     {(d.rate * 100).toFixed(1)}%
                   </td>
-                  <td className="px-4 py-2.5 text-xs text-muted">{d.note}</td>
+                  <td className="px-4 py-2.5 text-xs text-muted">
+                    {d.suspended ? `Abolished ${d.suspendedSince}. ` : "In force. "}
+                    {d.note}
+                  </td>
                 </tr>
               ))}
             </tbody>
