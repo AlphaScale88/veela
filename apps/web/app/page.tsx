@@ -52,16 +52,32 @@ function Hero(): React.JSX.Element {
             {/* One weight, one colour — the two-tone (bold clause + muted clause) read
                 as hedging on a line that's supposed to be the whole pitch in one
                 breath. font-extrabold (800) is Bricolage Grotesque's heaviest cut;
-                this is the one line on the site that should use it. */}
-            <h1 className="mt-5 max-w-[15ch] font-display text-display-1 font-extrabold">
-              Every number on a Hong Kong flat, and the one that kills the deal.
+                this is the one line on the site that should use it.
+
+                The previous line — "Every number on a Hong Kong flat, and the one that
+                kills the deal" — was evocative and did not say what the product is. A
+                visitor could read it and still not know whether this is a listings
+                portal, a blog or a calculator, which is the one job a hero has.
+
+                What it says now is the market study's own recommendation 7, which had
+                never been acted on: lead with the gross-versus-net gap. An agent quotes
+                a gross yield; after the 12% effective property tax, management fees,
+                rates and vacancy the buyer keeps materially less, and closing that gap
+                is the product's actual reason to exist. It is a sharper sentence than
+                "compute your yield" because it names someone else's number and offers
+                to correct it. */}
+            <h1 className="mt-5 max-w-[22ch] font-display text-display-1 font-extrabold">
+              An agent quotes the gross yield. Veela shows what you keep.
             </h1>
 
+            {/* The lede carries the clarity the headline trades for tension: what you
+                put in, what comes out, in that order and in plain words. */}
             <p className="mt-6 max-w-prose text-lede text-muted">
-              Give Veela a price, a rent and your own buyer situation. It returns the
-              yield, the stamp duty <em className="not-italic text-mist">you
-              personally</em> owe, the tax, the payback — and the problems a first-time
-              investor finds out about after signing.
+              Enter a price, a rent and your buyer situation. You get the net yield after
+              Hong Kong stamp duty, property tax, rates and vacancy — the duty{" "}
+              <em className="not-italic text-mist">you personally</em> owe, not a generic
+              rate — plus your payback period and the problems a first-time investor
+              finds out about after signing.
             </p>
 
             <div className="mt-8 flex flex-wrap items-center gap-4">
@@ -73,8 +89,15 @@ function Hero(): React.JSX.Element {
               </Link>
             </div>
 
+            {/* This used to read "No account, nothing saved", which stopped being true
+                when the full report went behind login on 06/08/2026 — the same stale
+                claim that was corrected on /analyse's own header at the time and missed
+                here, on the first screen anyone reads. Stating the split plainly is also
+                the stronger line: it answers "what does this cost me" before the click
+                rather than after it. */}
             <p className="mt-5 text-sm text-muted">
-              No account, nothing saved. The engine runs on the figures you type.
+              The live preview is free and needs no account — it recomputes as you type.
+              The full report needs one.
             </p>
           </div>
 

@@ -3435,6 +3435,46 @@ not. This file already warns about exactly this against the licence checkbox; th
 `waitUntil: "networkidle"` plus a settle before the first click, and the lesson is that a probe
 which silently measures the wrong view looks identical to a real regression.
 
+## The landing hero said nothing about what the product does (26/08/2026)
+
+Reported from a phone on production: *"c'est pas clair le site fait quoi avec le message
+d'accroche."* Fair. The headline read **"Every number on a Hong Kong flat, and the one that kills
+the deal"** — evocative, and a visitor could read it and still not know whether this is a listings
+portal, a blog or a calculator, which is the one job a hero has.
+
+| | Before | Now |
+|---|---|---|
+| Headline | Every number on a Hong Kong flat, and the one that kills the deal. | **An agent quotes the gross yield. Veela shows what you keep.** |
+| Lede | *Give Veela* a price… *It returns* the yield, the stamp duty you personally owe… | **Enter** a price, a rent and your buyer situation. **You get** the net yield after Hong Kong stamp duty, property tax, rates and vacancy — the duty *you personally* owe, not a generic rate — plus your payback period… |
+| Under the CTA | No account, nothing saved. | The live preview is free and needs no account — it recomputes as you type. The full report needs one. |
+
+**The new line is the market study's own recommendation 7, which had never been acted on:** lead
+with the gross-versus-net gap. An agent quotes a gross yield; after the 12% effective property
+tax, management fees, rates and vacancy the buyer keeps materially less, and closing that gap is
+the product's reason to exist. It is a sharper sentence than "compute your yield" because it names
+someone else's number and offers to correct it — and the headline can take the tension precisely
+because the lede underneath is now plainly input-then-output.
+
+### Worth knowing
+
+**"No account, nothing saved" was false, on the first screen anyone reads.** It is the same stale
+claim corrected on `/analyse`'s own header when the report went behind login on 06/08/2026 — and
+missed here. Stating the split plainly is also the stronger line commercially, since it answers
+"what does this cost me" before the click rather than after it.
+
+**The first rewrite was better copy and worse on a phone.** *"An agent quotes you the gross yield.
+Veela shows you what you actually keep"* is more direct, and ran to **six lines at 390px**, pushing
+the call to action further down than the version being complained about. Dropping two pronouns
+took it to four lines and put the CTA at **579px on an 844px viewport** — above the fold with the
+whole pitch, both buttons and the free-preview line. Measured, not judged by eye: on the hero, the
+fold is a constraint on the copy, not a consequence of it.
+
+**No number in the headline, deliberately.** The study's sharpest framing quotes 3.7% gross
+against ~2.5% net, but the 3.7% rests on a single press citation of an analyst and the study flags
+it as indicative. The headline names the *mechanism* instead, which is defensible from our own RVD
+data and needs no footnote — consistent with the FactBar rule that a claim on this page has to be
+checkable from the repository.
+
 ## Working conventions
 - Dates DD/MM/YYYY. Currency: **HKD** for Hong Kong, **VND** for Vietnam, **EUR** for
   France — always state which, never a bare number. Keep a single reporting currency
