@@ -28,17 +28,35 @@ import Link from "next/link";
  */
 export const MAX_COMPARE = 3;
 
+/**
+ * Two sizes, because the heart appears in two different kinds of place.
+ *
+ * `overlay` sits on a listing photo and is the one Zillow's is comparable to. Measured off
+ * their card: a 30px heart on a 345px card, i.e. **8.7% of the card's width**, inset ~4%.
+ * Ours was 18px on a 280px card — 6.4% — which read as a small utility control rather than
+ * the card's own affordance. 24px restores the proportion.
+ *
+ * `inline` is the default and is unchanged at 18px: those hearts sit in a control row beside
+ * a `CompareCheckbox`, where matching the checkbox matters more than matching Zillow, and a
+ * 40px button next to a 16px tick would look like a mistake.
+ *
+ * The button is 40px at `overlay` — which also lifts it over the 24px WCAG 2.2 target-size
+ * minimum with room to spare, where 32px was closer to the line than it needed to be.
+ */
 export function HeartButton({
   filled,
   busy,
   label,
   onClick,
+  size = "inline",
 }: {
   readonly filled: boolean;
   readonly busy: boolean;
   readonly label: string;
   readonly onClick: () => void;
+  readonly size?: "inline" | "overlay";
 }): React.JSX.Element {
+  const overlay = size === "overlay";
   return (
     <button
       type="button"
@@ -53,9 +71,11 @@ export function HeartButton({
       aria-pressed={filled}
       aria-label={label}
       title={label}
-      className="grid size-8 place-items-center rounded-full bg-white/92 shadow-card transition-transform hover:scale-105 disabled:opacity-50"
+      className={`grid place-items-center rounded-full bg-white/92 shadow-card transition-transform hover:scale-105 disabled:opacity-50 ${
+        overlay ? "size-10" : "size-8"
+      }`}
     >
-      <HeartIcon filled={filled} className="h-[18px] w-[18px]" />
+      <HeartIcon filled={filled} className={overlay ? "h-6 w-6" : "h-[18px] w-[18px]"} />
     </button>
   );
 }

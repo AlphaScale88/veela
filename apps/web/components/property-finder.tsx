@@ -1238,8 +1238,9 @@ function PropertyCard({
         <ListingPhoto rank={rank} className="aspect-[16/9]" />
         {/* Heart top-left, yield top-right — Zillow's own placement, and it keeps the two apart
             so neither is clicked by accident. */}
-        <span className="absolute left-2.5 top-2.5 z-20">
+        <span className="absolute left-3 top-3 z-20">
           <HeartButton
+            size="overlay"
             filled={savedPropertyId !== undefined}
             busy={heartBusy}
             label={
@@ -1251,7 +1252,7 @@ function PropertyCard({
           />
         </span>
         <span
-          className="absolute right-2.5 top-2.5 rounded-full px-2 py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.08em] shadow-card"
+          className="absolute right-3 top-3 rounded-full px-2 py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.08em] shadow-card"
           style={{ color: standingColor[standing], backgroundColor: "rgba(255,255,255,0.92)" }}
         >
           {formatPercent(verdict.returns.netYield)}
@@ -1259,7 +1260,7 @@ function PropertyCard({
         {/* Only once it is saved: the comparison reads stored snapshots, so there is nothing for
             it to show about a listing nobody has saved. */}
         {savedPropertyId !== undefined && (
-          <span className="absolute bottom-2.5 left-2.5 z-20">
+          <span className="absolute bottom-3 left-3 z-20">
             <CompareCheckbox
               checked={compareChecked}
               disabled={compareFull && !compareChecked}

@@ -3393,6 +3393,48 @@ Verified after the changes: 48 pages crawled (up from 43, the renamed nav openin
 links, no console errors, 49/49 tests, clean typecheck across all 8 packages, clean production
 build.
 
+## The heart, at Zillow's proportion — measured, not eyeballed (26/08/2026)
+
+Shown Zillow's card and asked for the same proportion. Measured off their screenshot rather than
+matched by impression, because this file already records a pass that "missed by guessing at
+'photo-forward' instead of measuring":
+
+| | Zillow | ours before | ours now |
+|---|---|---|---|
+| heart / card width | 8.7% (30px on 345px) | 6.4% (18px on 280px) | **8.6%** (24px on 280px) |
+| corner inset | 4.1% | 3.6% | 4.3% |
+
+The yield badge and the compare tick moved from a 10px to a 12px inset with it. Leaving them
+behind would have put two controls on the same visual row at different heights, which reads as a
+misalignment rather than a choice.
+
+### Worth knowing
+
+**The size is a prop, not a global bump.** `HeartButton` has four call sites and only one is the
+Zillow case — the card, where the heart sits on a photo. The other three sit inline beside a
+`CompareCheckbox`, and a 40px button next to a 16px tick would look like a mistake. So
+`size="overlay"` is passed at the card and `inline` stays the default at 18px. Verified in a
+browser: card hearts 40/24, list-row hearts 32/18.
+
+**Mobile cannot match the proportion, and the heart is not the reason.** At 390px the finder's
+cards are **2-up at 173px each**, so a 24px glyph is 13.9%. Zillow shows one card per row on
+mobile (~358px), which is how theirs stays at 8.7%. The heart was left at 40px anyway: shrinking a
+touch target on touch devices is the wrong direction, and 40px clears WCAG 2.2's 24px minimum
+where 32px was nearer the line than it needed to be. **If mobile should match, the change is the
+grid going 1-up**, which is a layout decision rather than a sizing one.
+
+**Zillow's fill semantics were deliberately not copied.** Theirs is white-filled-with-outline when
+unsaved and solid red when saved — state by colour alone. Ours stays outline-versus-filled, for
+the reason already recorded against this component: the state has to survive greyscale and colour
+blindness. Matching Zillow exactly would trade that away for a visual.
+
+**The pre-hydration click trap bit again, and cost a wrong diagnosis.** A Playwright click on the
+List/Table toggle landed before React hydrated, so the view never changed and the probe reported
+the list-row hearts as 40/24 — i.e. that the change had leaked into the inline call sites. It had
+not. This file already warns about exactly this against the licence checkbox; the fix is
+`waitUntil: "networkidle"` plus a settle before the first click, and the lesson is that a probe
+which silently measures the wrong view looks identical to a real regression.
+
 ## Working conventions
 - Dates DD/MM/YYYY. Currency: **HKD** for Hong Kong, **VND** for Vietnam, **EUR** for
   France — always state which, never a bare number. Keep a single reporting currency
