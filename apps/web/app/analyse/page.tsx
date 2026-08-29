@@ -225,6 +225,8 @@ export default function AnalysePage(): React.JSX.Element {
    *  gate below renders instead of the report, and the auto-retry effect further down
    *  clears it and re-submits the moment `user` stops being `null`. */
   const [reportGated, setReportGated] = useState(false);
+  /** Set from `?import=` on mount; handed to the importer, which fetches it once. */
+  const [pendingImportUrl, setPendingImportUrl] = useState<string | undefined>(undefined);
   /**
    * A submit that arrived before `useAuth` had decided whether there is a session.
    *
@@ -417,6 +419,10 @@ export default function AnalysePage(): React.JSX.Element {
     const params = new URLSearchParams(window.location.search);
     const listingId = params.get("listing");
     const propertyId = params.get("property");
+    // Handed over by the landing page's search box. Held in state rather than read again at
+    // render time so the importer receives a stable value and cannot re-fetch on a re-render.
+    const importUrl = params.get("import");
+    if (importUrl !== null && importUrl.trim() !== "") setPendingImportUrl(importUrl);
 
     if (listingId !== null) {
       autoLoadedRef.current = true;
@@ -854,7 +860,7 @@ export default function AnalysePage(): React.JSX.Element {
       )}
 
       <div className={imported === null ? "mt-6" : "mt-6 grid gap-4 lg:grid-cols-2 lg:items-stretch"}>
-        <ListingImporter onImported={handleImported} />
+        <ListingImporter onImported={handleImported} initialUrl={pendingImportUrl} />
         {imported !== null && <ImportSummaryCard listing={imported} />}
       </div>
 

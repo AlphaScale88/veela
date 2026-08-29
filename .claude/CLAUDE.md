@@ -3475,6 +3475,63 @@ it as indicative. The headline names the *mechanism* instead, which is defensibl
 data and needs no footnote — consistent with the FactBar rule that a claim on this page has to be
 checkable from the repository.
 
+## The hero, on the reference's pattern — and a search box that can keep its promise (27/08/2026)
+
+Sent Mashvisor's landing page and asked for similar text and design. Their hero is a specific
+shape and it is adopted: **[category] Simplified**, one muted line under it, **a search box as the
+primary action** rather than two buttons, and a social-proof row.
+
+Headline is now *"Investing in Hong Kong Property, Simplified"*; the lede carries the specificity
+the register gives up, and keeps the market study's recommendation 7 in play — the number an agent
+quotes is gross.
+
+### The search box takes a listing link, not an address
+
+The reference's box accepts an address, a neighbourhood, a city or a ZIP because an MLS-scale
+database sits behind it. **Hong Kong has no such thing at any price** — the Land Registry sells
+sale records one at a time at HK$10, and this project has repeatedly declined to harvest the
+portals holding the rest. A box promising "enter an address" would return nothing about that
+address, which is the one failure this product refuses everywhere else.
+
+A pasted listing link *can* be honoured, because the importer reads published metadata. So the box
+asks for what it can use, names the portals it works with, and offers the manual form beside it.
+`?import=` hands the link to `/analyse`, which runs the **import** — never the report, per the rule
+this importer was built around.
+
+### Three defects found on the way
+
+**The "Engine tests" tile said 49 and the truth was 69**, on the one tile whose whole purpose is
+being checkable, and it had already gone stale once before. So it is no longer maintained by
+memory: `scripts/check-links.mjs` counts `^test(` across the engine's test files and fails if the
+page disagrees. **The guard was verified by breaking it** — set to 68, the check reported
+`STALE / claims 68 … source declares 69` — rather than trusted because it typechecked.
+
+**Horizontal overflow at 390px, caused by one word.** The hero column is a grid item, and a grid
+item defaults to `min-width: auto`, so it cannot shrink below its longest unbreakable word —
+"Simplified" at 76px is wider than anything the previous headline contained. `min-w-0` on the
+column. Worth knowing generally: the fix belongs on the *item*, and the symptom points at the page.
+
+**The auto-import silently did nothing**, because `submit()` read the URL from state while the prop
+arrives one render after mount. Caught only because the first test asserted with a loose regex that
+matched the page's own explanatory copy — a false green. The lesson is the assertion, not the bug:
+a smoke test that greps for plausible words will confirm whatever it is pointed at.
+
+### What was deliberately not copied
+
+**No ratings badges.** Theirs shows G2 4.5/5 and Google 3.6/5. Veela has no users and no reviews,
+so either would be invented — the rule already governing the dark band's tiles. That slot carries
+two repository-checkable facts instead.
+
+**No announcement bar.** Theirs promotes "AI Assistant — Try it free". `ANTHROPIC_API_KEY` is unset
+in production, so that bar would advertise a feature that reports itself unconfigured — the same
+failure already corrected on the pricing page.
+
+**The headline is 3–4 lines where theirs is 2, and that could not be fixed honestly.** At 76px it
+needs ~719px a line; the column is 488px, and widening the grid to 1.6fr reaches only ~586px while
+shrinking the photo for nothing (measured, then reverted). Theirs is a *smaller* headline in a
+wider column. Dropping the hero below display-1 would fix it and would reverse a size and weight
+chosen deliberately, so it stayed.
+
 ## Working conventions
 - Dates DD/MM/YYYY. Currency: **HKD** for Hong Kong, **VND** for Vietnam, **EUR** for
   France — always state which, never a bare number. Keep a single reporting currency

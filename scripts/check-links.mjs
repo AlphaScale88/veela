@@ -28,6 +28,7 @@
  * paths 308 on purpose, and the checker prints where they land so the intent stays visible.
  */
 
+import { readdirSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -193,6 +194,48 @@ for (const route of ORPHAN_CANDIDATES) {
     console.log(`  ORPHAN  ${route} — nothing on any crawled page links to it`);
   } else {
     console.log(`  ok      ${route} — linked from ${[...referrers].slice(0, 3).join(", ")}`);
+  }
+}
+
+/*
+ * The landing page's "Engine tests" tile exists to be checked, and it has gone stale twice — it
+ * read 64 for an hour after the short-let calculator was removed, then 49 after the dated rule
+ * sets and the lending fix added twenty between them. A number whose whole purpose is
+ * verifiability is the worst possible thing to maintain by memory, so it is asserted here rather
+ * than trusted.
+ *
+ * Counted from the source rather than from a test run: this script already needs the dev server
+ * up and does not need a second toolchain, and `^test(` is how every test in the package is
+ * declared. If that convention ever changes this check fails loudly, which is the correct
+ * outcome for a guard.
+ */
+console.log("\nClaims on the site that must match the repository\n" + "=".repeat(78));
+{
+  const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+  const dirs = [join(root, "packages", "core", "src"), join(root, "packages", "core", "src", "rules")];
+  let declared = 0;
+  for (const dir of dirs) {
+    for (const name of readdirSync(dir)) {
+      if (!name.endsWith(".test.ts")) continue;
+      for (const line of readFileSync(join(dir, name), "utf8").split("\n")) {
+        if (line.startsWith("test(")) declared += 1;
+      }
+    }
+  }
+
+  const html = await (await fetch(BASE + "/", { headers: { "user-agent": UA } })).text();
+  // The tile renders the count as its own element between the label and the note.
+  const shown = html.match(/Engine tests<\/dt>[\s\S]{0,400}?>(\d+)</);
+  const claimed = shown === null ? null : Number(shown[1]);
+
+  if (claimed === null) {
+    failures += 1;
+    console.log("  BROKEN  could not find the Engine tests tile on / — has the markup changed?");
+  } else if (claimed !== declared) {
+    failures += 1;
+    console.log(`  STALE   / claims ${claimed} engine tests; the source declares ${declared}`);
+  } else {
+    console.log(`  ok      / claims ${claimed} engine tests, matching the source`);
   }
 }
 

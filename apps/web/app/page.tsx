@@ -5,6 +5,7 @@ import Link from "next/link";
 
 import heroPhoto from "../public/hero/hong-kong-apartments.jpg";
 import { HeroDemo } from "../components/hero-demo";
+import { HeroSearch } from "../components/hero-search";
 import { MapPreview } from "../components/map-preview";
 
 /**
@@ -46,7 +47,12 @@ function Hero(): React.JSX.Element {
     <section>
       <div className="col pb-14 pt-14 sm:pb-20 sm:pt-20">
         <div className="grid gap-12 lg:grid-cols-[1.05fr_1fr] lg:items-center lg:gap-16">
-          <div>
+          {/* `min-w-0` is load-bearing: a grid item defaults to `min-width: auto`, so it cannot
+              shrink below its longest unbreakable word — and at display-1 size "Simplified" is
+              wider than anything the previous headline contained. Without this the column forced
+              the page 5px past the viewport at 390px, which is a horizontal scrollbar caused by
+              one word. */}
+          <div className="min-w-0">
             <p className="eyebrow">Hong Kong · long-term residential</p>
 
             {/* One weight, one colour — the two-tone (bold clause + muted clause) read
@@ -66,28 +72,42 @@ function Hero(): React.JSX.Element {
                 is the product's actual reason to exist. It is a sharper sentence than
                 "compute your yield" because it names someone else's number and offers
                 to correct it. */}
-            <h1 className="mt-5 max-w-[22ch] font-display text-display-1 font-extrabold">
-              An agent quotes the gross yield. Veela shows what you keep.
+            <h1 className="mt-5 max-w-[20ch] font-display text-display-1 font-extrabold">
+              Investing in Hong Kong Property, Simplified
             </h1>
 
-            {/* The lede carries the clarity the headline trades for tension: what you
-                put in, what comes out, in that order and in plain words. */}
+            {/* One muted line under the headline, as the reference has it — and it is where
+                the specificity now lives. The headline took the reference's register
+                ("[category] Simplified"), which is deliberately broad; this line is what
+                stops the pair being generic, and it keeps the market study's recommendation
+                7 in play: the number an agent quotes is gross, and the gap to what you keep
+                is the product's reason to exist. */}
             <p className="mt-6 max-w-prose text-lede text-muted">
-              Enter a price, a rent and your buyer situation. You get the net yield after
-              Hong Kong stamp duty, property tax, rates and vacancy — the duty{" "}
-              <em className="not-italic text-mist">you personally</em> owe, not a generic
-              rate — plus your payback period and the problems a first-time investor
-              finds out about after signing.
+              The real net yield after stamp duty, property tax, rates and fees — not the
+              gross an agent quotes you.
             </p>
 
-            <div className="mt-8 flex flex-wrap items-center gap-4">
-              <Link href="/analyse" className="btn-primary">
-                Analyse a property
-              </Link>
-              <Link href="/map" className="btn-secondary">
-                Explore the map
-              </Link>
+            {/* Search-first, like the reference. What the box accepts is a listing link
+                rather than an address, for the reason set out in `hero-search.tsx`: there is
+                no Hong Kong listings database behind an address here, and there is no price
+                at which one can be bought. */}
+            <div className="mt-8 max-w-xl">
+              <HeroSearch />
             </div>
+
+            {/* The reference fills this slot with G2 and Google ratings. Veela has no users
+                and no reviews, so any badge of that shape would be invented — the same rule
+                that governs the dark band's fact tiles further down this page and `FactBar`
+                on the service pages. These two are checkable from the repository, which for
+                someone deciding whether to trust a stamp duty figure is the stronger claim
+                anyway. */}
+            {/* A grid, not a wrapping inline-flex: wrapped flex items keep their content width, so
+                    the container's rule colour showed through as a ragged block beside them on a
+                    phone. One column below `sm`, two above, each cell filled. */}
+            <dl className="mt-7 grid max-w-md grid-cols-1 gap-px overflow-hidden rounded-panel border border-line bg-line sm:grid-cols-2">
+              <Proof value="IRD" label="Duty scales transcribed, dated and cited" />
+              <Proof value="69" label="Engine tests, every duty band boundary" />
+            </dl>
 
             {/* This used to read "No account, nothing saved", which stopped being true
                 when the full report went behind login on 06/08/2026 — the same stale
@@ -95,7 +115,7 @@ function Hero(): React.JSX.Element {
                 here, on the first screen anyone reads. Stating the split plainly is also
                 the stronger line: it answers "what does this cost me" before the click
                 rather than after it. */}
-            <p className="mt-5 text-sm text-muted">
+            <p className="mt-6 text-sm text-muted">
               The live preview is free and needs no account — it recomputes as you type.
               The full report needs one.
             </p>
@@ -370,10 +390,12 @@ function LocalKnowledge(): React.JSX.Element {
               `FactBar` on the service pages. For somebody deciding whether to trust a stamp duty
               figure, "tested at every band boundary" is the stronger claim anyway. */}
           <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-panel border border-inverseLine bg-inverseLine">
-            {/* 49, not the 64 this said for an hour — removing the short-let calculator took its 15
-                  tests with it. A stale count here is the same class of error as a stale price on
-                  the pricing page, and this tile exists precisely to be checkable. */}
-            <Fact label="Engine tests" value="49" note="Every duty band boundary" />
+            {/* 69 as of 26/08/2026: 49 after the short-let calculator was removed, +15 with the
+                  five dated stamp duty rule sets, +5 with the HKMA lending correction. This has now
+                  gone stale twice, on the one tile whose entire purpose is being checkable, so
+                  `scripts/check-links.mjs` asserts it against a count of the test files rather than
+                  trusting the next person to remember. */}
+            <Fact label="Engine tests" value="69" note="Every duty band boundary" />
             <Fact label="Duty scales" value="IRD" note="Transcribed, not approximated" />
             <Fact label="RVD series" value="1993" note="Monthly, to this month" />
             <Fact label="Invented figures" value="Zero" note="In any real report" />
@@ -381,6 +403,21 @@ function LocalKnowledge(): React.JSX.Element {
         </div>
       </div>
     </section>
+  );
+}
+
+function Proof({
+  value,
+  label,
+}: {
+  readonly value: string;
+  readonly label: string;
+}): React.JSX.Element {
+  return (
+    <div className="flex items-center gap-3 bg-surface px-4 py-3">
+      <dt className="font-display text-[20px] font-bold leading-none text-mist">{value}</dt>
+      <dd className="max-w-[18ch] text-xs leading-snug text-muted">{label}</dd>
+    </div>
   );
 }
 

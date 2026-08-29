@@ -1,7 +1,7 @@
 "use client";
 
 import type { ImportedListing } from "@veela/types";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { ErrorToast } from "./toast";
 
@@ -15,6 +15,8 @@ import { ErrorToast } from "./toast";
  */
 interface Props {
   readonly onImported: (listing: ImportedListing) => void;
+  /** A link handed over by the landing page's search box, fetched once on mount. */
+  readonly initialUrl?: string | undefined;
 }
 
 /**
@@ -47,13 +49,34 @@ async function readRejectionMessage(res: Response): Promise<string> {
   return `The server rejected that link (${res.status}).`;
 }
 
-export function ListingImporter({ onImported }: Props): React.JSX.Element {
-  const [url, setUrl] = useState("");
+export function ListingImporter({ onImported, initialUrl }: Props): React.JSX.Element {
+  const [url, setUrl] = useState(initialUrl ?? "");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /* The landing page's search box hands the link over through `?import=`, so the fetch runs
+     without a second click on a button the reader has already effectively pressed.
+     **This runs the import, not the report** — the distinction this file is built around: an
+     imported listing is real but partial, so its figures land in the form for a human to
+     confirm. Guarded by a ref rather than a dependency list because it must happen once per
+     visit, and a re-render is not a new request. */
+  const autoRunRef = useRef(false);
 
-  async function submit(): Promise<void> {
-    if (url.trim() === "") return;
+  useEffect(() => {
+    if (autoRunRef.current) return;
+    if (initialUrl === undefined || initialUrl.trim() === "") return;
+    autoRunRef.current = true;
+    setUrl(initialUrl);
+    void submit(initialUrl);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialUrl]);
+
+  /* `overrideUrl` exists because the auto-run below fires when the prop arrives, which is one
+     render *after* mount: reading `url` from state there gets the empty initial value and the
+     fetch silently does nothing. Passing the target in is the fix; the button still passes
+     nothing and uses what was typed. */
+  async function submit(overrideUrl?: string): Promise<void> {
+    const target = (overrideUrl ?? url).trim();
+    if (target === "") return;
     setPending(true);
     setError(null);
 
@@ -61,7 +84,7 @@ export function ListingImporter({ onImported }: Props): React.JSX.Element {
       const res = await fetch("/api/listing/import", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ url: url.trim() }),
+        body: JSON.stringify({ url: target }),
       });
 
       if (!res.ok) {
