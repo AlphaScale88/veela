@@ -213,6 +213,23 @@ function FitToItems({
    */
   const core = useMapsLibrary("core");
 
+  /*
+   * Keyed on the *positions*, not on the array.
+   *
+   * `items` was in the dependency list directly, and the panel above builds it fresh on every
+   * render. Anything that re-rendered the panel — hovering a row in the list, which it does
+   * through `highlightKey` — therefore handed this effect a new array identity, re-ran it, and
+   * re-fitted the map. `fitBounds` jumps the camera, the `idle` clamp pulls it back to 16, the
+   * next render fits again: the map zoomed in and out without stopping, which is exactly how it
+   * was reported.
+   *
+   * A string of the coordinates changes when the points change and not when React re-renders,
+   * so the camera moves when there is something new to frame and stays still otherwise.
+   */
+  const fitKey = `${centre.lat},${centre.lng}|${items
+    .map((a) => `${a.latitude},${a.longitude}`)
+    .join(";")}`;
+
   useEffect(() => {
     if (map === null || core === null) return;
 
@@ -237,7 +254,10 @@ function FitToItems({
       listener.remove();
     });
     return () => listener.remove();
-  }, [map, core, centre.lat, centre.lng, items]);
+    // `items` and `centre` are read above but deliberately not listed: `fitKey` is their
+    // content, and listing the objects themselves is what caused the loop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [map, core, fitKey]);
 
   return null;
 }

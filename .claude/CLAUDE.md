@@ -3680,6 +3680,42 @@ asked for.
 re-matched what the first had just written and produced a duplicate object key. Caught by
 typecheck.
 
+## The first real user feedback, and both halves were right (31/08/2026)
+
+Arrived by WhatsApp, on the neighbourhood panel: *"la map est buggy"*, *"les chiffres pour les
+notations, on comprend pas ce que ca veut dire"*, *"31 pour le bus, c'est bien ou pas bien?"*.
+
+### The counts had no denominator
+
+The tile showed **31** and nothing else. What it is judged against — 31 against a target of 40,
+earning 5 of 7 points — sat above it in a mono line reading `BUS STOPS 5/7 (31 OF 40)`: two
+unexplained fractions. A count with no denominator is not information.
+
+Each tile now carries `31 / 40`, a bar filling to the target, and the points earned. The bar is
+the actual answer to "is 31 good": three-quarters full reads as three-quarters served without
+anyone finding the formula. Capped, because the score caps — 30 parks against a target of 22 is
+full marks, not 136%, and that tile says "Full marks" in green. Building work says **Not scored**,
+since it is counted and deliberately excluded. The formula line was reordered to the sentence it
+actually is: `31 OF 40 -> 5/7 PTS`.
+
+### The map zoomed in and out without stopping
+
+`FitToItems` had `items` — an **array** — in its dependency list, and this panel builds it fresh
+on every render; there was no `useMemo` in the file at all. Hovering a row in the list re-renders
+the panel through `highlightKey`, so every hover handed the effect a new array identity. It
+re-ran, `fitBounds` jumped the camera, the `idle` clamp pulled it back to 16, the next render
+fitted again.
+
+The effect keys on a **string of the coordinates** now: it changes when the points change and not
+when React re-renders. `mapItems` is memoised as well, which also stops the markers rebuilding on
+every hover.
+
+**Verified with a control, after two false greens earlier the same day.** A harness forcing ten
+parent re-renders held zoom 15 throughout — but a stable reading proves nothing unless the probe
+can detect movement, so two clicks on Google's own `+` were checked to move it 15 → 17 first. The
+lesson is general: when a fix means "this number should stop changing", prove the instrument can
+still see it change.
+
 ## Working conventions
 - Dates DD/MM/YYYY. Currency: **HKD** for Hong Kong, **VND** for Vietnam, **EUR** for
   France — always state which, never a bare number. Keep a single reporting currency

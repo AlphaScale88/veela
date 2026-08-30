@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import {
   BusIcon,
@@ -251,6 +251,17 @@ interface ScoreRow {
   readonly points: number;
 }
 
+/**
+ * What a tile needs to answer "is 31 good?" — the question this panel could not answer.
+ *
+ * Reported by a reader looking at BUS STOPS 31: the tile showed a bare count, and the target it
+ * is judged against sat in the formula line above it in mono capitals. A count with no
+ * denominator is not information, it is trivia. `undefined` for building work, which is counted
+ * and deliberately not scored.
+ */
+const SCORED_BY_KIND: Partial<Record<AmenityKind, { weight: number; target: number }>> =
+  Object.fromEntries(WEIGHTS.map((w) => [w.kind, { weight: w.weight, target: w.target }]));
+
 function scoreOf(counts: Readonly<Record<AmenityKind, number>>): {
   total: number;
   rows: readonly ScoreRow[];
@@ -372,7 +383,13 @@ export function NeighbourhoodPanel({
           (a): a is Amenity => a !== undefined,
         );
 
-  const mapItems = data === null ? [] : open === null ? nearestPerKind : openItems;
+  /* Memoised because it is a prop on the map, and a new array on every render used to re-fit
+     the camera — see `FitToItems`. The effect no longer depends on identity, so this is belt as
+     well as braces; it also stops the marker list rebuilding on every hover. */
+  const mapItems = useMemo(
+    () => (data === null ? [] : open === null ? nearestPerKind : openItems),
+    [data, open, nearestPerKind, openItems],
+  );
 
   /** The map is optional infrastructure, like every other map in this app: no key, no map,
    *  and the list alone still answers the question it was built to answer. */
@@ -471,14 +488,17 @@ export function NeighbourhoodPanel({
 
                 {/* The formula, in full, every time. This is the condition the number is
                     allowed to exist under — see WEIGHTS above. */}
+                {/* "BUS STOPS 5/7 (31 OF 40)" read as two unexplained fractions. Same numbers
+                    below, in the order the sentence actually goes: what was found, what full
+                    marks needs, what it therefore earned. */}
                 <ul className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1 font-mono text-[10px] uppercase tracking-[0.06em] text-muted">
                   {rows.map((r) => (
                     <li key={r.kind}>
                       {KIND_LABEL[r.kind]}{" "}
                       <span className="text-mist">
-                        {r.points}/{r.weight}
+                        {r.counted} of {r.target}
                       </span>{" "}
-                      ({r.counted} of {r.target})
+                      &rarr; {r.points}/{r.weight} pts
                     </li>
                   ))}
                 </ul>
@@ -512,6 +532,7 @@ export function NeighbourhoodPanel({
               const count = data.counts[k];
               const isOpen = open === k;
               const Icon = KIND_ICON[k];
+              const scored = SCORED_BY_KIND[k];
               if (count === 0) {
                 return (
                   <div
@@ -551,15 +572,52 @@ export function NeighbourhoodPanel({
                     </dt>
                     <dd className="tnum mt-1 flex items-baseline gap-1.5 text-lg font-semibold text-mist">
                       {count}
+                      {scored !== undefined && (
+                        <span className="text-[11px] font-normal text-muted">
+                          / {scored.target}
+                        </span>
+                      )}
                       <span
                         aria-hidden="true"
-                        className={`text-[10px] font-normal text-muted transition-transform ${
+                        className={`ml-auto text-[10px] font-normal text-muted transition-transform ${
                           isOpen ? "rotate-180" : ""
                         }`}
                       >
                         ▾
                       </span>
                     </dd>
+
+                    {/* The bar is the whole answer to "is 31 good?": it fills to the target,
+                        so three-quarters full reads as three-quarters served without anyone
+                        having to find the formula. Capped, because the score caps too — 30
+                        parks against a target of 22 is full marks, not 136%. */}
+                    {scored !== undefined ? (
+                      <>
+                        <div
+                          className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-line"
+                          role="img"
+                          aria-label={`${count} of ${scored.target} for full marks`}
+                        >
+                          <div
+                            className={`h-full rounded-full ${
+                              count >= scored.target ? "bg-positive" : "bg-accent"
+                            }`}
+                            style={{ width: `${Math.min(100, (count / scored.target) * 100)}%` }}
+                          />
+                        </div>
+                        <span className="mt-1 block text-[10px] text-muted">
+                          {count >= scored.target
+                            ? `Full marks — ${scored.weight}/${scored.weight} pts`
+                            : `${Math.round(
+                                Math.min(1, count / scored.target) * scored.weight,
+                              )}/${scored.weight} pts`}
+                        </span>
+                      </>
+                    ) : (
+                      /* Building work: counted, shown, and deliberately not scored, so it gets
+                         no bar and says why rather than looking like a tile that lost one. */
+                      <span className="mt-1.5 block text-[10px] text-muted">Not scored</span>
+                    )}
                     <span className="mt-0.5 block text-[10px] text-muted">
                       {isOpen ? "Hide the list" : "See the list"}
                     </span>
