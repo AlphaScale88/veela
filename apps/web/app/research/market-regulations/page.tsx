@@ -2,6 +2,7 @@ import { HK_RULE_SETS, minor, type DutyBand, type StampDutyScale } from "@veela/
 import { formatCompactMoney } from "@veela/ui";
 
 import { AppShell } from "../../../components/app-shell";
+import { DutyCalculator } from "../../../components/duty-calculator";
 
 /**
  * "Market Regulations" — Mashvisor's phrase for a page telling you the rules a market
@@ -166,6 +167,15 @@ export default function MarketRegulationsPage(): React.JSX.Element {
           against — nothing here is a separate summary that could disagree with it.
         </p>
       </header>
+
+      {/* Before the tables, not after: the tables answer "what are the rates", and almost
+          nobody arrives with that question. They arrive with "what do I owe", which is a
+          different question the same rule sets can answer directly. The calculator reads
+          `evaluateScale` and `HK_RULE_SETS`, so it cannot disagree with the tables below it
+          or with a report. */}
+      <Section title="What would you pay?">
+        <DutyCalculator />
+      </Section>
 
       <Section title="Stamp duty (AVD)">
         <ScaleTable scale={rules.stampDuty.firstTimeResident} />

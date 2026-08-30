@@ -3584,6 +3584,45 @@ smoke-test signup. Useful in itself: the rejection proved the form *does* surfac
 in a `role="alert"`, which is what ruled out `disable_signup` and the rate limit as causes — both
 return errors the user would have seen.
 
+## Market Regulations answers "what do I owe" now, not just "what are the rates" (30/08/2026)
+
+Asked to review the app and make it interactive with as much data as possible. The review found
+the gap worth starting with: this page rendered all five dated rule sets as static tables, which
+answers a question almost nobody arrives with.
+
+`DutyCalculator` takes a price, a date and the three buyer questions, and returns the duty from
+`evaluateScale` and `HK_RULE_SETS` — **the same objects `computeVerdict` uses**, so it cannot drift
+from what a report says. No rate is typed into this component and nothing is recomputed
+independently. It shows the scale applied, the band the price lands in, BSD where it was live, and
+the source links for the rule set in force on that date.
+
+Verified against known figures rather than eyeballed:
+
+| Case | Result |
+|---|---|
+| HK$9M, first-time PR, today | HK$270k — 3% at that band boundary |
+| HK$8M, owns another, today | HK$240k, Part 1 of Scale 1 |
+| HK$8M, owns another, 01/06/2023 | **HK$1.20M** — the flat 15% was the law then |
+| HK$8M, non-PR, 01/06/2023 | 15% AVD **plus** 15% BSD = **HK$2.40M**, 30% of the price |
+
+The third row is the one worth keeping: **HK$1.20M was the bug this codebase fixed in 2026 and is
+the correct answer for 2023.** A versioned engine is the difference, and the calculator makes that
+visible by letting anyone move the date.
+
+### The review's other findings, not yet built
+
+Data held, sourced and rendered nowhere:
+
+- **RVD transaction volumes and values** (`RVD_TRANSACTION_PERIODS`, primary/secondary counts and
+  HK$M) — **zero UI usage anywhere.** The demand side of the market, ingested and dormant.
+- **Census 2021 by district** — population, households, rent-to-income, housing-type shares. Only
+  `rentContext`'s caveat is consumed; the rest is unused.
+- **`RVD_AVG_RENT_PER_SQM`** — the Class x region series 1999-2025 is only point-queried, never
+  charted.
+
+Next in order: surface the transaction series on Market Performance, then district profiles from
+the Census on `/map`.
+
 ## Working conventions
 - Dates DD/MM/YYYY. Currency: **HKD** for Hong Kong, **VND** for Vietnam, **EUR** for
   France — always state which, never a bare number. Keep a single reporting currency
