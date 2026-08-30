@@ -275,6 +275,19 @@ export default function ComparePage(): React.JSX.Element {
                 </thead>
                 <tbody>
                   <CompareRow label="Price" rows={compared} render={(v, p) => formatCompactMoney({ amount: p.priceMinor, currency: p.currency })} />
+                  {/* Directly under the price, because that is the pair the eye compares: a
+                      cheaper flat is not cheaper if it is half the size. Saleable area, which
+                      is what the report collects and what Hong Kong listings quote — gross
+                      area is a different and larger number, so the label says which. */}
+                  <CompareRow
+                    label="Saleable area"
+                    rows={compared}
+                    render={(v, p) =>
+                      p.saleableAreaSqft === null
+                        ? "—"
+                        : `${Math.round(p.saleableAreaSqft).toLocaleString("en-HK")} sqft`
+                    }
+                  />
                   <CompareRow label="Net yield" rows={compared} render={(v) => (v !== null ? formatPercent(v.returns.netYield) : "—")} color={(v) => (v !== null ? standingColor[gradeNetYield(v.returns.netYield)] : undefined)} />
                   <CompareRow label="Cash-on-cash" rows={compared} render={(v) => (v !== null ? formatPercent(v.returns.cashOnCash) : "—")} />
                   <CompareRow label="Payback" rows={compared} render={(v) => (v !== null ? formatYears(v.returns.paybackYears) : "—")} />
