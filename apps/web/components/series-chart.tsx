@@ -220,14 +220,34 @@ export function SeriesChart({ metric, points, districtName }: Props): React.JSX.
       </svg>
       </div>
 
-      {hovered !== undefined && (
-        <div role="status" className="mt-1 flex items-baseline gap-2 text-xs">
-          <span className="tnum font-semibold text-mist">
-            {formatDemoValue(metric, hovered.value)}
-          </span>
-          <span className="text-muted">{formatPeriod(hovered.periodStart)}</span>
-        </div>
-      )}
+      {/*
+        * Always rendered, never mounted on hover, and the difference is not cosmetic.
+        *
+        * This row used to appear only while hovering, which grew the figure by its own height.
+        * That pushed the chart out from under the pointer, firing `pointerleave`, which removed
+        * the row, which moved the chart back under the pointer, which fired `pointermove` — an
+        * infinite oscillation that shook the whole row, the map beside it included. Reserving
+        * the space means hovering can never change the layout, which fixes the cause rather
+        * than damping the symptom.
+        *
+        * `min-h` matches one line of `text-xs`, so the reserved strip is exactly the height the
+        * readout occupies. Empty when nothing is hovered, and `aria-hidden` then, because an
+        * empty live region is noise to a screen reader.
+        */}
+      <div
+        role="status"
+        aria-hidden={hovered === undefined}
+        className="mt-1 flex min-h-4 items-baseline gap-2 text-xs"
+      >
+        {hovered !== undefined && (
+          <>
+            <span className="tnum font-semibold text-mist">
+              {formatDemoValue(metric, hovered.value)}
+            </span>
+            <span className="text-muted">{formatPeriod(hovered.periodStart)}</span>
+          </>
+        )}
+      </div>
     </figure>
   );
 }

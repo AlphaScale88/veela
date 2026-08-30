@@ -152,12 +152,22 @@ export function TerritoryIndexChart({ label, points, color = viz.demand }: Props
       </svg>
       </div>
 
-      {hovered !== undefined && (
-        <div role="status" className="mt-1 flex items-baseline gap-2 text-xs">
-          <span className="tnum font-semibold text-mist">{hovered.value.toFixed(1)}</span>
-          <span className="text-muted">{formatPeriod(hovered.periodStart)}</span>
-        </div>
-      )}
+      {/* Space reserved, not mounted on hover — the same defect `series-chart.tsx` carried and
+          for the same reason: a readout that appears on hover changes the figure's height, which
+          moves the chart out from under the pointer, which fires `pointerleave`, which removes
+          it again. Found here while fixing the other one; identical pattern, identical fix. */}
+      <div
+        role="status"
+        aria-hidden={hovered === undefined}
+        className="mt-1 flex min-h-4 items-baseline gap-2 text-xs"
+      >
+        {hovered !== undefined && (
+          <>
+            <span className="tnum font-semibold text-mist">{hovered.value.toFixed(1)}</span>
+            <span className="text-muted">{formatPeriod(hovered.periodStart)}</span>
+          </>
+        )}
+      </div>
     </figure>
   );
 }

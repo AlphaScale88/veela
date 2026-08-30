@@ -3626,6 +3626,37 @@ Data held, sourced and rendered nowhere:
 Next in order: surface the transaction series on Market Performance, then district profiles from
 the Census on `/map`.
 
+## A hover readout that shook the page it was drawn on (30/08/2026)
+
+Reported from `/map`: hovering the charts made the graph and the map "tilt non stop".
+
+**The readout under each chart was conditionally mounted.** Hovering added its height to the
+`<figure>`, which pushed the chart out from under the pointer, which fired `pointerleave`, which
+unmounted the readout, which moved the chart back under the pointer, which fired `pointermove` —
+a self-sustaining oscillation. The map shares that grid row, so it shook with it.
+
+The fix is to reserve the space (`min-h-4`, always rendered, only the contents vary) so hovering
+cannot change layout at all. Damping it — a delay, a transition, a fixed figure height — would
+have hidden a feedback loop rather than removed one.
+
+`aria-hidden` when empty, because a permanently-mounted empty live region is noise to a screen
+reader.
+
+**The same pattern was sitting in `territory-index-chart.tsx`**, found while fixing the first, so
+`/research/market-performance` carried the identical bug. Both are fixed.
+
+### Worth knowing, because both nearly produced a false pass
+
+**A stable height proves nothing on its own.** The first run reported the figure unchanged at
+202px *and an empty readout* — the pointer had never landed on the plot, because the svg was
+partly out of view and `boundingBox()` still returned a box. `scrollIntoViewIfNeeded()` fixed it.
+Height and readout have to be asserted together: stability with the feature broken looks
+identical to stability with it working.
+
+**Verified by holding still and sampling**, not by one measurement — an oscillation is invisible
+to a single reading. Eight samples at 202px on `/map`, six at 235px on Market Performance, with
+the readout populating correctly at three separate hover positions.
+
 ## Working conventions
 - Dates DD/MM/YYYY. Currency: **HKD** for Hong Kong, **VND** for Vietnam, **EUR** for
   France — always state which, never a bare number. Keep a single reporting currency
