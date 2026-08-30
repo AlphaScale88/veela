@@ -40,15 +40,36 @@ function safeNext(raw: string | null): string {
   return raw;
 }
 
+/*
+ * One sentence per reason, because they call for different actions and the single message this
+ * replaced ("it may have expired — try again") gave the wrong advice for the most common case.
+ * A link clicked a minute after it arrived has not expired; it was opened somewhere that never
+ * held the other half of it, and requesting another one fails identically.
+ *
+ * `auth_failed` is kept so a link already in someone's inbox, pointing at the old reason, still
+ * says something sensible.
+ */
+const AUTH_ERRORS: Record<string, string> = {
+  wrong_browser:
+    "That link has to be opened in the same browser you signed up in — email apps often open their own. Copy the link into that browser, or sign in with your email and password below.",
+  link_used:
+    "That link has already been used or has expired. Request a new one, or sign in with your email and password below.",
+  no_code:
+    "That link arrived without its confirmation code, which usually means the email client altered it. Try opening it in a browser instead, or sign in below.",
+  not_configured: "Sign-in isn't configured on this deployment.",
+  auth_failed: "That sign-in link didn't work. Try again, or sign in with your email and password below.",
+};
+
 export default function LoginPage(): React.JSX.Element {
   const { user, configured } = useAuth();
   const [next, setNext] = useState("/portfolio");
-  const [authFailed, setAuthFailed] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     setNext(safeNext(params.get("next")));
-    if (params.get("error") === "auth_failed") setAuthFailed(true);
+    const reason = params.get("error");
+    if (reason !== null && reason !== "") setAuthError(reason);
   }, []);
 
   useEffect(() => {
@@ -71,9 +92,9 @@ export default function LoginPage(): React.JSX.Element {
 
   return (
     <div className="col max-w-sm py-20">
-      {authFailed && (
+      {authError !== null && (
         <p role="alert" className="mb-5 text-sm text-negative">
-          That sign-in link didn't work — it may have expired. Try again.
+          {AUTH_ERRORS[authError] ?? AUTH_ERRORS["link_used"]}
         </p>
       )}
       <LoginForm

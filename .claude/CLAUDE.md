@@ -3532,6 +3532,58 @@ shrinking the photo for nothing (measured, then reverted). Theirs is a *smaller*
 wider column. Dropping the hero below display-1 would fix it and would reverse a size and weight
 chosen deliberately, so it stayed.
 
+## Sign-up and confirmation were broken end to end (28–29/08/2026)
+
+Reported twice: first that the confirmation link said it had expired when clicked within five
+minutes, then that production sent no confirmation email at all. Two separate faults, and the
+second was the one actually blocking anybody.
+
+### The link that "expired"
+
+`/auth/callback` handled only `?code=` — the PKCE code. Exchanging it **requires the
+`code_verifier` cookie written by the browser that started the flow**, so a link opened anywhere
+else — another device, or a mail app's in-app webview with its own cookie jar — fails. The route
+then flattened every failure into `?error=auth_failed`, which `/login` rendered as "it may have
+expired": for a link a minute old that is not merely unhelpful, it is wrong, and it sends someone
+to request another link that fails identically.
+
+Now `?token_hash=&type=` is handled via `verifyOtp`, which is stateless and works in any browser —
+**switch the Supabase "Confirm signup" template to the `{{ .TokenHash }}` URL and cross-browser
+confirmation just works.** Failures are told apart (`wrong_browser`, `link_used`, `no_code`,
+`not_configured`), each with its own sentence, and Supabase's real message is logged server-side so
+the next report is diagnosable rather than guessed at. The `next` parameter also picked up the same
+`safeNext` shape guard `/login` already had.
+
+### The email that was never sent
+
+**Supabase does not report an already-registered address as an error.** With confirmation on,
+`signUp` for an existing email returns `200`, no error, sends nothing, and hands back an obfuscated
+user whose `identities` array is empty — deliberately, so the form cannot be used to discover who
+has an account. `signUpWithPassword` read only `error`, so the page said "Check your email" and no
+email was coming.
+
+Confirmed against the real project rather than reasoned about: a live signup with
+`alphascale88@gmail.com` returned `HTTP 200`, `identities: 0`, `session: none`, and a
+`confirmation_sent_at` from the previous day echoed off the stored user. **The test cost nothing —
+no user created, no email sent, because the account already existed.**
+
+`signUpWithPassword` now returns a `SignUpOutcome` (`error` / `already-registered` / `confirm-sent`
+/ `signed-in`) instead of `string | null`, and the page has a screen for each.
+
+**The worse trap this exposed, and the reason for the resend button.** An account that exists but
+was never confirmed cannot log in *and* cannot be signed up again — Supabase reports the address as
+taken and sends nothing. That is a closed loop with no exit from the UI at all; the only ways out
+were the Supabase dashboard or a different address. `resendConfirmation` is now wired to
+`auth.resend` and offered first on that screen, ahead of "Log in instead", because logging in is
+exactly what does not work in that state.
+
+### Worth knowing
+
+**Supabase rejects `@example.com`** with `400 email_address_invalid`, so it cannot be used to
+smoke-test signup. Useful in itself: the rejection proved the form *does* surface Supabase's errors
+in a `role="alert"`, which is what ruled out `disable_signup` and the rate limit as causes — both
+return errors the user would have seen.
+
 ## Working conventions
 - Dates DD/MM/YYYY. Currency: **HKD** for Hong Kong, **VND** for Vietnam, **EUR** for
   France — always state which, never a bare number. Keep a single reporting currency

@@ -27,13 +27,15 @@ import { GoogleIcon } from "../../components/login-form";
 const MIN_PASSWORD = 8;
 
 export default function SignupPage(): React.JSX.Element {
-  const { user, configured, signUpWithPassword, signInWithGoogle } = useAuth();
+  const { user, configured, signUpWithPassword, signInWithGoogle, resendConfirmation } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [touched, setTouched] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmSent, setConfirmSent] = useState(false);
+  const [alreadyRegistered, setAlreadyRegistered] = useState(false);
+  const [resendState, setResendState] = useState<"idle" | "sending" | "sent" | string>("idle");
   /**
    * Acceptance is **required and unticked by default**.
    *
@@ -66,9 +68,21 @@ export default function SignupPage(): React.JSX.Element {
     setPending(true);
     setError(null);
     try {
-      const message = await signUpWithPassword(email.trim(), password);
-      if (message !== null) {
-        setError(message);
+      const outcome = await signUpWithPassword(email.trim(), password);
+
+      if (outcome.kind === "error") {
+        setError(outcome.message);
+        return;
+      }
+      if (outcome.kind === "already-registered") {
+        // Not an error in Supabase's eyes, and the one case that must not claim an email was
+        // sent: none was, and telling someone to check their inbox sends them to wait for
+        // nothing. See `SignUpOutcome` for why this arrives as a success.
+        setAlreadyRegistered(true);
+        return;
+      }
+      if (outcome.kind === "signed-in") {
+        // Confirmation is off on this project; the effect above redirects once `user` lands.
         return;
       }
       setConfirmSent(true);
@@ -91,6 +105,67 @@ export default function SignupPage(): React.JSX.Element {
           <code className="font-mono">NEXT_PUBLIC_SUPABASE_ANON_KEY</code> aren&apos;t set.
           Everything that doesn&apos;t need an account still works.
         </p>
+      </div>
+    );
+  }
+
+  if (alreadyRegistered) {
+    return (
+      <div className="col max-w-md py-20">
+        <div className="card">
+          <h1 className="font-display text-[22px] font-semibold tracking-[-0.02em]">
+            That address already has an account
+          </h1>
+          <p className="mt-2 text-sm leading-relaxed text-muted">
+            <strong className="text-mist">{email.trim()}</strong> is already registered, so no
+            new email was sent. If you never confirmed it, send the link again below — until it
+            is confirmed you cannot log in either.
+          </p>
+          {/* Said plainly because the alternative is someone waiting on an email that is never
+              coming — which is exactly what happened on production before this screen existed.
+              Supabase reports this as a *success* with no mail sent, on purpose, so that the
+              form cannot be used to discover who has an account. */}
+          {/* Offered first, because this is the case that actually strands people: an account
+              created but never confirmed cannot log in *and* cannot be signed up again, since
+              Supabase reports the address as taken and sends nothing. Without a resend the only
+              exits are the Supabase dashboard or a different address. */}
+          {resendState === "sent" ? (
+            <p className="mt-5 rounded-card border border-line bg-surfaceMuted px-4 py-3 text-sm text-mist">
+              Sent again to <strong>{email.trim()}</strong>. It can take a minute, and it may be
+              in spam.
+            </p>
+          ) : (
+            <button
+              type="button"
+              disabled={resendState === "sending"}
+              onClick={() => {
+                setResendState("sending");
+                void resendConfirmation(email.trim()).then((message) =>
+                  setResendState(message ?? "sent"),
+                );
+              }}
+              className="btn-primary mt-5 w-full !py-2.5 disabled:opacity-60"
+            >
+              {resendState === "sending" ? "Sending…" : "Resend the confirmation email"}
+            </button>
+          )}
+          {resendState !== "idle" && resendState !== "sending" && resendState !== "sent" && (
+            <p role="alert" className="mt-2 text-sm text-negative">
+              {resendState}
+            </p>
+          )}
+
+          <Link href="/login" className="btn-secondary mt-3 w-full !py-2.5">
+            Log in instead
+          </Link>
+          <button
+            type="button"
+            onClick={() => setAlreadyRegistered(false)}
+            className="mt-3 w-full text-xs text-muted hover:text-mist"
+          >
+            Use a different address
+          </button>
+        </div>
       </div>
     );
   }
