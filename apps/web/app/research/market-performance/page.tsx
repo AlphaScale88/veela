@@ -42,20 +42,29 @@ export default function MarketPerformancePage(): React.JSX.Element {
   const district = DEMO_DISTRICTS.find((d) => d.id === districtId) ?? DEMO_DISTRICTS[0];
   const districtName = district?.nameEn ?? "—";
 
-  const price = useMemo(
-    () => demoSeries(districtId, "price_index").points.slice(-months),
-    [districtId, months],
-  );
-  const rent = useMemo(
-    () => demoSeries(districtId, "rent_index").points.slice(-months),
-    [districtId, months],
-  );
-
-  const priceChange = pctChange(price);
-  const rentChange = pctChange(rent);
-
   const realPrice = useMemo(() => RVD_PRICE_INDEX.slice(-months), [months]);
   const realRent = useMemo(() => RVD_RENT_INDEX.slice(-months), [months]);
+
+  /*
+   * Measured, territory-wide — not the generated per-district series these replaced.
+   *
+   * Those charts drew a *fabricated* index per district and the header printed its five-year
+   * change. For Central and Western that read **+42.9% price, +23.0% rent**. The real RVD
+   * series in this repository says **-18.0% and +14.8%** over the same window: the generated
+   * line was not merely invented, it pointed the opposite way on the single number a reader
+   * takes from this page, under a real district's name, in green.
+   *
+   * A "generated values" banner is honest about provenance and does nothing about direction.
+   * Someone reading for ten seconds left believing Hong Kong property rose 43% in five years.
+   *
+   * The fix is the one `area-rent.tsx` already applies to rents: show the real figure at the
+   * resolution it exists and say what that resolution is. Hong Kong publishes no monthly
+   * per-district domestic index, so there is no district line to draw honestly -- three real
+   * regions beat eighteen invented ones, and one real territory beats eighteen invented
+   * districts for exactly the same reason.
+   */
+  const priceChange = pctChange(realPrice);
+  const rentChange = pctChange(realRent);
 
   return (
     <AppShell breadcrumb={`Research & Analyse › Market Performance › ${districtName}`}>
@@ -113,19 +122,13 @@ export default function MarketPerformancePage(): React.JSX.Element {
       </section>
 
       <div className="mt-10 border-t border-line pt-8">
-        <h2 className="text-sm font-semibold text-mist">By district — synthetic</h2>
+        <h2 className="text-sm font-semibold text-mist">Over your chosen window — measured</h2>
         <p className="mt-1 max-w-prose text-xs leading-relaxed text-muted">
-          Price and rent indices, rebased to 100 at {DEMO_PERIODS[0] !== undefined ? formatMonth(DEMO_PERIODS[0]) : "the start of the series"}.
-          Synthetic — see the banner below — standing in for a real per-district series,
-          which no free Hong Kong source publishes monthly.
-        </p>
-      </div>
-
-      <div className="mt-4 max-w-prose rounded-panel border border-caution/40 bg-caution/10 px-4 py-3 shadow-card">
-        <p className="text-xs leading-relaxed text-muted">
-          <strong className="text-mist">Demo data.</strong> District names are real; the
-          index values are generated with a plausible shape (slow drift, small monthly
-          noise) — not a published per-district series.
+          The same RVD series as above, cut to the range you pick.{" "}
+          <strong className="text-mist">Hong Kong overall, not by district</strong> — no free
+          source publishes a monthly domestic index per district, so there is no district line
+          that could be drawn honestly. Generated ones used to sit here and have been removed:
+          they showed prices rising over five years when the measured series shows them falling.
         </p>
       </div>
 
@@ -188,9 +191,9 @@ export default function MarketPerformancePage(): React.JSX.Element {
       </div>
 
       <div className="card mt-6 max-w-3xl space-y-6">
-        <SeriesChart metric="price_index" points={price} districtName={districtName} />
+        <TerritoryIndexChart label="Price index" points={realPrice} color={viz.demand} />
         <div className="h-px bg-line" />
-        <SeriesChart metric="rent_index" points={rent} districtName={districtName} />
+        <TerritoryIndexChart label="Rent index" points={realRent} color={viz.supply} />
       </div>
     </AppShell>
   );

@@ -3716,6 +3716,33 @@ can detect movement, so two clicks on Google's own `+` were checked to move it 1
 lesson is general: when a fix means "this number should stop changing", prove the instrument can
 still see it change.
 
+## The generated district index pointed the wrong way (31/08/2026)
+
+Asked where the data on Market Performance came from. The per-district price and rent indices
+were generated — `observations.ts`, mulberry32 — and the page said so in a banner. **The banner
+was honest about provenance and useless about direction.**
+
+| Central and Western, 5 years | Shown | RVD, measured, in this repo |
+|---|---|---|
+| Price | **+42.9%** | **−18.0%** |
+| Rent | +23.0% | +14.8% |
+
+Hong Kong prices *fell* 18% over that window. The chart drew a steadily rising line, printed
++42.9% in green, under a real district's name. That is worse than invented: it is invented and
+backwards on the one number a reader carries away, and a "generated values" label does nothing
+about it. Worse than the fabricated listings, too — those claim to describe no real place.
+
+Removed, and replaced with the RVD series cut to the chosen range, labelled **"Hong Kong overall,
+not by district"** with the reason. The headline percentages now read −18.8% / +14.1%: measured.
+
+The rule this follows is already in this file, from the rents work: *three real regions beat
+eighteen invented ones*. One real territory beats eighteen invented districts for the same
+reason — show the figure at the resolution it exists and name that resolution, rather than
+inventing the resolution that is missing.
+
+What stays per district, because it is real: stock, completions and vacancy (RVD), population and
+households (Census 2021).
+
 ## Working conventions
 - Dates DD/MM/YYYY. Currency: **HKD** for Hong Kong, **VND** for Vietnam, **EUR** for
   France — always state which, never a bare number. Keep a single reporting currency
