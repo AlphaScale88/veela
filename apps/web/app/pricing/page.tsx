@@ -110,21 +110,6 @@ export default function PricingPage(): React.JSX.Element {
         . Higher volume than Pro allows? Tell us what you need and we will price it.
       </p>
 
-      {/* Said plainly rather than buried: a price nobody has paid yet is a hypothesis, and
-          pretending otherwise is the kind of small dishonesty this product does not do
-          elsewhere. It also invites the conversation that sets the real number. */}
-      <section className="card mt-12 max-w-prose">
-        <h2 className="text-[15px] font-semibold">If these numbers are wrong, say so</h2>
-        <p className="mt-2 text-sm leading-relaxed text-muted">
-          Veela is early, and these prices are a considered guess rather than a tested one.
-          HK$188 a month is roughly what a single hour of professional advice costs, for
-          something that watches a portfolio all year — that is the argument for it, not
-          evidence. The only evidence that counts is somebody paying. If it is priced wrong for
-          you or for your team, tell us what it is worth and we will talk. Early customers get
-          that conversation, and the price it lands on.
-        </p>
-      </section>
-
       <p className="mt-8 text-xs leading-relaxed text-muted">
         Prices in Hong Kong dollars. Veela computes figures from public rules and your own
         inputs; it is not financial, tax or legal advice, and it is not a substitute for a

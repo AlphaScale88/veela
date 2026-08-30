@@ -1699,8 +1699,11 @@ that cost an afternoon twice.
 **Honesty about what cannot be bought yet.** No payment processor is configured, so the report
 tier renders **"Not on sale yet"** with an inert button and a line saying the price is real and
 the checkout is not. A "Buy" button that leads nowhere is the same failure as a fabricated
-figure, and the pricing page says outright that these prices are a considered guess until
-somebody pays one.
+figure. ~~The pricing page also said outright that these prices were a considered guess until
+somebody paid one~~ — **that block was removed on 30/08/2026 on request.** What remains is still
+accurate: the tier renders "Not on sale yet", and unbuilt features keep their "not built yet"
+tags. Only the self-deprecating note about price *confidence* is gone, which asserts nothing
+false; a price with no customers behind it is simply no longer labelled as such on the page.
 
 **`/terms` written, `/privacy` transferees enumerated** — Supabase, Vercel, the AI provider
 (**including that a free tier may train on inputs**), a payment processor, and the Land
