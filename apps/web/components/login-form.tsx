@@ -139,10 +139,17 @@ export function LoginForm({ next, heading, description }: Props): React.JSX.Elem
         </button>
       </form>
 
-      {/* A link to a real page, not a mode toggle. `next` is carried across so someone
-          who was sent here from a gated action still lands where they were going after
-          signing up, not on a default page. */}
+      {/* Under the button rather than beside the password field: someone who knows their
+          password never needs to see it, and someone who does not is already looking below
+          the form having failed to submit. No `next` is carried -- a reset ends in a signed-in
+          session on the reset page, not back at whatever gated action sent them here. */}
       <p className="mt-4 text-sm text-muted">
+        <Link href="/reset-password" className="font-medium text-accent hover:underline">
+          Forgot your password?
+        </Link>
+      </p>
+
+      <p className="mt-2 text-sm text-muted">
         No account yet?{" "}
         <Link
           href={`/signup?next=${encodeURIComponent(next)}`}

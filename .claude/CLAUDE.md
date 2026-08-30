@@ -3657,6 +3657,29 @@ identical to stability with it working.
 to a single reading. Eight samples at 202px on `/map`, six at 235px on Market Performance, with
 the readout populating correctly at three separate hover positions.
 
+## Forgot password (31/08/2026)
+
+`/reset-password`, one route doing two jobs chosen by whether a session exists: no session gives
+the "send me a link" form, a session gives "choose a new password". Supabase's recovery link goes
+through `/auth/callback`, which already handled `type=recovery` — that came free with the
+`token_hash` work — so arriving *with* a session is exactly the signal the link was followed. Two
+routes would have been tidier to describe and worse to use: the second is reachable only from an
+email, so anyone landing on it directly has nothing to do there.
+
+**The request form never says whether the address has an account.** Supabase answers identically
+either way on purpose, and echoing the difference would turn the form into an account-enumeration
+oracle. The copy is written to be true whichever it was.
+
+A Google-only account gets a warning rather than silently setting a password it will never be
+asked for.
+
+**Worth knowing:** an edit that appended the new key after `"      updatePassword,
+"` also matched
+`"    updatePassword,
+"` — the shorter indent is a suffix of the longer one, so the second pass
+re-matched what the first had just written and produced a duplicate object key. Caught by
+typecheck.
+
 ## Working conventions
 - Dates DD/MM/YYYY. Currency: **HKD** for Hong Kong, **VND** for Vietnam, **EUR** for
   France — always state which, never a bare number. Keep a single reporting currency

@@ -64,6 +64,15 @@ interface AuthState {
    *  is why the caller must say so rather than reporting "email changed". */
   readonly updateEmail: (email: string) => Promise<string | null>;
   readonly updatePassword: (password: string) => Promise<string | null>;
+  /**
+   * Sends a recovery link. Resolves to an error message, or `null` when accepted.
+   *
+   * **`null` does not mean the address has an account**, and the caller must not say it does.
+   * Supabase answers the same way either way, deliberately: a reset form that distinguished
+   * "sent" from "no such user" would be an account-enumeration oracle for anyone who wanted to
+   * know whether a given person banks here.
+   */
+  readonly sendPasswordReset: (email: string) => Promise<string | null>;
   readonly signOut: () => Promise<void>;
   /** True when this account has a password to change at all. A Google-only account has
    *  no `email` identity, and offering it a "change password" form is offering something
@@ -185,6 +194,19 @@ export function AuthProvider({ children }: { readonly children: ReactNode }): Re
     [supabase],
   );
 
+  const sendPasswordReset = useCallback(
+    async (email: string): Promise<string | null> => {
+      if (supabase === null) return "Password reset isn't configured on this deployment.";
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        // Through the callback, which establishes the session from the recovery token and
+        // then hands over to the page that actually sets the new password.
+        redirectTo: `${window.location.origin}/auth/callback?next=%2Freset-password`,
+      });
+      return error?.message ?? null;
+    },
+    [supabase],
+  );
+
   const signOut = useCallback(async () => {
     if (supabase === null) return;
     await supabase.auth.signOut();
@@ -209,6 +231,7 @@ export function AuthProvider({ children }: { readonly children: ReactNode }): Re
       resendConfirmation,
       updateEmail,
       updatePassword,
+      sendPasswordReset,
       signOut,
       hasPasswordIdentity,
     }),
@@ -222,6 +245,7 @@ export function AuthProvider({ children }: { readonly children: ReactNode }): Re
       resendConfirmation,
       updateEmail,
       updatePassword,
+      sendPasswordReset,
       signOut,
       hasPasswordIdentity,
     ],
