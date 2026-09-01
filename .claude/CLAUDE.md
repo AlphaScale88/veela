@@ -3829,6 +3829,59 @@ and what share of them were new build.
 Still dormant after this: the Census 2021 district profiles — population, households,
 rent-to-income, housing-type shares — of which only `rentContext`'s caveat is consumed.
 
+## The collector writes now, and crosses two sources (02/09/2026)
+
+Asked to fetch recent data and save it. Re-running the collector found **no drift** — the five
+official sources answer and the snapshots still match, so "recent" was already what we held. The
+blockage was downstream, and it was worse than a stale figure:
+
+1. **The write path did not exist.** The script fetched, parsed, verified, then printed that it
+   *would* have stored something. It had said "DATABASE_URL is not set" for a fortnight.
+2. **`DATABASE_URL` was one directory away**, in `apps/web/.env.local`, not the repository root.
+3. **`market_metric` had no value** for any of the Census figures.
+
+### The cross-reference is the point
+
+Census 2021 gives who lives in a district and what they pay. RVD's **forecast completions** —
+held, parsed and drawn nowhere — gives how many new flats land there in 2025 and 2026. It is the
+only forward-looking supply figure Hong Kong publishes per district, and together the two answer
+what neither can alone: whether the rent a district commands is about to meet more supply.
+
+| District | Median rent | Public rental | New 2025 + 2026 |
+|---|---|---|---|
+| Central and Western | HK$15,070 | 3.2% | 909 + 594 |
+| Southern | HK$2,850 | 29.8% | **1,252 + 985** |
+| Wong Tai Sin | HK$2,430 | **49.8%** | 230 + 0 |
+
+Wong Tai Sin is why `public_rental_share` is stored beside `median_rent` rather than separately:
+HK$2,430 is not a market price, it is the shadow of half the district being public housing.
+
+### Worth knowing
+
+**Matched by district name, not row position** — the CSV's order is RVD's and can change, the
+names are stable. The four aggregate rows (HONG KONG, KOWLOON, NEW TERRITORIES, OVERALL) are named
+explicitly so a genuinely unmatched district is still reported: one silently missing from a supply
+table reads as "no new supply", which is the wrong kind of wrong.
+
+**Writing is opt-in behind `--write`.** This script is run to look at the sources far more often
+than to change the database, and a collector that mutates by default is one nobody dares run.
+
+**Upserted on the natural key**, and `period_start` is the period observed — 2021-06-30 for the
+census, 2025 and 2026 for the forecasts — not the day the collector ran. A five-year-old figure
+stamped today looks fresh.
+
+**Two column mistakes, both mine, both caught by the database.** `kind` is `propertyKindEnum NOT
+NULL DEFAULT 'domestic'`; the nullable column meaning "all size classes" is `rvd_class`. And
+`postgres` is a dependency of `packages/db`, so a bare import does not resolve from `scripts/` —
+the same pnpm isolation `check-links.mjs` already works around for playwright.
+
+**`ALTER TYPE ... ADD VALUE` is irreversible**: Postgres has no `DROP VALUE`. Confirmed before
+running rather than after. The enum went 12 values to 16.
+
+**Searched and not found: median household income by district.** The C&SD tables are broken down
+by household size and by housing type, not geographically. The census rent-to-income ratio remains
+the only per-district affordability figure, which is why it is in the set.
+
 ## Working conventions
 - Dates DD/MM/YYYY. Currency: **HKD** for Hong Kong, **VND** for Vietnam, **EUR** for
   France — always state which, never a bare number. Keep a single reporting currency

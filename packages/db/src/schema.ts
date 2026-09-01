@@ -157,6 +157,15 @@ export const marketMetricEnum = pgEnum("market_metric", [
   // fundamentals
   "population",
   "households",
+  /* Census 2021, added by migration 0010. `public_rental_share` travels with `median_rent`
+     deliberately: it is what explains a HK$2,430 median in Wong Tai Sin against HK$15,070 in
+     Central and Western, and the rent alone is the most misleading figure in this dataset. */
+  "median_rent",
+  "rent_to_income",
+  "public_rental_share",
+  /* What is coming, as against `completions_units` which is what was built. RVD publishes it
+     per district two years ahead — the only forward-looking supply figure in this dataset. */
+  "forecast_completions_units",
 ]);
 
 export const marketObservations = pgTable(

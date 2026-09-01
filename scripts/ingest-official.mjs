@@ -48,11 +48,39 @@
 
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
+
+/*
+ * `DATABASE_URL` lives in `apps/web/.env.local`, not at the repository root — the root file
+ * holds only a Vercel token. This script reported "DATABASE_URL is not set" for a fortnight
+ * while the connection string sat one directory away, which is why it looks in both.
+ *
+ * Deliberately not a dotenv dependency: two candidate paths and a regex is the whole need, and
+ * a data-collection script that pulls in a config library to read one variable has acquired a
+ * dependency it will still have long after anyone remembers why.
+ */
+function loadDatabaseUrl() {
+  if (process.env.DATABASE_URL) return process.env.DATABASE_URL;
+  for (const rel of ["apps/web/.env.local", ".env.local"]) {
+    try {
+      const body = readFileSync(join(ROOT, rel), "utf8");
+      const line = body.split("\n").find((l) => l.startsWith("DATABASE_URL="));
+      if (line === undefined) continue;
+      return line.slice("DATABASE_URL=".length).trim().replace(/^["']|["']$/g, "");
+    } catch {
+      /* not there — try the next */
+    }
+  }
+  return undefined;
+}
+import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const CHECK = process.argv.includes("--check");
+/* Writing is opt-in: this script is run to look at the sources far more often than to
+   change the database, and a collector that mutates by default is one nobody dares run. */
+const WRITE = process.argv.includes("--write");
 
 /**
  * Every source, with what it actually yields — including the ones that yield *nothing useful*,
@@ -189,9 +217,116 @@ console.log("\nDeliberately not collected: Centaline, Midland, Squarefoot, 28Hse
 console.log("Spacious. Their terms prohibit it and two of them actively challenge bots. See the");
 console.log("comment at the top of this file — licensing is the route, not a crawler.\n");
 
-if (process.env.DATABASE_URL === undefined || process.env.DATABASE_URL === "") {
-  console.log("DATABASE_URL is not set, so nothing was written. The district series above are");
-  console.log("ready to load into market_observations once a `median_rent` metric exists.\n");
+/*
+ * The write, which did not exist: this script fetched, parsed, verified and then reported that
+ * it *would* have stored something.
+ *
+ * Only the Census district profiles are written. The RVD series are already committed snapshots
+ * that the app imports directly — putting them in the database too would create a second copy
+ * that can disagree with the first, which is the failure this repository keeps finding.
+ * The Census figures are the ones `/map` reads from `market_observations` and could not show.
+ *
+ * Upserted on the natural key, so re-running is free and never duplicates. `periodStart` is the
+ * census date rather than today: the observation is *of* 2021, and stamping it with the day the
+ * collector happened to run would make a decade-old figure look fresh.
+ */
+const DATABASE_URL = loadDatabaseUrl();
+
+if (DATABASE_URL === undefined) {
+  console.log("No DATABASE_URL in the environment, apps/web/.env.local or .env.local —");
+  console.log("nothing was written.\n");
+} else if (!WRITE) {
+  console.log("Census district profiles are ready to write. Re-run with --write to store them.\n");
+} else {
+  const { CENSUS_DISTRICTS, CENSUS_SOURCE } = await import("../packages/fixtures/dist/index.js");
+  /* `postgres` is a dependency of packages/db, not of the repository root, so a bare import
+     does not resolve from here — the same pnpm isolation `check-links.mjs` works around for
+     playwright, and resolved the same way. */
+  const require_ = createRequire(join(ROOT, "packages", "db", "package.json"));
+  const postgres = (await import(pathToFileURL(require_.resolve("postgres")).href)).default;
+  const sql = postgres(DATABASE_URL, { max: 1, prepare: false, onnotice: () => {} });
+
+  const { DEMO_DISTRICTS } = await import("../packages/fixtures/dist/index.js");
+
+  const CENSUS_PERIOD = "2021-06-30";
+  const rows = [];
+  for (const d of CENSUS_DISTRICTS) {
+    rows.push([d.districtId, "median_rent", CENSUS_PERIOD, d.medianMonthlyRentHkd, CENSUS_SOURCE]);
+    rows.push([d.districtId, "rent_to_income", CENSUS_PERIOD, d.rentToIncomeRatio, CENSUS_SOURCE]);
+    rows.push([d.districtId, "public_rental_share", CENSUS_PERIOD, d.publicRentalShare, CENSUS_SOURCE]);
+    rows.push([d.districtId, "households", CENSUS_PERIOD, d.households, CENSUS_SOURCE]);
+  }
+
+  /*
+   * Crossed with RVD's forecast completions — the second source, and the reason this is worth
+   * doing at all. The Census says who lives in a district and what they pay; this says how many
+   * new flats land there next year and the year after. Together they answer a question neither
+   * can alone: whether the rent a district commands is about to meet more supply.
+   *
+   * Matched by name, not by position: the CSV's row order is RVD's and could change, while the
+   * district names are stable and already carried in `DEMO_DISTRICTS`. An unmatched name is
+   * counted and reported rather than silently dropped — a district quietly missing from a supply
+   * table is exactly the kind of gap that looks like "no new supply".
+   */
+  const FORECAST_URL =
+    "https://www.rvd.gov.hk/datagovhk/Dom_Completions_and_Forecast_Completions_by_District_Eng.csv";
+  const byName = new Map(DEMO_DISTRICTS.map((d) => [d.nameEn.toLowerCase(), d.id]));
+  let unmatched = 0;
+  try {
+    const csv = await (await fetch(FORECAST_URL)).text();
+    const lines = csv.split(/\r?\n/).filter((l) => l.trim() !== "");
+    const header = lines[1] ?? "";
+    const cols = header.split(",");
+    const y2025 = cols.findIndex((c) => /Forecast Completions in 2025/i.test(c));
+    const y2026 = cols.findIndex((c) => /Forecast Completions in 2026/i.test(c));
+    for (const line of lines.slice(2)) {
+      const cells = line.split(",");
+      const name = (cells[0] ?? "").trim();
+      /* The file carries four aggregate rows alongside the eighteen districts. Named here so a
+         genuine unmatched district still gets reported — a district silently missing from a
+         supply table reads as "no new supply", which is the wrong kind of wrong. */
+      if (/^(hong kong|kowloon|new territories|overall)$/i.test(name)) continue;
+      const id = byName.get(name.toLowerCase());
+      if (id === undefined) { unmatched += 1; continue; }
+      for (const [idx, year] of [[y2025, "2025-01-01"], [y2026, "2026-01-01"]]) {
+        const raw = (cells[idx] ?? "").trim();
+        const n = Number(raw);
+        // "-" is RVD's "none", and is a real zero rather than a missing value.
+        if (raw === "-") { rows.push([id, "forecast_completions_units", year, 0, FORECAST_URL]); continue; }
+        if (Number.isFinite(n)) rows.push([id, "forecast_completions_units", year, n, FORECAST_URL]);
+      }
+    }
+  } catch (err) {
+    console.log(`  forecast completions unavailable — ${err instanceof Error ? err.message : err}`);
+  }
+
+  console.log("Writing Census 2021 district profiles\n" + "=".repeat(78));
+  try {
+    let written = 0;
+    for (const [districtId, metric, periodStart, value, source] of rows) {
+      if (value === undefined || value === null) continue;
+      await sql`
+        insert into market_observations (district_id, metric, kind, rvd_class, period_start, value, source)
+        values (${districtId}, ${metric}, 'domestic', null, ${periodStart}, ${value}, ${source})
+        on conflict (district_id, metric, kind, period_start)
+        do update set value = excluded.value, source = excluded.source
+      `;
+      written += 1;
+    }
+    console.log(`  ok — ${written} observations upserted across ${CENSUS_DISTRICTS.length} districts`);
+    if (unmatched > 0) console.log(`  ${unmatched} forecast row(s) had a district name we could not match`);
+    const [{ count }] = await sql`
+      select count(*)::int as count from market_observations
+      where metric in ('median_rent','rent_to_income','public_rental_share','forecast_completions_units')
+    `;
+    console.log(`  census metrics now in market_observations: ${count}`);
+  } catch (err) {
+    failures += 1;
+    console.log(`  FAILED — ${err instanceof Error ? err.message : String(err)}`);
+  } finally {
+    await sql.end();
+  }
+  console.log("");
 }
 
 if (failures > 0) {
