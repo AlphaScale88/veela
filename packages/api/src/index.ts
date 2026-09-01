@@ -1288,8 +1288,9 @@ ${area}`,
    * district — and building it out of five calls to the other endpoint would be five round trips
    * to assemble one panel.
    *
-   * **It returns only what is genuinely in `market_observations`**, which is population and
-   * households from the 2021 Census and stock, completions and vacancy from the RVD. There is no
+   * **It returns only what is genuinely in `market_observations`**, which is now population,
+   * households, median rent, rent-to-income and the public-rental share from the 2021 Census,
+   * and stock, completions, vacancy and **forecast completions** from the RVD. There is no
    * median sale price, no days on market and no listings count, because Hong Kong publishes none
    * of those per district — see the overview component for the list and the reasons. A metric with
    * no row simply does not appear, rather than appearing as zero.
@@ -1298,12 +1299,32 @@ ${area}`,
     const districtId = c.req.param("districtId");
     const db = c.get("db");
 
+    /*
+     * `distinct on (metric)` keeps the newest period, which is right for a stock or a census
+     * count and wrong for a forecast: RVD publishes completions for **two** years ahead, and
+     * keeping only the later one throws away half of the only forward-looking figure Hong Kong
+     * gives per district. "909 next year and 594 the year after" is the shape of a supply
+     * pipeline; "594" on its own is a number with no direction.
+     *
+     * So point-in-time metrics collapse to their latest row and forecasts keep every period.
+     */
     const rows = await db.execute(sql`
-      select distinct on (o.metric)
-        o.metric, o.value, o.period_start, o.period_months, o.source
-      from market_observations o
-      where o.district_id = ${districtId}
-      order by o.metric, o.period_start desc
+      (
+        select distinct on (o.metric)
+          o.metric, o.value, o.period_start, o.period_months, o.source
+        from market_observations o
+        where o.district_id = ${districtId}
+          and o.metric <> 'forecast_completions_units'
+        order by o.metric, o.period_start desc
+      )
+      union all
+      (
+        select o.metric, o.value, o.period_start, o.period_months, o.source
+        from market_observations o
+        where o.district_id = ${districtId}
+          and o.metric = 'forecast_completions_units'
+        order by o.period_start
+      )
     `);
 
     const observations = (rows as unknown as Record<string, unknown>[]).map((r) => ({

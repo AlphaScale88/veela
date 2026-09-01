@@ -249,12 +249,16 @@ if (DATABASE_URL === undefined) {
   const { DEMO_DISTRICTS } = await import("../packages/fixtures/dist/index.js");
 
   const CENSUS_PERIOD = "2021-06-30";
+  const CENSUS_CITATION =
+    "Census and Statistics Department — 2021 Population Census, District Council district statistics";
+  const FORECAST_CITATION =
+    "Rating and Valuation Department — Completions and Forecast Completions by District (data.gov.hk)";
   const rows = [];
   for (const d of CENSUS_DISTRICTS) {
-    rows.push([d.districtId, "median_rent", CENSUS_PERIOD, d.medianMonthlyRentHkd, CENSUS_SOURCE]);
-    rows.push([d.districtId, "rent_to_income", CENSUS_PERIOD, d.rentToIncomeRatio, CENSUS_SOURCE]);
-    rows.push([d.districtId, "public_rental_share", CENSUS_PERIOD, d.publicRentalShare, CENSUS_SOURCE]);
-    rows.push([d.districtId, "households", CENSUS_PERIOD, d.households, CENSUS_SOURCE]);
+    rows.push([d.districtId, "median_rent", CENSUS_PERIOD, d.medianMonthlyRentHkd, CENSUS_CITATION]);
+    rows.push([d.districtId, "rent_to_income", CENSUS_PERIOD, d.rentToIncomeRatio, CENSUS_CITATION]);
+    rows.push([d.districtId, "public_rental_share", CENSUS_PERIOD, d.publicRentalShare, CENSUS_CITATION]);
+    rows.push([d.districtId, "households", CENSUS_PERIOD, d.households, CENSUS_CITATION]);
   }
 
   /*
@@ -292,8 +296,8 @@ if (DATABASE_URL === undefined) {
         const raw = (cells[idx] ?? "").trim();
         const n = Number(raw);
         // "-" is RVD's "none", and is a real zero rather than a missing value.
-        if (raw === "-") { rows.push([id, "forecast_completions_units", year, 0, FORECAST_URL]); continue; }
-        if (Number.isFinite(n)) rows.push([id, "forecast_completions_units", year, n, FORECAST_URL]);
+        if (raw === "-") { rows.push([id, "forecast_completions_units", year, 0, FORECAST_CITATION]); continue; }
+        if (Number.isFinite(n)) rows.push([id, "forecast_completions_units", year, n, FORECAST_CITATION]);
       }
     }
   } catch (err) {

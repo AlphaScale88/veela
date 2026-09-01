@@ -70,6 +70,21 @@ const SHOWN: Record<string, { readonly label: string; readonly format: (v: numbe
     format: (v) => `${Math.round(v).toLocaleString("en-HK")} units`,
   },
   vacancy_rate: { label: "Vacancy rate", format: (v) => `${v.toFixed(1)}%` },
+  /* Census 2021, written to the database on 02/09/2026 and until then held in a fixture no
+     screen read. `median_rent` is a *household* rent across all tenures, not a market asking
+     rent — which is why the public-rental share sits beside it rather than in a footnote. */
+  median_rent: {
+    label: "Median household rent",
+    format: (v) => `HK$${Math.round(v).toLocaleString("en-HK")}/mo`,
+  },
+  rent_to_income: {
+    label: "Rent as share of income",
+    format: (v) => `${(v * 100).toFixed(1)}%`,
+  },
+  public_rental_share: {
+    label: "Households in public rental",
+    format: (v) => `${(v * 100).toFixed(1)}%`,
+  },
 };
 
 /** Named on screen, with the reason. Each of these is a row the reference fills and we cannot. */
@@ -116,6 +131,9 @@ export function DistrictOverview({
   }, [districtId]);
 
   const shown = (observations ?? []).filter((o) => o.metric in SHOWN);
+  const forecast = (observations ?? [])
+    .filter((o) => o.metric === "forecast_completions_units")
+    .sort((a, b) => a.periodStart.localeCompare(b.periodStart));
 
   /* Territory-wide context, straight from the ingested RVD series — real, monthly, and the same
      numbers every report is priced against. Not district-level, and labelled as such. */
@@ -165,6 +183,38 @@ export function DistrictOverview({
               );
             })}
           </dl>
+        )}
+
+        {/*
+          * Supply ahead, given its own block rather than a tile, because it is the one figure
+          * here with two periods and the pair is the point: a district taking 900 flats next
+          * year and 600 the year after is loosening, and either number alone does not say so.
+          * It is also the only forward-looking figure in this panel — everything above is a
+          * measurement of something that already happened.
+          */}
+        {forecast.length > 0 && (
+          <div className="mt-4 rounded-card border border-line bg-surfaceMuted px-4 py-3">
+            <p className="text-[11px] leading-tight text-muted">
+              New private homes expected — the only forward-looking figure published per district
+            </p>
+            <div className="mt-2 flex flex-wrap items-baseline gap-x-6 gap-y-1">
+              {forecast.map((o) => (
+                <span key={o.periodStart} className="tnum">
+                  <span className="font-display text-[17px] font-semibold tracking-[-0.02em] text-mist">
+                    {Math.round(o.value).toLocaleString("en-HK")}
+                  </span>
+                  <span className="ml-1.5 font-mono text-[10px] uppercase tracking-[0.06em] text-muted">
+                    in {o.periodStart.slice(0, 4)}
+                  </span>
+                </span>
+              ))}
+            </div>
+            <p className="mt-1.5 text-[11px] leading-relaxed text-muted">
+              A forecast from the Rating and Valuation Department, not a commitment — projects
+              slip. Read it against the stock above: the same 900 flats mean something different
+              in a district of 20,000 than in one of 200,000.
+            </p>
+          </div>
         )}
 
         {observations !== null && shown.length === 0 && !failed && (

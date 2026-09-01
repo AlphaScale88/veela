@@ -3882,6 +3882,47 @@ running rather than after. The enum went 12 values to 16.
 by household size and by housing type, not geographically. The census rent-to-income ratio remains
 the only per-district affordability figure, which is why it is in the set.
 
+## The screens for it (02/09/2026)
+
+The collector wrote 108 observations the day before and **nothing rendered them.**
+`DistrictOverview` on `/map` is driven by a `SHOWN` record whose comment says "anything not
+listed is not displayed", so three census metrics and the forecast landed in the database and
+stayed there. Storing a figure and drawing it are two jobs, and only the first had been done.
+
+Now on every district panel: **median household rent**, **rent as a share of income**, and
+**households in public rental** — the third beside the first for the reason the migration gives,
+since Wong Tai Sin's HK$2,430 is half a district in public housing rather than a market price.
+
+### The forecast needed the API changed, not just a tile
+
+`distinct on (o.metric)` keeps the newest period. Right for a stock or a census count, wrong for
+the one metric with **two** periods: it silently dropped the 2025 forecast and showed 2026 alone.
+"347 next year and 331 the year after" is the shape of a supply pipeline; "331" on its own is a
+number with no direction. Point-in-time metrics still collapse to their latest row; forecasts keep
+every period, via a `union all`.
+
+It gets its own block rather than a tile, because the pair is the point and because it is the only
+forward-looking figure in a panel where everything else measures something that already happened.
+
+### `[object Object]`, on screen, under a real district
+
+`CENSUS_SOURCE` is `{name, table, url, asOf}` and the collector passed it whole into a text
+column. Postgres stored the coercion, so the panel's source line read *"…district statistics ·
+**[object Object]** · https://www.rvd.gov.hk/datagovhk/Dom_Completions…csv"* — one source
+unreadable and the next a bare URL beside two properly cited departments.
+
+Both now cite in the form the existing rows use, which also makes the census line **deduplicate**
+against the row already there instead of showing two spellings of one department. The rows were
+re-upserted, not just the display fixed: the bad string was in the database.
+
+**Caught by looking at the screenshot, not by the text assertions** — every check passed with
+`[object Object]` on screen, because nothing thought to assert the absence of a string nobody
+expects to be there.
+
+Verified against the source CSV row by hand (`Wan Chai,78,41,-,4,3,126,347,331`): the panel reads
+HK$16,300/mo, 28.1%, 4.0%, and 347 in 2025 / 331 in 2026. Typecheck clean across all 8 packages,
+no console errors.
+
 ## Working conventions
 - Dates DD/MM/YYYY. Currency: **HKD** for Hong Kong, **VND** for Vietnam, **EUR** for
   France — always state which, never a bare number. Keep a single reporting currency
