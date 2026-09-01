@@ -51,7 +51,7 @@ export function SiteHeader(): React.JSX.Element {
               account on 09/08/2026 (see middleware.ts), so a login prompt here would now
               be a lie about what clicking it does. */}
           <Link href="/finder" className="hidden text-muted transition-colors hover:text-mist sm:inline">
-            Finder
+            Find a property
           </Link>
           <Link
             href="/map"
@@ -140,7 +140,7 @@ export function SiteHeader(): React.JSX.Element {
             {/* Same order as the bar above. The drawer is the phone's version of that row,
                 so a reader who has learned one should not have to relearn the other. */}
             <Link href="/finder" className="py-2.5 text-muted hover:text-mist">
-              Finder
+              Find a property
             </Link>
             <Link href="/map" className="py-2.5 text-muted hover:text-mist">
               Market Explorer

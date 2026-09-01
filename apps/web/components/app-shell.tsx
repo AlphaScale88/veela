@@ -107,86 +107,146 @@ interface NavLink {
   readonly icon: (props: { readonly className?: string }) => React.JSX.Element;
 }
 
+/**
+ * The sidebar, rebuilt around the loop after a reader said the three things that matter:
+ * *"jsuis completement perdu"*, *"jcomprend pas ou il faut clicker"*, *"jcomprend pas quel tab
+ * fait quoi"*.
+ *
+ * Measured before changing anything, because all three were verifiable:
+ *
+ * - **Ten destinations of equal weight**, for a product with one loop — bring a property, get a
+ *   verdict. Nothing said where to start.
+ * - **Six of ten labels did not match the heading they opened.** "Finder" led to *Find a property
+ *   worth analysing*, "Market Explorer" to *Supply and demand, by district*. Every click was a
+ *   small broken promise, which is exactly "I don't understand what each tab does".
+ * - **Two different navigations** for one product, the marketing header and this.
+ *
+ * So: one primary action, four groups, and a rule that a label and its page heading are the same
+ * words. Where the page's own name was the better one it won — `/assistant` keeps *Ask Veela* and
+ * the nav adopts it, rather than both being flattened to something duller.
+ *
+ * The old sidebar mirrored the reference product's grouping (Research & Analyse, My Workspace,
+ * Services). That was a reasonable thing to copy and it is not what this product is: the
+ * reference sells to agents managing listings, this one answers a question about one flat.
+ */
+
+/** The one thing this product does. Rendered apart from the groups, not inside them. */
+const PRIMARY_LINK: NavLink = {
+  href: "/analyse",
+  label: "Analyse a property",
+  icon: DocumentIcon,
+};
+
+/** Feeds the primary action, so it sits directly under it and above the context. */
 const NAV_LINKS: readonly NavLink[] = [
-  { href: "/dashboard", label: "Dashboard", icon: GridIcon },
-  /* "Finder", not "Search" — one page must not have two names.
-     Found by walking the app as a new user: `/finder` was called **Search** by this sidebar,
-     **Finder** by the marketing header, and "Find a property worth analysing" by its own
-     heading. Three names for one destination, and the two navigation labels are the ones that
-     matter: a reader who arrives via the header and later looks for it in the sidebar has no
-     reason to think Search is the same place. The label was inherited from the reference
-     product's own sidebar, which is a reason to have considered it and not a reason to keep it
-     when this product already calls the page something else in the nav a stranger meets first. */
-  { href: "/finder", label: "Finder", icon: SearchIcon },
-  { href: "/assistant", label: "AI Assistant", icon: SparkleIcon },
+  { href: "/finder", label: "Find a property", icon: SearchIcon },
+];
+
+/** Context for a verdict: what the market is doing, at the resolution it is published. */
+const MARKET_LINKS: readonly NavLink[] = [
   { href: "/map", label: "Market Explorer", icon: MapIcon },
-];
-
-/**
- * Mashvisor's "Research & Analyze" nests sub-pages; the real, buildable equivalents here are
- * these — a rank-many-cities "Market Performance" needs a feature this product doesn't have
- * (see "Hong Kong only" in CLAUDE.md).
- *
- * **"Analyse a property" leads the group**, as an ordinary item rather than the white pill it
- * used to be above the list. The pill's argument was that every other entry is a *place* and
- * this is the one *action* — Gmail's Compose. Asked to make it match the rest, and the group
- * label is the reason the request is right: this section is literally called *Research &
- * Analyse*, and analysing a property is the analysis. It reads as the first thing you do in
- * the section rather than a control floating above the navigation.
- *
- * It is first in the group, not alphabetical: the two market pages are context, this is the
- * thing the context is for.
- */
-const RESEARCH_LINKS: readonly NavLink[] = [
-  { href: "/analyse", label: "Analyse a property", icon: DocumentIcon },
   { href: "/research/market-performance", label: "Market Performance", icon: TrendIcon },
-  { href: "/research/market-regulations", label: "Market Regulations", icon: ScaleIcon },
+];
+
+/** What happens after a verdict. Was "My Workspace", which named a container rather than
+ *  its contents — and its own page already called itself "My properties". */
+const WORKSPACE_LINKS: readonly NavLink[] = [
+  { href: "/portfolio", label: "Saved properties", icon: FolderIcon },
+  { href: "/portfolio/compare", label: "Compare", icon: CompareIcon },
+  { href: "/portfolio/alerts", label: "Alerts", icon: BellIcon },
+  { href: "/portfolio/favorites", label: "Favourite markets", icon: StarIcon },
 ];
 
 /**
- * "My Workspace" is the one group Mashvisor itself renders as an expandable dropdown
- * rather than a flat link, so this mirrors that specifically rather than every group —
- * Research & Analyse's two items read fine as a flat pair; four sub-pages under one
- * label read better collapsed by default. `/portfolio` is both the group's own link
- * and "Saved Properties" — Mashvisor draws that same overlap in its own sidebar.
+ * Everything that is a cost or a rule rather than a place to go.
+ *
+ * This folds the old Services group into the same drawer as the duty rules, because they answer
+ * one question — *what does this purchase cost me beyond the price* — and that is literally what
+ * `/services` calls itself. Two separate groups made a reader choose between them before knowing
+ * either.
  */
-const WORKSPACE_LINKS: readonly NavLink[] = [
-  { href: "/portfolio", label: "Saved Properties", icon: FolderIcon },
-  { href: "/portfolio/compare", label: "Property Compare", icon: CompareIcon },
-  { href: "/portfolio/alerts", label: "Property Alerts", icon: BellIcon },
-  { href: "/portfolio/favorites", label: "My Favorite Markets", icon: StarIcon },
-];
-
-/** Services — the same expandable-group treatment My Workspace gets, because it is the other
- *  place with several related leaves rather than one destination. */
-const SERVICES_LINKS: readonly NavLink[] = [
-  /* `/services` leads the group, which is how it becomes reachable at all.
-     Found by crawling the app: the page existed, returned 200, and **nothing anywhere linked to
-     it** — the group header is a toggle button rather than a link, so the index was orphaned
-     while its four leaves were fine. An unreachable page is a broken link with the arrow pointing
-     the other way.
-     This mirrors My Workspace exactly, where "Saved Properties" (`/portfolio`) is the group's own
-     first sub-link, so the shell now has one pattern for a group with an index instead of two. */
-  { href: "/services", label: "All services", icon: LayersIcon },
+const RULES_LINKS: readonly NavLink[] = [
+  { href: "/research/market-regulations", label: "Stamp duty & rules", icon: ScaleIcon },
   { href: "/mortgage", label: "Mortgage", icon: WalletIcon },
   { href: "/insurance", label: "Insurance", icon: ShieldIcon },
-  { href: "/agent-finder", label: "Agent Finder", icon: BadgeIcon },
-  { href: "/home-valuation", label: "Home Valuation", icon: TagIcon },
+  { href: "/agent-finder", label: "Check an agent", icon: BadgeIcon },
+  { href: "/home-valuation", label: "Home valuation", icon: TagIcon },
+  /* Kept reachable: crawling once found this page orphaned because the group header is a
+     toggle, not a link. An unreachable page is a broken link with the arrow reversed. */
+  { href: "/services", label: "All of these", icon: LayersIcon },
 ];
 
 /**
- * Pricing was here and is not any more, on request.
- *
- * It reads better as a marketing-header item than a product-sidebar one, and the two are not
- * the same audience: the sidebar belongs to someone already inside the product, while a price
- * list is read by someone deciding whether to be. That is the same reasoning that took
- * `/pricing` out of the app shell entirely a day earlier — the sidebar entry was the last
- * piece of that move left behind. It is still in the marketing header, the landing page's
- * pricing section and the footer.
+ * Secondary by design. The assistant is a floating button on every page already, and the
+ * dashboard is a page of links to the very nav that contains it — neither belongs in the path a
+ * lost reader is trying to follow.
  */
 const TAIL_LINKS: readonly NavLink[] = [
+  { href: "/dashboard", label: "Dashboard", icon: GridIcon },
+  { href: "/assistant", label: "Ask Veela", icon: SparkleIcon },
   { href: "/account", label: "Settings", icon: GearIcon },
 ];
+
+/**
+ * One expandable group, used by all three.
+ *
+ * There were two hand-written copies of this markup and a third was about to be added, which is
+ * how the chevron, the active treatment and the collapsed behaviour drift apart between groups
+ * that are supposed to look identical.
+ */
+function NavGroup({
+  label,
+  icon: Icon,
+  open,
+  active,
+  collapsed,
+  onToggle,
+  links,
+  isActive,
+  className,
+}: {
+  readonly label: string;
+  readonly icon: (props: { readonly className?: string }) => React.JSX.Element;
+  readonly open: boolean;
+  readonly active: boolean;
+  readonly collapsed: boolean;
+  readonly onToggle: () => void;
+  readonly links: readonly NavLink[];
+  readonly isActive: (href: string) => boolean;
+  readonly className?: string;
+}): React.JSX.Element {
+  return (
+    <div className={`space-y-1 px-2.5 ${className ?? ""}`}>
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        title={collapsed ? label : undefined}
+        /* The group reads as "you are somewhere in here" — brighter text, no wash. The wash
+           belongs to the one leaf you are actually on, so the two stay distinguishable. */
+        className={`flex w-full items-center gap-3 rounded-full px-3 py-2.5 text-sm font-medium transition-colors ${
+          active ? "text-inverseText" : "text-inverseMuted hover:bg-white/10 hover:text-inverseText"
+        }`}
+      >
+        <Icon className="h-[18px] w-[18px] shrink-0" />
+        <span className={`flex-1 text-left ${collapsed ? "lg:hidden" : ""}`}>{label}</span>
+        <ChevronDownIcon
+          className={`h-3.5 w-3.5 shrink-0 transition-transform ${open ? "rotate-180" : ""} ${
+            collapsed ? "lg:hidden" : ""
+          }`}
+        />
+      </button>
+
+      {open && (
+        <ul className={`space-y-1 pl-4 ${collapsed ? "lg:pl-0" : ""}`}>
+          {links.map((item) => (
+            <NavItem key={item.href} item={item} active={isActive(item.href)} collapsed={collapsed} />
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
 
 /** Home Valuation's glyph. It was drawn for Pricing, which has since left this nav; kept
  *  because Services still uses it, and a price tag reads correctly for a valuation too. */
@@ -228,12 +288,11 @@ function Sidebar({
     pathname === href || pathname?.startsWith(`${href}/`) === true;
   const workspaceActive = sectionActive("/portfolio");
   const [workspaceOpen, setWorkspaceOpen] = useState(workspaceActive);
-  /* The leaves are top-level now, so a single prefix no longer covers the group. Listed
-     explicitly rather than matched loosely — `/mortgage` and `/insurance` share no prefix. */
-  const servicesActive =
-    pathname.startsWith("/services") ||
-    SERVICES_LINKS.some((l) => pathname === l.href);
-  const [servicesOpen, setServicesOpen] = useState(servicesActive);
+  const marketActive = MARKET_LINKS.some((l) => sectionActive(l.href));
+  const [marketOpen, setMarketOpen] = useState(marketActive);
+  /* Listed explicitly rather than matched by prefix — `/mortgage` and `/insurance` share none. */
+  const rulesActive = RULES_LINKS.some((l) => sectionActive(l.href));
+  const [rulesOpen, setRulesOpen] = useState(rulesActive);
 
   return (
     <nav
@@ -261,91 +320,70 @@ function Sidebar({
         />
       </Link>
 
-      {/* The white "Analyse a property" pill used to sit here, above the list. It is now the
-          first item of Research & Analyse, in the same treatment as every other entry — see
-          `RESEARCH_LINKS` for why the request was the right call. */}
+      {/*
+        * The primary action, back in its own treatment above the groups.
+        *
+        * It was folded into "Research & Analyse" as an ordinary row, on the argument that the
+        * section is called analysis so the analysis belongs in it. Consistent, and it left a
+        * reader with ten equal rows and no answer to "where do I click" -- which is what was
+        * reported. A product with one loop should say what the loop is before it offers to be
+        * browsed. Gmail's Compose, again, and this time it stays.
+        */}
+      <div className="mt-6 px-2.5">
+        <Link
+          href={PRIMARY_LINK.href}
+          className={`flex items-center gap-3 rounded-full bg-surface px-3 py-2.5 text-sm font-semibold text-accent shadow-card transition-colors hover:bg-white ${
+            collapsed ? "lg:justify-center lg:px-0" : ""
+          }`}
+          title={collapsed ? PRIMARY_LINK.label : undefined}
+          aria-current={isActive(PRIMARY_LINK.href) ? "page" : undefined}
+        >
+          <PRIMARY_LINK.icon className="h-[18px] w-[18px] shrink-0" />
+          <span className={collapsed ? "lg:hidden" : ""}>{PRIMARY_LINK.label}</span>
+        </Link>
+      </div>
 
-      <ul className="mt-6 space-y-1 px-2.5">
+      <ul className="mt-3 space-y-1 px-2.5">
         {NAV_LINKS.map((item) => (
           <NavItem key={item.href} item={item} active={isActive(item.href)} collapsed={collapsed} />
         ))}
       </ul>
 
-      <p
-        className={`mt-6 px-5 font-mono text-[10px] uppercase tracking-[0.12em] text-inverseMuted ${
-          collapsed ? "lg:hidden" : ""
-        }`}
-      >
-        Research &amp; Analyse
-      </p>
-      <ul className={`mt-2 space-y-1 px-2.5 ${collapsed ? "lg:mt-6" : ""}`}>
-        {RESEARCH_LINKS.map((item) => (
-          <NavItem key={item.href} item={item} active={isActive(item.href)} collapsed={collapsed} />
-        ))}
-      </ul>
+      <NavGroup
+        label="The market"
+        icon={MapIcon}
+        open={marketOpen}
+        active={marketActive}
+        collapsed={collapsed}
+        onToggle={() => setMarketOpen((o) => !o)}
+        links={MARKET_LINKS}
+        isActive={isActive}
+        className="mt-4 border-t border-white/10 pt-4"
+      />
 
-      <div className="mt-6 space-y-1 border-t border-white/10 px-2.5 pt-4">
-        <button
-          type="button"
-          onClick={() => setWorkspaceOpen((o) => !o)}
-          aria-expanded={workspaceOpen}
-          title={collapsed ? "My Workspace" : undefined}
-          /* The group reads as "you are somewhere in here" — brighter text, no wash. The
-             wash belongs to the one leaf you are actually on, so the two are
-             distinguishable instead of two identical slabs stacked on each other. */
-          className={`flex w-full items-center gap-3 rounded-full px-3 py-2.5 text-sm font-medium transition-colors ${
-            workspaceActive
-              ? "text-inverseText"
-              : "text-inverseMuted hover:bg-white/10 hover:text-inverseText"
-          }`}
-        >
-          <SearchIcon className="h-[18px] w-[18px] shrink-0" />
-          <span className={`flex-1 text-left ${collapsed ? "lg:hidden" : ""}`}>My Workspace</span>
-          <ChevronDownIcon
-            className={`h-3.5 w-3.5 shrink-0 transition-transform ${workspaceOpen ? "rotate-180" : ""} ${
-              collapsed ? "lg:hidden" : ""
-            }`}
-          />
-        </button>
+      <NavGroup
+        label="My properties"
+        icon={FolderIcon}
+        open={workspaceOpen}
+        active={workspaceActive}
+        collapsed={collapsed}
+        onToggle={() => setWorkspaceOpen((o) => !o)}
+        links={WORKSPACE_LINKS}
+        isActive={isActive}
+        className="mt-2"
+      />
 
-        {workspaceOpen && (
-          <ul className={`space-y-1 pl-4 ${collapsed ? "lg:pl-0" : ""}`}>
-            {WORKSPACE_LINKS.map((item) => (
-              <NavItem key={item.href} item={item} active={isActive(item.href)} collapsed={collapsed} />
-            ))}
-          </ul>
-        )}
-      </div>
-
-      <div className="mt-2 space-y-1 px-2.5">
-        <button
-          type="button"
-          onClick={() => setServicesOpen((o) => !o)}
-          aria-expanded={servicesOpen}
-          title={collapsed ? "Services" : undefined}
-          className={`flex w-full items-center gap-3 rounded-full px-3 py-2.5 text-sm font-medium transition-colors ${
-            servicesActive
-              ? "text-inverseText"
-              : "text-inverseMuted hover:bg-white/10 hover:text-inverseText"
-          }`}
-        >
-          <LayersIcon className="h-[18px] w-[18px] shrink-0" />
-          <span className={`flex-1 text-left ${collapsed ? "lg:hidden" : ""}`}>Services</span>
-          <ChevronDownIcon
-            className={`h-3.5 w-3.5 shrink-0 transition-transform ${servicesOpen ? "rotate-180" : ""} ${
-              collapsed ? "lg:hidden" : ""
-            }`}
-          />
-        </button>
-
-        {servicesOpen && (
-          <ul className={`space-y-1 pl-4 ${collapsed ? "lg:pl-0" : ""}`}>
-            {SERVICES_LINKS.map((item) => (
-              <NavItem key={item.href} item={item} active={isActive(item.href)} collapsed={collapsed} />
-            ))}
-          </ul>
-        )}
-      </div>
+      <NavGroup
+        label="Costs & rules"
+        icon={ScaleIcon}
+        open={rulesOpen}
+        active={rulesActive}
+        collapsed={collapsed}
+        onToggle={() => setRulesOpen((o) => !o)}
+        links={RULES_LINKS}
+        isActive={isActive}
+        className="mt-2"
+      />
 
       <ul className="mt-2 space-y-1 px-2.5">
         {TAIL_LINKS.map((item) => (

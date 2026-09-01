@@ -38,7 +38,7 @@ export default function FavoriteMarketsPage(): React.JSX.Element {
     return (
       <AppShell breadcrumb="My Workspace › My Favorite Markets">
         <h1 className="font-display text-[26px] font-semibold tracking-[-0.03em] text-mist">
-          My Favorite Markets
+          Favourite markets
         </h1>
         <p className="mt-3 max-w-prose text-sm text-muted">
           Log in to star districts on Market Performance and find them here.

@@ -157,7 +157,7 @@ export default function MarketRegulationsPage(): React.JSX.Element {
     <AppShell breadcrumb="Research & Analyse › Market Regulations">
       <header className="max-w-prose">
         <h1 className="font-display text-[26px] font-semibold tracking-[-0.03em] text-mist">
-          Market Regulations
+          Stamp duty & rules
         </h1>
         <p className="mt-3 text-sm leading-relaxed text-muted">
           Effective from {rules.meta.effectiveFrom}

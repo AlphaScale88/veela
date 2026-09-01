@@ -73,7 +73,7 @@ export default function ServicesPage(): React.JSX.Element {
       <header className="max-w-prose">
         <p className="eyebrow">Services · Hong Kong</p>
         <h1 className="mt-3 font-display text-[34px] font-extrabold leading-tight tracking-[-0.03em]">
-          The parts of a purchase that aren&apos;t the price
+          Costs &amp; rules
         </h1>
         <p className="mt-3 text-[15px] leading-relaxed text-muted">
           Financing, insurance, agents and what the place is worth. Tools where something can

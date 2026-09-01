@@ -811,7 +811,7 @@ export default function AnalysePage(): React.JSX.Element {
         {/* font-extrabold to match the landing hero's weight — see app/page.tsx —
             this is the same "big statement" headline tier, not a form label. */}
         <h1 className="mt-3 font-display text-[34px] font-extrabold leading-tight tracking-[-0.03em]">
-          Is this property worth it?
+          Analyse a property
         </h1>
         <p className="mt-3 text-[15px] leading-relaxed text-muted">
           Enter the figures for a Hong Kong flat and see a live yield estimate with no

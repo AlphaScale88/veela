@@ -144,7 +144,7 @@ export default function PortfolioPage(): React.JSX.Element {
     return (
       <AppShell breadcrumb="My Workspace">
         <h1 className="font-display text-[26px] font-semibold tracking-[-0.03em] text-mist">
-          My properties
+          Saved properties
         </h1>
         <p className="mt-3 max-w-prose text-sm text-muted">
           Log in to see properties you've saved from a report, or to start saving them.

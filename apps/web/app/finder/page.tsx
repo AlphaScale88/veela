@@ -116,7 +116,7 @@ export default function FinderPage(): React.JSX.Element {
       <div className="space-y-6">
         <header className="max-w-prose space-y-1.5">
           <h1 className="font-display text-[26px] font-semibold leading-tight tracking-[-0.03em] text-mist">
-            Find a property worth analysing
+            Find a property
           </h1>
           <p className="text-sm leading-relaxed text-muted">
             {mode === "mine" ? (

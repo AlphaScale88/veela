@@ -3743,6 +3743,52 @@ inventing the resolution that is missing.
 What stays per district, because it is real: stock, completions and vacancy (RVD), population and
 households (Census 2021).
 
+## The navigation, rebuilt around the loop (01/09/2026)
+
+A reader said three things: *"jsuis completement perdu"*, *"jcomprend pas ou il faut clicker"*,
+*"jcomprend pas quel tab fait quoi"*. All three were measurable, and measuring first is what made
+the fix obvious.
+
+| Complaint | What was actually true |
+|---|---|
+| lost | **Two navigations** for one product — marketing header and product sidebar, overlapping, differently named |
+| don't know where to click | **Ten destinations of equal weight**, for a product with one loop |
+| don't know what each tab does | **Six of ten labels did not match the heading they opened** |
+
+That last one is the sharpest. "Finder" opened *Find a property worth analysing*; "Market
+Explorer" opened *Supply and demand, by district*; "Services" opened *The parts of a purchase that
+aren't the price*. Every click was a small broken promise.
+
+### What it is now
+
+One primary action in its own treatment — **Analyse a property**, a white pill — then *Find a
+property*, then three collapsed groups: **The market**, **My properties**, **Costs & rules**.
+Dashboard, Ask Veela and Settings drop to the tail: the assistant is a floating button on every
+page already, and the dashboard is a page of links to the nav that contains it. Neither belongs in
+the path a lost reader is following.
+
+**Costs & rules folds the old Services group in with the duty rules**, because they answer one
+question — what does this purchase cost beyond the price — which is what `/services` already
+called itself. Two groups made a reader choose between them before understanding either.
+
+**13 of 17 labels now match their heading**, from 4 of 10. Where the page's own name was better,
+the nav adopted it: `/assistant` keeps *Ask Veela*.
+
+**The four service pages are deliberately left mismatched.** *Mortgage* opens "How much would a
+bank actually lend?". Those pages are reached from outside — search, the marketing header — where
+the editorial heading is doing real work, and the label still predicts the subject. The confusing
+mismatches were the ones sharing no word with their destination; these share the topic. Flattening
+four pieces of good copy to score a metric would be the wrong trade.
+
+**`NavGroup` is one component now.** There were two hand-written copies of the group markup and a
+third was about to be added, which is how the chevron, the active treatment and the collapsed
+behaviour drift apart between groups meant to look identical.
+
+**The primary pill came back, and the reversal is the point.** It was folded into the list on
+request, on the argument that the section is called analysis so the analysis belongs in it —
+consistent, and it left ten equal rows with no answer to "where do I click". A product with one
+loop should say what the loop is before it offers to be browsed.
+
 ## Working conventions
 - Dates DD/MM/YYYY. Currency: **HKD** for Hong Kong, **VND** for Vietnam, **EUR** for
   France — always state which, never a bare number. Keep a single reporting currency
