@@ -211,8 +211,8 @@ export function DistrictOverview({
             </div>
             <p className="mt-1.5 text-[11px] leading-relaxed text-muted">
               A forecast from the Rating and Valuation Department, not a commitment — projects
-              slip. Read it against the stock above: the same 900 flats mean something different
-              in a district of 20,000 than in one of 200,000.
+              slip. Read it against the stock above: the same number of new flats means something
+              different in a district of 20,000 than in one of 200,000.
             </p>
           </div>
         )}
