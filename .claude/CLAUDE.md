@@ -3789,6 +3789,23 @@ request, on the argument that the section is called analysis so the analysis bel
 consistent, and it left ten equal rows with no answer to "where do I click". A product with one
 loop should say what the loop is before it offers to be browsed.
 
+## The chrome follows the reader, not the route (01/09/2026)
+
+Clicking *Mortgage* in the sidebar made the sidebar vanish: those four pages render with the
+marketing header, which this file's own comment already admitted was "a discontinuity for someone
+already inside the app". The reason for it was real — a stranger arriving from a search needs a
+header they can navigate from, not a logged-out product rail.
+
+Both are true at once, so the four `DUAL_ROUTES` now take their chrome from the reader: app shell
+when signed in, marketing header when not.
+
+**The cost, stated because I could not measure it away.** `loading` starts true while the session
+resolves, so a signed-in reader gets a brief marketing-chrome flash before the sidebar appears.
+Marketing is the honest default while the session is unknown — a reader we cannot see is, as far
+as we know, a stranger — and it means the flash only ever runs one way. **Not verified from a
+signed-in session**, because there is no test password: the signed-out path was checked and is
+unchanged, the signed-in path is reasoned. Worth a look on production, where a session exists.
+
 ## Working conventions
 - Dates DD/MM/YYYY. Currency: **HKD** for Hong Kong, **VND** for Vietnam, **EUR** for
   France — always state which, never a bare number. Keep a single reporting currency

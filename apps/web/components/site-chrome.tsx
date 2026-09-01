@@ -4,6 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
+import { AppShell } from "./app-shell";
+import { useAuth } from "./auth-provider";
 import { SiteFooter, SiteHeader } from "./site-nav";
 
 /**
@@ -71,8 +73,42 @@ const MARKETING_ROUTES = new Set([
 /** Deliberately chrome-less: nothing to click but the form. */
 const BARE_ROUTES = new Set(["/login", "/signup", "/auth/callback"]);
 
+/**
+ * The four service pages, which legitimately belong to two audiences at once.
+ *
+ * A stranger arriving from a search needs the marketing header — that was the reason they were
+ * moved out of the app shell, and it still holds. But a signed-in reader clicking *Mortgage* in
+ * the sidebar had the sidebar vanish under them, which is the discontinuity this file's own
+ * comment admitted to. Both are true, so the chrome follows the reader rather than the route.
+ *
+ * `/services` is not here: it is the in-product index and always belongs in the shell.
+ */
+const DUAL_ROUTES = new Set(["/mortgage", "/insurance", "/agent-finder", "/home-valuation"]);
+
+/** Breadcrumb for a dual route seen from inside the product. */
+const DUAL_BREADCRUMB: Record<string, string> = {
+  "/mortgage": "Costs & rules › Mortgage",
+  "/insurance": "Costs & rules › Insurance",
+  "/agent-finder": "Costs & rules › Check an agent",
+  "/home-valuation": "Costs & rules › Home valuation",
+};
+
 export function SiteChrome({ children }: { readonly children: ReactNode }): React.JSX.Element {
   const pathname = usePathname() ?? "/";
+  const { user, loading } = useAuth();
+
+  /*
+   * Marketing chrome while the session is still resolving, which is the honest default: a reader
+   * whose session we cannot see yet is, as far as we know, a stranger. It also means the flash
+   * only ever runs one way — never showing a signed-in reader a stranger's page permanently.
+   */
+  if (DUAL_ROUTES.has(pathname) && !loading && user !== null) {
+    return (
+      <main id="main">
+        <AppShell breadcrumb={DUAL_BREADCRUMB[pathname] ?? "Costs & rules"}>{children}</AppShell>
+      </main>
+    );
+  }
 
   if (BARE_ROUTES.has(pathname)) {
     return (
