@@ -1,6 +1,16 @@
 "use client";
 
-import { DEMO_DISTRICTS, DEMO_PERIODS, RVD_PRICE_INDEX, RVD_RENT_INDEX, RVD_SOURCE, demoSeries } from "@veela/fixtures";
+import {
+  DEMO_DISTRICTS,
+  DEMO_PERIODS,
+  RVD_PRICE_INDEX,
+  RVD_PRIMARY_SALES_COUNT,
+  RVD_RENT_INDEX,
+  RVD_SECONDARY_SALES_COUNT,
+  RVD_SOURCE,
+  RVD_TRANSACTION_PERIODS,
+  demoSeries,
+} from "@veela/fixtures";
 import { viz } from "@veela/ui";
 import { useMemo, useState } from "react";
 
@@ -44,6 +54,33 @@ export default function MarketPerformancePage(): React.JSX.Element {
 
   const realPrice = useMemo(() => RVD_PRICE_INDEX.slice(-months), [months]);
   const realRent = useMemo(() => RVD_RENT_INDEX.slice(-months), [months]);
+
+  /*
+   * Sale-and-purchase agreements — the demand side, and until now the largest thing this
+   * repository held and never showed. `RVD_TRANSACTION_PERIODS` and the four count/value arrays
+   * were parsed, committed and referenced by **no component at all**.
+   *
+   * It matters next to the price index above it rather than on its own page: an index says what
+   * the market charged, this says how many people actually transacted. A price holding up on
+   * collapsing volume is a different market from the same price on rising volume, and only one
+   * of the two charts can tell you which.
+   *
+   * Counts, not values. The value series is held too, but HK$M and a count share no scale and
+   * the value is mostly the count times the price index this page already draws — a third line
+   * restating the other two is noise, not information.
+   */
+  const salesPoints = (counts: readonly (number | null)[]) =>
+    RVD_TRANSACTION_PERIODS.map((periodStart, i) => ({ periodStart, value: counts[i] ?? 0 }))
+      .filter((pt) => pt.value > 0)
+      .slice(-months);
+
+  const resale = useMemo(() => salesPoints(RVD_SECONDARY_SALES_COUNT), [months]);
+  const newBuild = useMemo(() => salesPoints(RVD_PRIMARY_SALES_COUNT), [months]);
+
+  const latestResale = resale[resale.length - 1]?.value ?? 0;
+  const latestNew = newBuild[newBuild.length - 1]?.value ?? 0;
+  const newBuildShare =
+    latestResale + latestNew === 0 ? 0 : (latestNew / (latestResale + latestNew)) * 100;
 
   /*
    * Measured, territory-wide — not the generated per-district series these replaced.
@@ -120,6 +157,30 @@ export default function MarketPerformancePage(): React.JSX.Element {
           <TerritoryIndexChart label="Rent index" points={realRent} color={viz.supply} />
         </div>
       </section>
+
+      <div className="mt-10 border-t border-line pt-8">
+        <h2 className="text-sm font-semibold text-mist">Transactions — measured</h2>
+        <p className="mt-1 max-w-prose text-xs leading-relaxed text-muted">
+          Sale-and-purchase agreements per month, from the Land Registry via RVD — new-build and
+          resale counted separately, because they behave differently and a developer&apos;s launch
+          month can swamp the total. Hong Kong overall. This is the demand side: a price holding
+          up on falling volume is a different market from the same price on rising volume.
+        </p>
+        <div className="mt-3 flex flex-wrap gap-6 font-mono text-xs text-muted">
+          <span>
+            Latest month <span className="text-mist">{(latestResale + latestNew).toLocaleString("en-HK")}</span> agreements
+          </span>
+          <span>
+            New build <span className="text-mist">{newBuildShare.toFixed(0)}%</span> of them
+          </span>
+        </div>
+      </div>
+
+      <div className="card mt-4 max-w-3xl space-y-6">
+        <TerritoryIndexChart label="Resale agreements" points={resale} color={viz.demand} />
+        <div className="h-px bg-line" />
+        <TerritoryIndexChart label="New-build agreements" points={newBuild} color={viz.supply} />
+      </div>
 
       <div className="mt-10 border-t border-line pt-8">
         <h2 className="text-sm font-semibold text-mist">Over your chosen window — measured</h2>

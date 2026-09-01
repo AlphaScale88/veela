@@ -3806,6 +3806,29 @@ as we know, a stranger — and it means the flash only ever runs one way. **Not 
 signed-in session**, because there is no test password: the signed-out path was checked and is
 unchanged, the signed-in path is reasoned. Worth a look on production, where a session exists.
 
+## The demand side, finally on screen (01/09/2026)
+
+The interactivity review found three datasets held and never rendered. The largest was
+`RVD_TRANSACTION_PERIODS` and its four count/value arrays — monthly sale-and-purchase agreements
+back to 2002, split new-build and resale, **referenced by no component at all**. Parsed,
+committed, dormant.
+
+It sits on Market Performance directly under the price and rent indices, which is where it earns
+its place: an index says what the market charged, this says how many people actually transacted.
+A price holding up on collapsing volume is a different market from the same price on rising
+volume, and only one of those two charts can tell you which.
+
+**Counts, not values.** The value series is held too and is deliberately not drawn: HK$M and a
+count share no scale, and the value is largely the count times the index already on the page — a
+third line restating the other two is noise.
+
+**New-build and resale are separate charts**, because a single developer launch can swamp a
+month's total and the two behave differently. The headline states both: latest month's agreements
+and what share of them were new build.
+
+Still dormant after this: the Census 2021 district profiles — population, households,
+rent-to-income, housing-type shares — of which only `rentContext`'s caveat is consumed.
+
 ## Working conventions
 - Dates DD/MM/YYYY. Currency: **HKD** for Hong Kong, **VND** for Vietnam, **EUR** for
   France — always state which, never a bare number. Keep a single reporting currency
