@@ -1,0 +1,29 @@
+-- 0012 — median household income per district, which this project twice recorded as
+-- non-existent
+--
+-- The claim in CLAUDE.md was: "median household income by district does not exist in HK open
+-- data — the C&SD tables are by household size and housing type only." **Wrong, twice, and
+-- for a mechanical reason worth recording**: the enumeration that produced it asked
+-- data.gov.hk for `rows=200` against an organisation holding **332** packages, then filtered
+-- the truncated list. The dataset was in the 132 never fetched.
+--
+-- It is `130-06806`, and it is better than the census snapshot that was being used as a
+-- substitute: the General Household Survey publishes it **annually, 2001 to 2025**, for all
+-- eighteen districts, through a JSON API that needs no parsing of a spreadsheet.
+--
+--   https://www.censtatd.gov.hk/api/get.php?id=130-06806&lang=en&full_series=1
+--
+-- Why it matters more than any other district figure this product holds: it is the
+-- denominator of affordability. Territory-wide the median household income has risen about
+-- 67% since 2001 while RVD's price index has risen about 250%, and those two numbers are the
+-- product's whole argument. Per district they are the argument made locally.
+--
+-- One metric, not two. The API also carries average domestic household size, and that is
+-- deliberately not stored: `population / households` are both already in this table per
+-- district and their quotient is the same quantity. A second, slightly different figure for
+-- one thing is the disagreement this schema keeps being corrected for.
+--
+-- `ALTER TYPE ... ADD VALUE` is additive and cannot invalidate an existing row. It is also
+-- irreversible — Postgres has no DROP VALUE.
+
+alter type market_metric add value if not exists 'median_household_income';

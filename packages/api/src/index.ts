@@ -1306,7 +1306,12 @@ ${area}`,
      * gives per district. "909 next year and 594 the year after" is the shape of a supply
      * pipeline; "594" on its own is a number with no direction.
      *
-     * So point-in-time metrics collapse to their latest row and forecasts keep every period.
+     * So point-in-time metrics collapse to their latest row, and the two genuine *series* keep
+     * every period: the forecast, and median household income (C&SD 130-06806, annual from
+     * 2001). The income series is 25 rows per district and is sent whole on purpose — its
+     * latest value is the least interesting thing about it. What a reader needs is that
+     * incomes here rose by some percentage while prices rose by a much larger one, and that
+     * comparison cannot be made from one number.
      *
      * **`rvd_class is null` is load-bearing, and became so the moment migration 0011 landed.**
      * Before it, every row in this table had a null class and the filter was a no-op. Now
@@ -1327,7 +1332,7 @@ ${area}`,
         from market_observations o
         where o.district_id = ${districtId}
           and o.rvd_class is null
-          and o.metric <> 'forecast_completions_units'
+          and o.metric not in ('forecast_completions_units', 'median_household_income')
         order by o.metric, o.period_start desc
       )
       union all
@@ -1336,8 +1341,8 @@ ${area}`,
         from market_observations o
         where o.district_id = ${districtId}
           and o.rvd_class is null
-          and o.metric = 'forecast_completions_units'
-        order by o.period_start
+          and o.metric in ('forecast_completions_units', 'median_household_income')
+        order by o.metric, o.period_start
       )
     `);
 

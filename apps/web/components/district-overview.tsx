@@ -58,6 +58,33 @@ interface Observation {
 }
 
 /** How each real metric is labelled and formatted. Anything not listed is not displayed. */
+/**
+ * Growth in RVD's territory-wide price index between two dates, for comparison against a
+ * district income series measured over the same window.
+ *
+ * Nearest-month rather than exact: the income series is annual and stamped 1 January, and the
+ * price index is monthly, so an exact match would fail on every year. Returns null when either
+ * end lies outside the series rather than clamping — a growth figure quietly measured over a
+ * shorter window than its own label claims is worse than no figure.
+ */
+function indexGrowthBetween(fromISO: string, toISO: string): number | null {
+  const at = (iso: string) => {
+    const target = iso.slice(0, 7);
+    let best: { readonly value: number } | undefined;
+    let bestGap = Infinity;
+    for (const p of RVD_PRICE_INDEX) {
+      const gap = Math.abs(Date.parse(`${p.periodStart.slice(0, 7)}-01`) - Date.parse(`${target}-01`));
+      if (gap < bestGap) { bestGap = gap; best = p; }
+    }
+    // 400 days: tolerate an annual stamp landing between published months, refuse a series
+    // that simply does not reach the requested end.
+    return bestGap <= 400 * 24 * 3600 * 1000 ? best : undefined;
+  };
+  const a = at(fromISO);
+  const b = at(toISO);
+  return a !== undefined && b !== undefined && a.value > 0 ? b.value / a.value - 1 : null;
+}
+
 const SHOWN: Record<string, { readonly label: string; readonly format: (v: number) => string }> = {
   population: { label: "Population", format: (v) => Math.round(v).toLocaleString("en-HK") },
   households: { label: "Households", format: (v) => Math.round(v).toLocaleString("en-HK") },
@@ -144,6 +171,32 @@ export function DistrictOverview({
   }, [districtId]);
 
   const shown = (observations ?? []).filter((o) => o.metric in SHOWN);
+  /*
+   * Median household income, C&SD 130-06806, annual since 2001 — 25 rows, not one.
+   *
+   * Deliberately **not** in `SHOWN`: that record drives one tile per observation, so a
+   * 25-period series would render twenty-five tiles. It gets its own block for the same reason
+   * the forecast does — the series is the point, not the latest figure.
+   */
+  const income = (observations ?? [])
+    .filter((o) => o.metric === "median_household_income")
+    .sort((a, b) => a.periodStart.localeCompare(b.periodStart));
+  const incomeFirst = income[0];
+  const incomeLast = income[income.length - 1];
+  const affordability =
+    incomeFirst !== undefined && incomeLast !== undefined && incomeFirst.value > 0
+      ? {
+          from: incomeFirst.periodStart.slice(0, 4),
+          to: incomeLast.periodStart.slice(0, 4),
+          latest: incomeLast.value,
+          incomeGrowth: incomeLast.value / incomeFirst.value - 1,
+          /* The same window on RVD's price index, so the two percentages are comparable. Read
+             from the series rather than stated: a hardcoded "about 250%" would be stale the
+             next time either source updates, and this file has been bitten by exactly that. */
+          priceGrowth: indexGrowthBetween(incomeFirst.periodStart, incomeLast.periodStart),
+        }
+      : null;
+
   const forecast = (observations ?? [])
     .filter((o) => o.metric === "forecast_completions_units")
     .sort((a, b) => a.periodStart.localeCompare(b.periodStart));
@@ -196,6 +249,58 @@ export function DistrictOverview({
               );
             })}
           </dl>
+        )}
+
+        {/*
+          * Affordability, which is the one comparison this product exists to make. An agent
+          * quotes a gross yield; the landing page's promise is to show what is actually left.
+          * The district version of that promise is this: incomes here rose by one percentage
+          * over a quarter-century and prices rose by a much larger one, and the second figure
+          * is territory-wide because no per-district price series exists — said on screen
+          * rather than left to be assumed.
+          */}
+        {affordability !== null && (
+          <div className="mt-4 rounded-card border border-line bg-surfaceMuted px-4 py-3">
+            <p className="text-[11px] leading-tight text-muted">
+              Median household income here, and what has happened to it
+            </p>
+            <div className="mt-2 flex flex-wrap items-baseline gap-x-6 gap-y-1">
+              <span className="tnum">
+                <span className="font-display text-[17px] font-semibold tracking-[-0.02em] text-mist">
+                  HK${Math.round(affordability.latest).toLocaleString("en-HK")}
+                </span>
+                <span className="ml-1.5 font-mono text-[10px] uppercase tracking-[0.06em] text-muted">
+                  /mo in {affordability.to}
+                </span>
+              </span>
+              <span className="tnum">
+                <span className="font-display text-[17px] font-semibold tracking-[-0.02em] text-mist">
+                  {(affordability.incomeGrowth * 100).toFixed(0)}%
+                </span>
+                <span className="ml-1.5 font-mono text-[10px] uppercase tracking-[0.06em] text-muted">
+                  income since {affordability.from}
+                </span>
+              </span>
+              {affordability.priceGrowth !== null && (
+                <span className="tnum">
+                  <span className="font-display text-[17px] font-semibold tracking-[-0.02em] text-negative">
+                    {(affordability.priceGrowth * 100).toFixed(0)}%
+                  </span>
+                  <span className="ml-1.5 font-mono text-[10px] uppercase tracking-[0.06em] text-muted">
+                    prices, same window
+                  </span>
+                </span>
+              )}
+            </div>
+            <p className="mt-1.5 text-[11px] leading-relaxed text-muted">
+              Income is this district, from the Census and Statistics Department&apos;s General
+              Household Survey. <strong className="text-mist">The price figure is Hong Kong
+              overall</strong> — RVD publishes no monthly price index per district, so the two
+              percentages are not the same geography and the comparison is indicative rather
+              than local. It is still the gap that decides whether buying here has become
+              harder or easier.
+            </p>
+          </div>
         )}
 
         {/*

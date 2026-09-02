@@ -3878,9 +3878,10 @@ the same pnpm isolation `check-links.mjs` already works around for playwright.
 **`ALTER TYPE ... ADD VALUE` is irreversible**: Postgres has no `DROP VALUE`. Confirmed before
 running rather than after. The enum went 12 values to 16.
 
-**Searched and not found: median household income by district.** The C&SD tables are broken down
-by household size and by housing type, not geographically. The census rent-to-income ratio remains
-the only per-district affordability figure, which is why it is in the set.
+~~**Searched and not found: median household income by district.**~~ **Wrong — withdrawn
+03/09/2026.** It exists, annually since 2001, and is now ingested. See "Two 'does not exist'
+findings that were search failures" below. The paragraph is left struck through rather than
+deleted because the reason it was wrong is more useful than the claim ever was.
 
 ## The screens for it (02/09/2026)
 
@@ -3944,13 +3945,10 @@ below is open government data.
 
 Two long-standing questions were answered by the resource lists themselves:
 
-- **Median household income by district still does not exist.** C&SD publishes 332 datasets;
-  the household-income tables (130-06606 through 130-06613) break down by household size and by
-  type of housing, never geographically. The gap recorded on 02/09 stands.
-- **Lands Department publishes no geometry here.** Its six data.gov.hk packages are 3D-map
-  revision dates and land-transaction application summaries. District boundaries live on the
-  CSDI portal, not this API — so the map still has no real outlines, and now for a reason that
-  has been checked rather than assumed.
+- ~~**Median household income by district still does not exist.**~~ **Both of these bullets
+  were wrong.** They said the search had been done and had come back empty; the search had been
+  done badly. Corrected the next day — see the section below. Kept because "checked rather than
+  assumed" was asserted here, and it was not true.
 
 ### The finding that mattered: the indices are not one line
 
@@ -4126,6 +4124,104 @@ A recorded "known gap" said *"RVD's rent and price indices are territory-wide on
 and repeated for weeks. There is no **district** index, which is the part that matters; but 1.3M
 and 1.4M split all five Classes and 1.5M splits Urban from New Territories. The gap now says the
 narrower, true thing.
+
+## Two "does not exist" findings that were search failures (03/09/2026)
+
+Asked where the data recorded as unfindable could be found, and to look at other sources. Both
+turned out to be published, official, and free. **Neither needed another source; both needed a
+better search.** Recorded at length because the failure mode is repeatable and this file had
+promoted both claims to settled fact.
+
+### 1. Median household income by district: C&SD table 130-06806
+
+Written twice in this file as not existing, on the grounds that C&SD's household-income tables
+break down by household size and housing type rather than geographically.
+
+**The enumeration behind that asked data.gov.hk for `rows=200` against an organisation holding
+332 packages, and then ran a title filter over the truncated list.** The dataset sat in the 132
+never fetched. The conclusion was not wrong about what it saw; it was wrong to be stated as a
+property of Hong Kong's open data.
+
+It is better than the census snapshot that was standing in for it. The General Household Survey
+publishes it **annually, 2001 to 2025, all eighteen districts**, through a JSON API — no
+spreadsheet to parse:
+
+    https://www.censtatd.gov.hk/api/get.php?id=130-06806&lang=en&full_series=1
+
+**It is the denominator of everything else here.** Territory-wide the median household income
+has risen about **67%** since 2001 (HK$18,000 → HK$30,000) while RVD's price index has risen
+about **250%**. That gap is this product's entire argument, and it can now be made per district:
+
+| 2025 | Median household income | 2001 → 2025 |
+|---|---|---|
+| Central and Western | HK$45,000 | +83.7% |
+| Wan Chai | HK$43,300 | +80.4% |
+| Sai Kung | HK$40,600 | **+93.3%** |
+| *Hong Kong* | *HK$30,000* | *+66.7%* |
+| Kwai Tsing | HK$25,700 | +63.7% |
+| Sham Shui Po | HK$25,000 | +78.6% |
+| Kwun Tong | HK$24,900 | +62.7% |
+
+Yau Tsim Mong is the outlier at **+109%**, from the lowest base on the island side in 2001.
+
+**`MED_DH_INC` only.** The response also carries the median excluding economically inactive
+households, the median excluding foreign domestic helpers, and average household size. The
+income variants answer a different question from "what does a household here earn"; household
+size is already `population / households`, both of which are in this table, and a second
+slightly different figure for one quantity is the exact disagreement this schema keeps being
+corrected for.
+
+### 2. District boundaries: published by the Home Affairs Department, not Lands
+
+The other bullet said Lands Department publishes no geometry on data.gov.hk — true, and it does
+not follow that nobody does. **The search was one organisation wide.**
+
+    https://www.had.gov.hk/psi/hong-kong-administrative-boundaries/hksar_18_district_boundary.json
+
+Verified rather than assumed: a `FeatureCollection` of **18 Polygon features, 17,435
+coordinates, WGS84**, bounding box 113.82–114.50 / 22.14–22.57, which is Hong Kong to the
+degree. Carries English and Chinese district names.
+
+**This unblocks the choropleth.** The map's own comment records the fork it was forced into:
+*"a choropleth needs polygons and we have none: Lands Department geometry is not ingested… so it
+is a proportional symbol map"*, with the reasoning that painting invented outlines over a real
+basemap would be the worst available combination. That reasoning stands and the constraint
+behind it is gone. Not built in this pass, and **deliberately not stored either** — the rule
+this week has been that data stored and rendered nowhere is not delivered, so the geometry waits
+for the map that draws it rather than landing in the repository first.
+
+### The join key nobody had to invent
+
+The boundary GeoJSON keys districts **A–T** (`地區號碼`). The income API keys them **A–T**
+(`DC`). `DC_21C.xlsx` keys them **A–T** (`dc_class`). This file's long-standing worry about
+joining layers — *"Building names are the natural key, and they will be messy"* — is true at
+building level and simply does not apply at district level: there is one official code, shared
+across all three, and it needs no fuzzy matching. The collector still matches by name because
+`DEMO_DISTRICTS` is keyed that way and every district reconciles, but **A–T is the better key
+and is what a boundary join should use.**
+
+### On screen the same hour
+
+450 rows stored and rendered nowhere would repeat the fault this week has been about. The
+district panel gets an **affordability block**: the latest median income, its growth since 2001,
+and RVD's price growth **over the same window**, read from the series rather than stated — Wan
+Chai is HK$43,300 a month, **+80% income against +256% prices**.
+
+Two things it is careful about. The income series is 25 rows, so it is deliberately not in
+`SHOWN` — that record renders one tile per observation and would have produced twenty-five
+tiles. And the price figure is territory-wide, which is **said in the block**: RVD publishes no
+monthly price index per district, so the two percentages are not the same geography and the
+comparison is indicative rather than local. `GET /market/district/:id` now sends the whole
+income series alongside the forecast for the same reason it sends both forecast years — the
+latest value is the least interesting thing about a series whose point is a comparison.
+
+### The rule that comes out of this
+
+A recorded gap is a claim about the world, and this file treats its own gaps as settled — the
+first of these was quoted forward twice without being re-tested. So: **when adding to
+`KNOWN_GAPS`, say what was searched, and page the API to exhaustion first.** Both entries have
+been corrected in `ingest-official.mjs`, and the boundary URL is recorded there as available and
+deliberately unstored rather than as missing.
 
 ## Working conventions
 - Dates DD/MM/YYYY. Currency: **HKD** for Hong Kong, **VND** for Vietnam, **EUR** for

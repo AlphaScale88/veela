@@ -21,10 +21,11 @@ export default function MapPage(): React.JSX.Element {
         </h1>
         <p className="text-[15px] leading-relaxed text-muted">
           Vacancy against transaction volume, over a long series, is a defensible read on
-          whether a district is tightening or loosening. Stock, completions, vacancy,
-          population and households are <strong className="text-mist">measured</strong> —
-          RVD and Census, by district. The monthly series are still generated, and every
-          panel says which it is.
+          whether a district is tightening or loosening. Every figure in a district panel is{" "}
+          <strong className="text-mist">measured</strong> — stock and vacancy and forward
+          supply from the RVD, population and rent from the 2021 Census, and household income
+          annually since 2001 from the General Household Survey. The monthly charts further
+          down are still generated, and say so.
         </p>
       </header>
 

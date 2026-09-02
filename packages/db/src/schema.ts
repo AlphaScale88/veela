@@ -173,6 +173,12 @@ export const marketMetricEnum = pgEnum("market_metric", [
      worth having. */
   "house_stock_units",
   "house_completions_units",
+  /* Added by migration 0012, and the figure this repository twice recorded as not existing:
+     C&SD table 130-06806, annual from 2001, all eighteen districts. It is the denominator of
+     affordability — incomes up ~67% since 2001 against ~250% on RVD's price index — and the
+     only per-district income figure in this table. Average household size is deliberately not
+     stored beside it: `population / households` is the same quantity and both are here. */
+  "median_household_income",
 ]);
 
 export const marketObservations = pgTable(

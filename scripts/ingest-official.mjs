@@ -229,6 +229,13 @@ const SOURCES = [
     yields: "forward supply per district PER CLASS; awaits migration 0011",
   },
   {
+    id: "censtatd-household-income-by-district",
+    label: "C&SD \u2014 Median monthly household income by District Council district (130-06806)",
+    url: "https://www.censtatd.gov.hk/api/get.php?id=130-06806&lang=en&full_series=1",
+    grain: "18 districts x 25 years (annual, 2001\u2013)",
+    yields: "median_household_income \u2014 the denominator of affordability, per district",
+  },
+  {
     id: "rvd-houses-by-district",
     label: "RVD \u2014 Stock and Completions of Houses by District",
     url: "https://www.rvd.gov.hk/datagovhk/Dom_Stock_and_Completions_of_Houses_by_District_Eng.csv",
@@ -245,6 +252,13 @@ const KNOWN_GAPS = [
   // New Territories, and 1.3M/1.4M split all five Classes -- so the indices are not one line.
   "RVD publishes no rent or price index PER DISTRICT; district figures exist only inside annual PDF tables. It does publish them by Class (1.3M/1.4M) and, for selected popular developments, split Urban against New Territories (1.5M) — both now held.",
   "The Land Registry sells sale-and-purchase memorials one at a time at HK$10 with no bulk option. Its free monthly file is aggregate counts and values only.",
+  // Withdrawn 03/09/2026. This list previously said median household income by district does
+  // not exist. It does — C&SD table 130-06806, annual from 2001, JSON API, now ingested. The
+  // error was mechanical: the enumeration asked data.gov.hk for rows=200 against an
+  // organisation holding 332 packages and then filtered the truncated list. A "known gap" is
+  // only worth recording if the search behind it was complete, so: **when adding to this list,
+  // state what was searched, and page the API to exhaustion first.**
+  "District BOUNDARIES are available and are not ingested — https://www.had.gov.hk/psi/hong-kong-administrative-boundaries/hksar_18_district_boundary.json is GeoJSON, 18 polygons, WGS84, keyed by the same A–T district code C&SD uses. Published by the Home Affairs Department, which is why searching hk-landsd for it found nothing. Nothing is stored because nothing draws it yet.",
 ];
 
 async function fetchBuffer(url) {
@@ -510,6 +524,54 @@ if (DATABASE_URL === undefined) {
     });
   } catch (err) {
     console.log(`  forecast by class unavailable — ${err instanceof Error ? err.message : err}`);
+  }
+
+  /*
+   * ── Median household income per district, 2001 onwards ─────────────────────────────────
+   *
+   * The figure this project twice recorded as non-existent. C&SD table 130-06806, from the
+   * General Household Survey, annual and eighteen districts — and reachable as JSON, so no
+   * spreadsheet has to be parsed.
+   *
+   * It is the denominator of everything else here. Territory-wide the median household income
+   * has risen roughly 67% since 2001 against roughly 250% on RVD's price index, and that gap
+   * is the product's entire argument; per district it is that argument made locally.
+   *
+   * `MED_DH_INC` only. The response also carries the same median excluding economically
+   * inactive households and excluding foreign domestic helpers, plus average household size.
+   * The two income variants answer a different question than "what does a household here
+   * earn", and household size is already derivable from `population / households`, both of
+   * which are in this table — a second slightly different figure for one quantity is exactly
+   * the disagreement this schema keeps being corrected for.
+   *
+   * "Total" is C&SD's territory row and is skipped: this table is keyed by district and has
+   * nowhere to put a territory figure, and writing it against some district would be worse
+   * than omitting it.
+   */
+  const INCOME_URL =
+    "https://www.censtatd.gov.hk/api/get.php?id=130-06806&lang=en&full_series=1";
+  const INCOME_CITATION =
+    "Census and Statistics Department — Median monthly household income by District Council district (table 130-06806, General Household Survey)";
+  try {
+    const payload = await (await fetch(INCOME_URL)).json();
+    const set = Array.isArray(payload?.dataSet) ? payload.dataSet : [];
+    if (set.length === 0) throw new Error("dataSet was empty — the API shape may have changed");
+    let kept = 0;
+    for (const r of set) {
+      if (r.sv !== "MED_DH_INC") continue;
+      const name = String(r.DCDesc ?? "").trim();
+      if (name === "" || /^total$/i.test(name)) continue;
+      const id = byName.get(name.toLowerCase());
+      if (id === undefined) { unmatched += 1; continue; }
+      const year = String(r.period ?? "").trim();
+      const value = Number(r.figure);
+      if (!/^\d{4}$/.test(year) || !Number.isFinite(value)) continue;
+      rows.push([id, "median_household_income", `${year}-01-01`, value, INCOME_CITATION]);
+      kept += 1;
+    }
+    console.log(`  household income — ${kept} district-years parsed`);
+  } catch (err) {
+    console.log(`  household income unavailable — ${err instanceof Error ? err.message : err}`);
   }
 
   /* Houses, which are not flats. Own metrics rather than `stock_units`, because the flat count
