@@ -3,14 +3,30 @@
 import {
   DEMO_DISTRICTS,
   DEMO_PERIODS,
+  POPULAR_DEV_LABELS,
+  RVD_CLASS_INDEX_PERIODS,
+  RVD_CLASS_LABELS,
+  RVD_CLASS_SERIES_SOURCE,
+  RVD_COMPLETIONS_BY_CLASS,
+  RVD_POPULAR_DEV_PERIODS,
+  RVD_POPULAR_DEV_PRICE_INDEX,
   RVD_PRICE_INDEX,
+  RVD_PRICE_INDEX_BY_CLASS,
   RVD_PRIMARY_SALES_COUNT,
   RVD_RENT_INDEX,
+  RVD_RENT_INDEX_BY_CLASS,
   RVD_SECONDARY_SALES_COUNT,
   RVD_SOURCE,
+  RVD_STOCK_BY_CLASS,
+  RVD_SUPPLY_SOURCE,
+  RVD_SUPPLY_YEARS,
+  RVD_TAKEUP,
   RVD_TRANSACTION_PERIODS,
+  RVD_VACANCY_RATE_BY_CLASS,
   demoSeries,
+  latestReported,
 } from "@veela/fixtures";
+import type { RvdClassKey } from "@veela/fixtures";
 import { viz } from "@veela/ui";
 import { useMemo, useState } from "react";
 
@@ -52,8 +68,61 @@ export default function MarketPerformancePage(): React.JSX.Element {
   const district = DEMO_DISTRICTS.find((d) => d.id === districtId) ?? DEMO_DISTRICTS[0];
   const districtName = district?.nameEn ?? "—";
 
-  const realPrice = useMemo(() => RVD_PRICE_INDEX.slice(-months), [months]);
-  const realRent = useMemo(() => RVD_RENT_INDEX.slice(-months), [months]);
+  /*
+   * Which size band the two index charts show.
+   *
+   * "all" keeps the series this page has always drawn. The five Classes are new, and they
+   * are the point: this product sorts every flat into an RVD Class — `rvdClassForAreaSqft`
+   * does it, and the rent estimator already reads a per-Class yield — while this page showed
+   * one all-classes line to everybody. A Class E owner reading it was being told about
+   * somebody else's flat. Rents have diverged further than prices: Class A stands at 223.4
+   * against Class E at 147.8, and the single line sits between them describing neither.
+   */
+  const [band, setBand] = useState<"all" | RvdClassKey>("all");
+
+  const realPrice = useMemo(
+    () =>
+      band === "all"
+        ? RVD_PRICE_INDEX.slice(-months)
+        : classPoints(RVD_PRICE_INDEX_BY_CLASS[band]).slice(-months),
+    [band, months],
+  );
+  const realRent = useMemo(
+    () =>
+      band === "all"
+        ? RVD_RENT_INDEX.slice(-months)
+        : classPoints(RVD_RENT_INDEX_BY_CLASS[band]).slice(-months),
+    [band, months],
+  );
+
+  /*
+   * Urban against New Territories — the only geographic split RVD publishes in a price
+   * series, from its selected-popular-developments index. Two regions, not eighteen
+   * districts: the same argument this codebase already makes for rents, that a real coarse
+   * geography beats an invented fine one.
+   */
+  const urban = useMemo(
+    () => classPoints(RVD_POPULAR_DEV_PRICE_INDEX.urbanOverall, RVD_POPULAR_DEV_PERIODS).slice(-months),
+    [months],
+  );
+  const newTerritories = useMemo(
+    () => classPoints(RVD_POPULAR_DEV_PRICE_INDEX.ntOverall, RVD_POPULAR_DEV_PERIODS).slice(-months),
+    [months],
+  );
+
+  /* Supply by size band, at the latest year each series actually reported. */
+  const supplyRows = useMemo(
+    () =>
+      (Object.keys(RVD_CLASS_LABELS) as RvdClassKey[]).map((key) => ({
+        key,
+        label: RVD_CLASS_LABELS[key],
+        stock: latestAnnual(RVD_STOCK_BY_CLASS[key]),
+        vacancy: latestAnnual(RVD_VACANCY_RATE_BY_CLASS[key]),
+        completions: latestAnnual(RVD_COMPLETIONS_BY_CLASS[key]),
+      })),
+    [],
+  );
+  const takeUp = latestAnnual(RVD_TAKEUP.total);
 
   /*
    * Sale-and-purchase agreements — the demand side, and until now the largest thing this
@@ -136,8 +205,8 @@ export default function MarketPerformancePage(): React.JSX.Element {
       <section className="mt-10">
         <h2 className="text-sm font-semibold text-mist">Price and rent indices — measured</h2>
         <p className="mt-1 max-w-prose text-xs leading-relaxed text-muted">
-          Hong Kong&apos;s private domestic price and rental indices, All Classes, rebased
-          to 100 at January 1999 — downloaded directly from the{" "}
+          Hong Kong&apos;s private domestic price and rental indices, rebased to 100 at
+          January 1999 — downloaded directly from the{" "}
           <a
             href={RVD_SOURCE.url}
             target="_blank"
@@ -146,15 +215,144 @@ export default function MarketPerformancePage(): React.JSX.Element {
           >
             {RVD_SOURCE.label}
           </a>
-          , not generated. Territory-wide is the finest grain RVD publishes as a clean
-          monthly series — a district-level breakdown only exists inside the annual
-          Property Review&apos;s PDF tables, which is why the charts below this one are
-          still synthetic.
+          , not generated. <strong className="text-mist">Pick your flat size.</strong> RVD
+          publishes these by Class as well as all together, and the bands have genuinely
+          parted company: rents for the smallest flats stand at{" "}
+          {latestOf(RVD_RENT_INDEX_BY_CLASS.A, RVD_CLASS_INDEX_PERIODS)} against{" "}
+          {latestOf(RVD_RENT_INDEX_BY_CLASS.E, RVD_CLASS_INDEX_PERIODS)} for the largest, and
+          the all-classes line sits between them describing neither. If you know which Class
+          your flat is, the all-classes line is not the one you want. Still territory-wide —
+          RVD publishes no monthly domestic index per district, and the nearest thing to a
+          geographic split is the Urban / New Territories series further down.
         </p>
-        <div className="card mt-4 max-w-3xl space-y-6">
+        {/*
+          * A letter per pill, not the full label. `RVD_CLASS_LABELS` reads "Class B — 40 to
+          * 69.9 m²", and six of those is a wrapped block of text rather than a control. The
+          * full label is the accessible name of each button and is printed under the row for
+          * whichever band is selected, so the size range is always on screen — "Class B" on
+          * its own tells a reader nothing, and that is the half worth keeping visible.
+          */}
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-muted">
+            Flat size
+          </span>
+          {(["all", "A", "B", "C", "D", "E"] as const).map((key) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setBand(key)}
+              aria-pressed={band === key}
+              aria-label={key === "all" ? "All classes" : RVD_CLASS_LABELS[key]}
+              className={
+                band === key
+                  ? "rounded-full bg-accent px-3 py-1 text-xs font-medium text-white"
+                  : "rounded-full border border-line px-3 py-1 text-xs text-muted hover:text-mist"
+              }
+            >
+              {key === "all" ? "All classes" : key}
+            </button>
+          ))}
+        </div>
+        <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.06em] text-muted">
+          {band === "all"
+            ? "All classes — every private domestic flat"
+            : RVD_CLASS_LABELS[band]}
+        </p>
+        <div className="card mt-3 max-w-3xl space-y-6">
           <TerritoryIndexChart label="Price index" points={realPrice} color={viz.demand} />
           <div className="h-px bg-line" />
           <TerritoryIndexChart label="Rent index" points={realRent} color={viz.supply} />
+        </div>
+      </section>
+
+      <section className="mt-10">
+        <h2 className="text-sm font-semibold text-mist">
+          Supply and absorption, by flat size — measured
+        </h2>
+        <p className="mt-1 max-w-prose text-xs leading-relaxed text-muted">
+          What physically exists underneath the indices above, at{" "}
+          {RVD_SUPPLY_SOURCE.latestStockYear} year end. Vacancy is not evenly spread:{" "}
+          <strong className="text-mist">
+            the largest flats stand empty at roughly three times the rate of the smallest
+          </strong>
+          , which the single territory-wide figure of about 4% hides completely. Take-up is
+          the year&apos;s absorption and is not derivable from vacancy — vacancy counts flats
+          empty at one instant, take-up counts flats taken up across the year, and rising
+          vacancy means opposite things depending on which way take-up is moving.
+        </p>
+        <div className="card mt-4 max-w-3xl overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <caption className="sr-only">
+              Private domestic stock, vacancy rate and completions by RVD Class
+            </caption>
+            <thead>
+              <tr className="border-b border-line font-mono text-[10px] uppercase tracking-[0.06em] text-muted">
+                <th scope="col" className="py-2 pr-4 font-normal">Class</th>
+                <th scope="col" className="py-2 pr-4 text-right font-normal">Stock</th>
+                <th scope="col" className="py-2 pr-4 text-right font-normal">Vacant</th>
+                <th scope="col" className="py-2 text-right font-normal">Completed</th>
+              </tr>
+            </thead>
+            <tbody className="tnum">
+              {supplyRows.map((r) => (
+                <tr key={r.key} className="border-b border-line/60 last:border-0">
+                  <th scope="row" className="py-2 pr-4 font-normal text-mist">{r.label}</th>
+                  <td className="py-2 pr-4 text-right text-mist">
+                    {r.stock === null ? "—" : Math.round(r.stock).toLocaleString("en-HK")}
+                  </td>
+                  <td className="py-2 pr-4 text-right text-mist">
+                    {r.vacancy === null ? "—" : `${r.vacancy.toFixed(1)}%`}
+                  </td>
+                  <td className="py-2 text-right text-muted">
+                    {r.completions === null ? "—" : Math.round(r.completions).toLocaleString("en-HK")}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="mt-3 font-mono text-[10px] uppercase tracking-[0.06em] text-muted">
+            Take-up {takeUp === null ? "—" : Math.round(takeUp).toLocaleString("en-HK")} flats
+            absorbed · {RVD_SUPPLY_SOURCE.name}
+          </p>
+        </div>
+      </section>
+
+      <section className="mt-10">
+        <h2 className="text-sm font-semibold text-mist">
+          Urban against New Territories — measured
+        </h2>
+        <p className="mt-1 max-w-prose text-xs leading-relaxed text-muted">
+          The only price series RVD publishes with any geographic split, from its index of
+          selected popular developments, monthly since 1992.{" "}
+          <strong className="text-mist">Two regions, not eighteen districts</strong> — a real
+          coarse geography rather than an invented fine one, the same reason the rent figures
+          on a report are given for three regions and not spread across every district.{" "}
+          <strong className="text-mist">
+            The two lines almost coincide, and that is the finding:
+          </strong>{" "}
+          across all sizes the New Territories has tracked urban Hong Kong closely, so
+          &ldquo;buy out of town, it moves differently&rdquo; is not supported by this series.
+          Where the regions do part company is by flat size within them — large urban flats
+          stand at {latestOf(RVD_POPULAR_DEV_PRICE_INDEX.urbanLarge, RVD_POPULAR_DEV_PERIODS)}{" "}
+          against {latestOf(RVD_POPULAR_DEV_PRICE_INDEX.ntLarge, RVD_POPULAR_DEV_PERIODS)} in
+          the New Territories, a gap the overall lines average away.{" "}
+          <a
+            href={RVD_CLASS_SERIES_SOURCE.url}
+            target="_blank"
+            rel="noreferrer"
+            className="font-medium text-accent hover:underline"
+          >
+            {RVD_CLASS_SERIES_SOURCE.name}
+          </a>
+        </p>
+        <div className="card mt-4 max-w-3xl space-y-6">
+          <TerritoryIndexChart label={POPULAR_DEV_LABELS.urbanOverall} points={urban} color={viz.demand} />
+          <div className="h-px bg-line" />
+          <TerritoryIndexChart
+            label={POPULAR_DEV_LABELS.ntOverall}
+            points={newTerritories}
+            color={viz.supply}
+          />
         </div>
       </section>
 
@@ -258,6 +456,48 @@ export default function MarketPerformancePage(): React.JSX.Element {
       </div>
     </AppShell>
   );
+}
+
+/**
+ * Turn one of the parallel Class arrays into the `{periodStart, value}` points the charts
+ * take, dropping RVD's holes rather than plotting them as zeroes.
+ *
+ * The arrays are stored parallel to a shared axis rather than as objects because 403 months
+ * times five Classes times two series is 4,030 numbers, and objects would quadruple the
+ * bundle for data that is only ever read positionally.
+ */
+function classPoints(
+  values: readonly (number | null)[],
+  periods: readonly string[] = RVD_CLASS_INDEX_PERIODS,
+): { readonly periodStart: string; readonly value: number }[] {
+  const out: { periodStart: string; value: number }[] = [];
+  for (let i = 0; i < values.length; i += 1) {
+    const v = values[i];
+    const p = periods[i];
+    if (v !== null && v !== undefined && p !== undefined) out.push({ periodStart: p, value: v });
+  }
+  return out;
+}
+
+/**
+ * The latest published value of a series, formatted for use inside a sentence.
+ *
+ * Read from the data rather than typed into the paragraph. This codebase has shipped a
+ * hardcoded figure in prose twice — the landing page's engine-test count went stale on the
+ * one tile whose whole purpose was being checkable — and a number written into a sentence is
+ * one nobody re-checks when the source updates. These update whenever RVD does.
+ */
+function latestOf(
+  series: readonly (number | null)[],
+  periods: readonly string[],
+): string {
+  const latest = latestReported(series, periods);
+  return latest === null ? "—" : latest.value.toFixed(1);
+}
+
+/** The last year a supply series reported. Walks back past the trailing nulls RVD leaves. */
+function latestAnnual(values: readonly (number | null)[]): number | null {
+  return latestReported(values, RVD_SUPPLY_YEARS.map(String))?.value ?? null;
 }
 
 function pctChange(points: readonly { readonly value: number }[]): number {

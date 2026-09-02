@@ -59,3 +59,22 @@ export * from "./census-real.js";
  * would have been the wrong answer.
  */
 export * from "./rvd-rents.js";
+/**
+ * Real RVD price and rental indices **by Class**, plus the only price series RVD publishes
+ * with a geographic split (Urban against New Territories). Fifth genuine module.
+ *
+ * This is the one that closes a gap `rvd-real.ts` leaves open: that module's indices are
+ * "All Classes", and this product sorts every flat into a Class. Showing one reader's Class E
+ * flat the all-classes line is telling them about somebody else's property.
+ */
+export * from "./rvd-class-series.js";
+
+/**
+ * Real RVD stock, vacancy, completions, take-up, demolition and the age profile of the stock
+ * -- all by Class, annual, from 1985. The physical market underneath the indices above.
+ *
+ * Read the module's own comment on why take-up is here as well as vacancy: they separate a
+ * market building faster than it absorbs from one losing demand, and one number cannot.
+ */
+export * from "./rvd-supply.js";
+

@@ -129,12 +129,121 @@ const SOURCES = [
     bytesOnly: true,
     expectedBytes: 76335,
   },
+  /*
+   * Added 02/09/2026, after enumerating what RVD actually publishes rather than working from
+   * what this repository already held. Its Property Market Statistics package carries about
+   * 160 resources; seven were in use. The nine below are the residential ones that were not,
+   * and every one of them is split by Class -- which is the resolution this product already
+   * sorts a reader's flat into, and the resolution it was showing nobody.
+   */
+  {
+    id: "rvd-price-index-by-class",
+    label: "RVD \u2014 Price Indices by Class (territory-wide, monthly from 1993)",
+    url: "https://www.rvd.gov.hk/datagovhk/1.4M.csv",
+    grain: "class (5), territory-wide",
+    yields: "price index per Class \u2014 A stands ~58 points above E and the all-classes line hides it",
+    snapshot: "packages/fixtures/src/rvd-class-series.ts",
+  },
+  {
+    id: "rvd-rent-index-by-class",
+    label: "RVD \u2014 Rental Indices by Class (territory-wide, monthly from 1993)",
+    url: "https://www.rvd.gov.hk/datagovhk/1.3M.csv",
+    grain: "class (5), territory-wide",
+    yields: "rent index per Class \u2014 diverged further than prices: 223.4 against 147.8",
+    snapshot: "packages/fixtures/src/rvd-class-series.ts",
+  },
+  {
+    id: "rvd-popular-developments",
+    label: "RVD \u2014 Price Indices for Selected Popular Developments (monthly from 1992)",
+    url: "https://www.rvd.gov.hk/datagovhk/1.5M.csv",
+    grain: "2 regions (Urban / New Territories) x 2 size groups",
+    yields: "the ONLY price series RVD publishes with any geographic split",
+    snapshot: "packages/fixtures/src/rvd-class-series.ts",
+  },
+  {
+    id: "rvd-stock-by-class",
+    label: "RVD \u2014 Private Domestic Stock at year end by Class (from 1985)",
+    url: "https://www.rvd.gov.hk/datagovhk/Private_Domestic-Stock.csv",
+    grain: "class (5), territory-wide",
+    yields: "stock per Class, 42 years",
+    snapshot: "packages/fixtures/src/rvd-supply.ts",
+  },
+  {
+    id: "rvd-vacancy-by-class",
+    label: "RVD \u2014 Private Domestic Vacancy at year end by Class (from 1985)",
+    url: "https://www.rvd.gov.hk/datagovhk/Private_Domestic-Vacancy.csv",
+    grain: "class (5), territory-wide",
+    yields: "vacant units and rate \u2014 Class E runs ~10% against Class B ~3.6%",
+    snapshot: "packages/fixtures/src/rvd-supply.ts",
+  },
+  {
+    id: "rvd-completions-by-class",
+    label: "RVD \u2014 Private Domestic Completions by Class (from 1985)",
+    url: "https://www.rvd.gov.hk/datagovhk/Private_Domestic-Completions.csv",
+    grain: "class (5), territory-wide",
+    yields: "completions per Class; the newest year is provisional",
+    snapshot: "packages/fixtures/src/rvd-supply.ts",
+  },
+  {
+    id: "rvd-takeup",
+    label: "RVD \u2014 Private Domestic Take-up (from 1985)",
+    url: "https://www.rvd.gov.hk/datagovhk/Private_Domestic-Take-up.csv",
+    grain: "2 size groups, territory-wide",
+    yields: "absorption \u2014 the demand half of vacancy, and not derivable from it",
+    snapshot: "packages/fixtures/src/rvd-supply.ts",
+  },
+  {
+    id: "rvd-demolition",
+    label: "RVD \u2014 Private Domestic Demolition by Class and Region (from 2020)",
+    url: "https://www.rvd.gov.hk/datagovhk/Private_Dom_Demolition_by_Class_and_Region_Eng.csv",
+    grain: "class (5) x 3 regions",
+    yields: "supply REMOVED \u2014 completions minus demolition is the real change in stock",
+    snapshot: "packages/fixtures/src/rvd-supply.ts",
+  },
+  {
+    id: "rvd-stock-by-age",
+    label: "RVD \u2014 Private Domestic Stock by Age (from 2016)",
+    url: "https://www.rvd.gov.hk/datagovhk/Private_Dom_Stock_by_Age_Eng.csv",
+    grain: "3 segments, territory-wide",
+    yields: "age profile of the stock \u2014 redevelopment and maintenance exposure",
+    snapshot: "packages/fixtures/src/rvd-supply.ts",
+  },
+  /*
+   * Per-district and class-split. Both are fetched and drift-checked here, and neither is
+   * stored yet: `market_observations` keys on (district, metric, kind, period) with
+   * `rvd_class` outside the key, so five Classes for one district and period collide.
+   * Migration 0011 replaces that key; until it is applied these two cannot be written.
+   */
+  {
+    id: "rvd-stock-by-district-and-class",
+    label: "RVD \u2014 Private Domestic Stock by District (by Class)",
+    url: "https://www.rvd.gov.hk/datagovhk/Private_Dom_Stock_by_District_Eng.csv",
+    grain: "18 districts x 5 classes",
+    yields: "stock per district PER CLASS \u2014 only the total is stored today; awaits migration 0011",
+  },
+  {
+    id: "rvd-forecast-by-class-and-district",
+    label: "RVD \u2014 Forecast Completions by Class and District",
+    url: "https://www.rvd.gov.hk/datagovhk/Dom_Forecast_Completions_by_Class_and_District_Eng.csv",
+    grain: "18 districts x 5 classes x 2 years",
+    yields: "forward supply per district PER CLASS; awaits migration 0011",
+  },
+  {
+    id: "rvd-houses-by-district",
+    label: "RVD \u2014 Stock and Completions of Houses by District",
+    url: "https://www.rvd.gov.hk/datagovhk/Dom_Stock_and_Completions_of_Houses_by_District_Eng.csv",
+    grain: "18 districts",
+    yields: "houses, not flats \u2014 19,741 territory-wide, almost all in the New Territories",
+  },
 ];
 
 /** Sources checked and found NOT to carry what we wanted. Kept so the gap is not re-litigated. */
 const KNOWN_GAPS = [
   "RVD publishes no domestic RENTS by district — its district open data is stock, completions and vacancy only. Verified against data.gov.hk's own resource list for the Property Market Statistics package. Rents come by Class, and (only in the annual file) by region.",
-  "RVD's rent and price INDICES are territory-wide only. District figures exist inside annual PDF tables, not as a series.",
+  // Refined 02/09/2026: "territory-wide only" was too strong and had been repeated for weeks.
+  // There is no DISTRICT index, which is the part that matters. But 1.5M splits Urban from
+  // New Territories, and 1.3M/1.4M split all five Classes -- so the indices are not one line.
+  "RVD publishes no rent or price index PER DISTRICT; district figures exist only inside annual PDF tables. It does publish them by Class (1.3M/1.4M) and, for selected popular developments, split Urban against New Territories (1.5M) — both now held.",
   "The Land Registry sells sale-and-purchase memorials one at a time at HK$10 with no bulk option. Its free monthly file is aggregate counts and values only.",
 ];
 
