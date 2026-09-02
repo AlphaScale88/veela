@@ -1307,6 +1307,18 @@ ${area}`,
      * pipeline; "594" on its own is a number with no direction.
      *
      * So point-in-time metrics collapse to their latest row and forecasts keep every period.
+     *
+     * **`rvd_class is null` is load-bearing, and became so the moment migration 0011 landed.**
+     * Before it, every row in this table had a null class and the filter was a no-op. Now
+     * `stock_units` exists six times per district — five Classes and the all-classes total —
+     * and `distinct on (metric)` would keep whichever one the sort happened to reach first,
+     * so a district overview could show a Class E stock of 6,101 where the total is 96,066.
+     * The forecast branch is worse: without the filter it returns twelve rows per district
+     * instead of two, and the panel renders every one.
+     *
+     * This endpoint is the *district overview*. It answers "what is true of this district",
+     * which is the all-classes figure by definition. Class-split rows are for a caller that
+     * asks for a Class — `GET /market/observations` takes `rvdClass` and always could.
      */
     const rows = await db.execute(sql`
       (
@@ -1314,6 +1326,7 @@ ${area}`,
           o.metric, o.value, o.period_start, o.period_months, o.source
         from market_observations o
         where o.district_id = ${districtId}
+          and o.rvd_class is null
           and o.metric <> 'forecast_completions_units'
         order by o.metric, o.period_start desc
       )
@@ -1322,6 +1335,7 @@ ${area}`,
         select o.metric, o.value, o.period_start, o.period_months, o.source
         from market_observations o
         where o.district_id = ${districtId}
+          and o.rvd_class is null
           and o.metric = 'forecast_completions_units'
         order by o.period_start
       )

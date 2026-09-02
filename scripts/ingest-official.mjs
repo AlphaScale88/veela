@@ -362,6 +362,8 @@ if (DATABASE_URL === undefined) {
     "Census and Statistics Department — 2021 Population Census, District Council district statistics";
   const FORECAST_CITATION =
     "Rating and Valuation Department — Completions and Forecast Completions by District (data.gov.hk)";
+  const FORECAST_URL =
+    "https://www.rvd.gov.hk/datagovhk/Dom_Completions_and_Forecast_Completions_by_District_Eng.csv";
   const rows = [];
   for (const d of CENSUS_DISTRICTS) {
     rows.push([d.districtId, "median_rent", CENSUS_PERIOD, d.medianMonthlyRentHkd, CENSUS_CITATION]);
@@ -381,58 +383,201 @@ if (DATABASE_URL === undefined) {
    * counted and reported rather than silently dropped — a district quietly missing from a supply
    * table is exactly the kind of gap that looks like "no new supply".
    */
-  const FORECAST_URL =
-    "https://www.rvd.gov.hk/datagovhk/Dom_Completions_and_Forecast_Completions_by_District_Eng.csv";
   const byName = new Map(DEMO_DISTRICTS.map((d) => [d.nameEn.toLowerCase(), d.id]));
   let unmatched = 0;
-  try {
-    const csv = await (await fetch(FORECAST_URL)).text();
+
+  /**
+   * Walk one of RVD's by-district CSVs, handing each real district's cells to `onRow`.
+   *
+   * Extracted once a second and third by-district source arrived: the fetch, the two header
+   * lines, the four aggregate rows and the name match are identical in all of them, and three
+   * hand-copied versions is how one of them quietly stops skipping "OVERALL" and writes the
+   * territory total into a district.
+   *
+   * Matched by name, not by row position: the file's order is RVD's and can change, while the
+   * district names are stable and already carried in `DEMO_DISTRICTS`. A name that matches
+   * neither a district nor a known aggregate is counted and reported rather than dropped — a
+   * district silently missing from a supply table reads as "no new supply", which is the wrong
+   * kind of wrong.
+   */
+  async function forEachDistrictRow(url, onRow) {
+    const csv = await (await fetch(url)).text();
     const lines = csv.split(/\r?\n/).filter((l) => l.trim() !== "");
-    const header = lines[1] ?? "";
-    const cols = header.split(",");
-    const y2025 = cols.findIndex((c) => /Forecast Completions in 2025/i.test(c));
-    const y2026 = cols.findIndex((c) => /Forecast Completions in 2026/i.test(c));
+    const cols = (lines[1] ?? "").split(",").map((c) => c.trim());
     for (const line of lines.slice(2)) {
       const cells = line.split(",");
       const name = (cells[0] ?? "").trim();
-      /* The file carries four aggregate rows alongside the eighteen districts. Named here so a
-         genuine unmatched district still gets reported — a district silently missing from a
-         supply table reads as "no new supply", which is the wrong kind of wrong. */
       if (/^(hong kong|kowloon|new territories|overall)$/i.test(name)) continue;
       const id = byName.get(name.toLowerCase());
       if (id === undefined) { unmatched += 1; continue; }
-      for (const [idx, year] of [[y2025, "2025-01-01"], [y2026, "2026-01-01"]]) {
-        const raw = (cells[idx] ?? "").trim();
-        const n = Number(raw);
-        // "-" is RVD's "none", and is a real zero rather than a missing value.
-        if (raw === "-") { rows.push([id, "forecast_completions_units", year, 0, FORECAST_CITATION]); continue; }
-        if (Number.isFinite(n)) rows.push([id, "forecast_completions_units", year, n, FORECAST_CITATION]);
-      }
+      onRow(id, cells, cols);
     }
+  }
+
+  /**
+   * RVD writes "-" for none. It is a real zero, not a missing value, and the distinction
+   * matters: a district with no new supply next year is a fact worth storing, while a blank is
+   * an absence of information. Anything else unparseable returns null and is skipped upstream.
+   */
+  const cell = (cells, idx) => {
+    const raw = (cells[idx] ?? "").trim();
+    if (raw === "-") return 0;
+    const n = Number(raw.replace(/,/g, ""));
+    return Number.isFinite(n) ? n : null;
+  };
+
+  const CLASSES = ["A", "B", "C", "D", "E"];
+
+  try {
+    await forEachDistrictRow(FORECAST_URL, (id, cells, cols) => {
+      for (const year of ["2025", "2026"]) {
+        const idx = cols.findIndex((c) => new RegExp(`Forecast Completions in ${year}$`, "i").test(c));
+        const v = idx < 0 ? null : cell(cells, idx);
+        if (v !== null) rows.push([id, "forecast_completions_units", `${year}-01-01`, v, FORECAST_CITATION]);
+      }
+    });
   } catch (err) {
     console.log(`  forecast completions unavailable — ${err instanceof Error ? err.message : err}`);
   }
 
-  console.log("Writing Census 2021 district profiles\n" + "=".repeat(78));
+  /*
+   * ── The three sources migration 0011 unblocked ──────────────────────────────────────────
+   *
+   * All class-split or otherwise unable to share a key with a figure already stored. Until
+   * 0011 replaced the primary key with a unique index over `(district, metric, kind, period,
+   * rvd_class)`, five Classes for one district and period collided, so the first two of these
+   * were being downloaded and thrown away — the stock file has been fetched by this script for
+   * weeks and only its total column kept.
+   */
+
+  const STOCK_BY_CLASS_URL =
+    "https://www.rvd.gov.hk/datagovhk/Private_Dom_Stock_by_District_Eng.csv";
+  const FORECAST_BY_CLASS_URL =
+    "https://www.rvd.gov.hk/datagovhk/Dom_Forecast_Completions_by_Class_and_District_Eng.csv";
+  const HOUSES_URL =
+    "https://www.rvd.gov.hk/datagovhk/Dom_Stock_and_Completions_of_Houses_by_District_Eng.csv";
+  const STOCK_CITATION =
+    "Rating and Valuation Department — Private Domestic Stock by District (data.gov.hk)";
+  const FORECAST_CLASS_CITATION =
+    "Rating and Valuation Department — Forecast Completions by Class and District (data.gov.hk)";
+  const HOUSES_CITATION =
+    "Rating and Valuation Department — Stock and Completions of Houses by District (data.gov.hk)";
+
+  /*
+   * Stock per district PER CLASS. The all-classes total for the same district and period is
+   * already stored with a null class and is left alone — the class rows sit beside it rather
+   * than replacing it, which is exactly what `NULLS NOT DISTINCT` makes safe.
+   *
+   * The period is read from the header rather than assumed: the file says "Stock at 2024
+   * year-end" and will say 2025 next year, and a hardcoded date would silently file next
+   * year's figures under this year's.
+   */
+  try {
+    let period = null;
+    await forEachDistrictRow(STOCK_BY_CLASS_URL, (id, cells, cols) => {
+      if (period === null) {
+        const m = cols.join(" ").match(/Stock at (\d{4}) year-end/i);
+        period = m === null ? null : `${m[1]}-01-01`;
+      }
+      if (period === null) return;
+      for (const k of CLASSES) {
+        const idx = cols.findIndex((c) => new RegExp(`Stock at \\d{4} year-end - Class ${k}$`, "i").test(c));
+        const v = idx < 0 ? null : cell(cells, idx);
+        if (v !== null) rows.push([id, "stock_units", period, v, STOCK_CITATION, k]);
+      }
+    });
+    if (period === null) console.log("  stock by class — could not read the year from the header, skipped");
+  } catch (err) {
+    console.log(`  stock by class unavailable — ${err instanceof Error ? err.message : err}`);
+  }
+
+  /* Forward supply per district PER CLASS — the class breakdown of the figure already stored
+     as a district total. "1,300 new Class A flats coming to Sha Tin" is a different, sharper
+     statement than the same total spread across every size. */
+  try {
+    await forEachDistrictRow(FORECAST_BY_CLASS_URL, (id, cells, cols) => {
+      for (const year of ["2025", "2026"]) {
+        for (const k of CLASSES) {
+          const idx = cols.findIndex((c) =>
+            new RegExp(`Forecast Completions in ${year} - Class ${k}$`, "i").test(c),
+          );
+          const v = idx < 0 ? null : cell(cells, idx);
+          if (v !== null) {
+            rows.push([id, "forecast_completions_units", `${year}-01-01`, v, FORECAST_CLASS_CITATION, k]);
+          }
+        }
+      }
+    });
+  } catch (err) {
+    console.log(`  forecast by class unavailable — ${err instanceof Error ? err.message : err}`);
+  }
+
+  /* Houses, which are not flats. Own metrics rather than `stock_units`, because the flat count
+     for the same district, kind and period already holds that key — reusing it would not merely
+     be confusing, the two would overwrite each other. */
+  try {
+    await forEachDistrictRow(HOUSES_URL, (id, cells, cols) => {
+      const stockIdx = cols.findIndex((c) => /^Stock at (\d{4}) year-end$/i.test(c) && /2024|2025|2026/.test(c));
+      const compIdx = cols.findIndex((c) => /^Completions in \d{4}$/i.test(c));
+      const stockYear = (cols[stockIdx] ?? "").match(/(\d{4})/);
+      const compYear = (cols[compIdx] ?? "").match(/(\d{4})/);
+      if (stockIdx >= 0 && stockYear !== null) {
+        const v = cell(cells, stockIdx);
+        if (v !== null) rows.push([id, "house_stock_units", `${stockYear[1]}-01-01`, v, HOUSES_CITATION]);
+      }
+      if (compIdx >= 0 && compYear !== null) {
+        const v = cell(cells, compIdx);
+        if (v !== null) rows.push([id, "house_completions_units", `${compYear[1]}-01-01`, v, HOUSES_CITATION]);
+      }
+    });
+  } catch (err) {
+    console.log(`  houses by district unavailable — ${err instanceof Error ? err.message : err}`);
+  }
+
+  console.log("Writing district observations — Census 2021 and RVD\n" + "=".repeat(78));
   try {
     let written = 0;
-    for (const [districtId, metric, periodStart, value, source] of rows) {
+    /*
+     * `rvdClass` is the sixth element and undefined for everything published for a whole
+     * district — normalised to null, which is what "all classes" has always meant here.
+     *
+     * The conflict target must name `rvd_class` too, or a class row would try to displace the
+     * all-classes total that shares its other four columns. `NULLS NOT DISTINCT` on the index
+     * is what keeps the null case behaving exactly as it did before 0011: one row per district
+     * and period, not many. Verified against the live table rather than assumed.
+     */
+    for (const [districtId, metric, periodStart, value, source, rvdClass] of rows) {
       if (value === undefined || value === null) continue;
       await sql`
         insert into market_observations (district_id, metric, kind, rvd_class, period_start, value, source)
-        values (${districtId}, ${metric}, 'domestic', null, ${periodStart}, ${value}, ${source})
-        on conflict (district_id, metric, kind, period_start)
+        values (
+          ${districtId}, ${metric}, 'domestic', ${rvdClass ?? null},
+          ${periodStart}, ${value}, ${source}
+        )
+        on conflict (district_id, metric, kind, period_start, rvd_class)
         do update set value = excluded.value, source = excluded.source
       `;
       written += 1;
     }
     console.log(`  ok — ${written} observations upserted across ${CENSUS_DISTRICTS.length} districts`);
-    if (unmatched > 0) console.log(`  ${unmatched} forecast row(s) had a district name we could not match`);
-    const [{ count }] = await sql`
-      select count(*)::int as count from market_observations
-      where metric in ('median_rent','rent_to_income','public_rental_share','forecast_completions_units')
+    if (unmatched > 0) {
+      console.log(`  ${unmatched} row(s) carried a district name we could not match`);
+    }
+    const summary = await sql`
+      select metric::text as metric,
+             count(*)::int as total,
+             count(rvd_class)::int as class_split
+      from market_observations
+      group by 1
+      order by 1
     `;
-    console.log(`  census metrics now in market_observations: ${count}`);
+    console.log("");
+    for (const r of summary) {
+      const split = r.class_split > 0 ? `  (${r.class_split} by class)` : "";
+      console.log(`  ${r.metric.padEnd(30)} ${String(r.total).padStart(4)}${split}`);
+    }
+    const [{ n }] = await sql`select count(*)::int as n from market_observations`;
+    console.log(`  ${"".padEnd(30)} ${String(n).padStart(4)}  total`);
   } catch (err) {
     failures += 1;
     console.log(`  FAILED — ${err instanceof Error ? err.message : String(err)}`);

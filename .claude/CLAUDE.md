@@ -4036,7 +4036,7 @@ from the data through `latestOf()`, not typed: this codebase has shipped a hardc
 paragraph twice, and the landing page's engine-test count went stale on the one tile whose whole
 purpose was being checkable.
 
-### What is fetched, drift-checked, and still not stored
+### The schema fault this exposed, and what it was costing
 
 The collector now registers **17 sources, all fetching and parsing**, up from five. Three of them
 are per-district and cannot be written yet, which is a schema fault this work exposed:
@@ -4056,9 +4056,69 @@ and period already occupies it), and deletes eighteen duplicate `households` row
 at 2021-01-01 alongside identical rows at 2021-06-30, an artefact of two ingests using different
 census dates.
 
-**The migration is written and has not been run.** Applying it needs a `drop constraint` and a
-`delete` against the production database, which is a destructive change nobody should make on an
-agent's own initiative — see this workspace's standing rule about deleting without agreement.
+**Applied on approval, and the table went from 198 rows to 486** — 270 of them class-split (180
+forecast, 90 stock). Asking first was right: it needs a `drop constraint` and a `delete` against
+production, which is not a change to make on an agent's own initiative.
+
+### The index expression that cannot exist, and the feature that replaces it
+
+`(coalesce(rvd_class::text, '*'))` is the obvious way to put a nullable column in a unique key
+and **Postgres refuses it**: *functions in index expression must be marked IMMUTABLE*. An
+enum-to-text cast is only STABLE, because enum labels can be renamed, so its output is not fixed
+for all time.
+
+`NULLS NOT DISTINCT` (Postgres 15+, and this project runs 17.6 — checked, not assumed) is the
+right answer and needs no expression at all: it tells the index to treat two null classes as
+equal, which is precisely the existing semantics. "The figure for the whole district" stays one
+row and still cannot be duplicated.
+
+**That failure left the table with no unique key at all** for as long as it took to notice and
+replace — the runner reported `5/6 applied` and carried on, because its statements are
+independent. Two things came out of it: the migration file now records the wrong form as well as
+the right one, and `scripts/apply-migration.mjs` exists at all. This repo had eleven hand-written
+migrations and **no runner**, which is why they were applied by pasting statements at a prompt —
+the route by which a `kind`/`rvd_class` column mix-up and a wrong-cased variable both reached a
+live database. It takes `--dry-run`, prints every statement's outcome, and deliberately writes no
+journal table: adding one is itself a schema change, and there is no honest history to backfill
+eleven hand-applied migrations with.
+
+### The parse was verified by reconciliation, not by inspection
+
+Stock by district and Class comes from `Private_Dom_Stock_by_District_Eng.csv`; the all-classes
+total for the same districts was already stored from a **different** file
+(`Dom_Stock_Completions_and_Vacancy_by_District_Eng.csv`). So the five Classes summing to the
+stored total is a genuine cross-source check rather than a re-read of the same numbers:
+
+**18 districts, 18 exact matches, zero discrepancies** — Central and Western 44,241 + 27,699 +
+9,888 + 8,137 + 6,101 = 96,066, and so on through Yuen Long. The forecast series reconciles the
+same way: 36 district-year pairs, no mismatches. Wan Chai's row was then checked cell by cell
+against the CSV, including RVD's `-` for Class D in 2026 stored as a real 0 rather than a hole,
+which is what the file means by it.
+
+### A regression this introduced, caught before it was noticed and after it was live
+
+`GET /market/district/:id` collapses point-in-time metrics with `distinct on (o.metric)`. That was
+correct while every row carried a null class. The moment class rows existed, `stock_units` had six
+rows per district and the query kept whichever the sort reached first — **a district overview could
+show a Class E stock of 6,101 where the total is 96,066** — and the forecast branch returned
+twelve rows per district instead of two, which the panel renders one by one.
+
+`and o.rvd_class is null` on both branches, with a comment saying the filter is load-bearing, since
+it reads as a no-op against the table as it was. This endpoint is the district *overview*: it
+answers "what is true of this district", which is the all-classes figure by definition. A caller
+that wants a Class asks `GET /market/observations`, which has always taken `rvdClass`.
+
+**Worth stating plainly: production was serving that for the minutes between the ingest and the
+deploy.** The database is shared, so writing class rows broke the deployed read path before the
+fixed read path shipped. The safe order is deploy-the-reader-then-write; it was done the other way
+round.
+
+### Houses got tiles the same hour
+
+`house_stock_units` and `house_completions_units` are per district and were rendered nowhere, which
+is the exact fault this whole section began by correcting. Two tiles on the district panel, labelled
+"Houses (a separate market)" so nobody reads Wan Chai's 345 as comparable to the 72,408 flats above
+it — village houses and detached property are a different market under different rules.
 
 ### Also corrected
 

@@ -11,12 +11,12 @@ import {
   numeric,
   pgEnum,
   pgTable,
-  primaryKey,
   real,
   text,
   timestamp,
   unique,
   uuid,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 /**
@@ -166,6 +166,13 @@ export const marketMetricEnum = pgEnum("market_metric", [
   /* What is coming, as against `completions_units` which is what was built. RVD publishes it
      per district two years ahead — the only forward-looking supply figure in this dataset. */
   "forecast_completions_units",
+  /* Houses, added by migration 0011. Cannot reuse `stock_units`/`completions_units`: the flat
+     count for the same district, kind and period already occupies those, so the two would
+     collide on the key above and, worse, silently overwrite each other. 19,741 houses against
+     1.29 million flats, almost all of them in the New Territories — which is itself the fact
+     worth having. */
+  "house_stock_units",
+  "house_completions_units",
 ]);
 
 export const marketObservations = pgTable(
@@ -187,10 +194,29 @@ export const marketObservations = pgTable(
     ingestedAt: timestamp("ingested_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
-    primaryKey({
-      columns: [t.districtId, t.metric, t.kind, t.periodStart],
-      name: "market_observations_pk",
-    }),
+    /*
+     * A unique index rather than a primary key, because `rvdClass` has to be in the key and a
+     * primary key cannot contain a nullable column — see migration 0011.
+     *
+     * The column has existed since the first migration meaning "null is the figure for the
+     * whole district, all classes", and it was **outside** the old primary key, so five
+     * Classes for one district and period collided and every class-split figure RVD publishes
+     * per district was unstorable. All 198 rows that predate 0011 carry null, which is why
+     * nothing ever failed.
+     *
+     * `NULLS NOT DISTINCT` is what preserves the old semantics exactly: two null classes are
+     * treated as equal, so "the whole district" is still one row and cannot be duplicated.
+     * That is declared in the migration; Drizzle's index builder in this version has no
+     * modifier for it, and this schema is descriptive here — migrations are hand-written and
+     * `drizzle-kit generate` is not run (no journal to diff against).
+     */
+    uniqueIndex("market_observations_key").on(
+      t.districtId,
+      t.metric,
+      t.kind,
+      t.periodStart,
+      t.rvdClass,
+    ),
     index("market_obs_metric_period_idx").on(t.metric, t.periodStart),
   ],
 );

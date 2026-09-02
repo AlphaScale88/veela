@@ -85,6 +85,19 @@ const SHOWN: Record<string, { readonly label: string; readonly format: (v: numbe
     label: "Households in public rental",
     format: (v) => `${(v * 100).toFixed(1)}%`,
   },
+  /* Houses, which RVD counts entirely separately from flats and which are a different market:
+     village houses and detached property, under their own rules, and 19,741 of them territory-wide
+     against 1.29 million flats. Labelled so nobody reads 345 as a stock figure comparable to the
+     72,408 above it. A district with none renders "0", which is the true answer here rather than
+     an absence — RVD writes "-" and means none. */
+  house_stock_units: {
+    label: "Houses (a separate market)",
+    format: (v) => `${Math.round(v).toLocaleString("en-HK")} units`,
+  },
+  house_completions_units: {
+    label: "Houses completed",
+    format: (v) => `${Math.round(v).toLocaleString("en-HK")} units`,
+  },
 };
 
 /** Named on screen, with the reason. Each of these is a row the reference fills and we cannot. */

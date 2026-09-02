@@ -20,24 +20,37 @@
 --
 -- A primary key cannot contain a nullable column. Making `rvd_class` NOT NULL with an 'ALL'
 -- sentinel would work and would change what null means for every existing reader and every
--- existing row. A unique index over the same four columns plus the coalesced class keeps
--- null meaning exactly what it has always meant, and touches no data.
+-- existing row.
+--
+-- `NULLS NOT DISTINCT` is the feature that makes this a one-line change instead: it tells the
+-- index to treat two null classes as equal, which is exactly the existing semantics — "the
+-- figure for the whole district" is one row, not many. Postgres 15 and later; this project
+-- runs 17.6, checked rather than assumed.
+--
+-- **The first attempt was `(coalesce(rvd_class::text, '*'))` and it does not work.** Postgres
+-- refuses it: `functions in index expression must be marked IMMUTABLE`, because an enum-to-text
+-- cast is only STABLE — enum labels can be renamed, so the cast's output is not fixed for all
+-- time. That failure left the table with no unique key at all for as long as it took to
+-- replace, which is the argument for `--dry-run` and for reading a runner's output rather than
+-- its exit code. Recorded because the coalesce form is the obvious first idea and it is wrong.
 --
 -- The consequence to know about: the table now has a unique key and no PRIMARY KEY. Nothing
--- here depends on one — this table is read through Drizzle and hand-written SQL, never
--- through PostgREST's row identity — and RLS is unaffected.
+-- here depends on one — this table is read through Drizzle and hand-written SQL, never through
+-- PostgREST's row identity — and RLS is unaffected.
 
 alter table market_observations drop constraint market_observations_pk;
 
 create unique index market_observations_key
-  on market_observations (
-    district_id, metric, kind, period_start, (coalesce(rvd_class::text, '*'))
-  );
+  on market_observations (district_id, metric, kind, period_start, rvd_class)
+  nulls not distinct;
 
--- An upsert must name this expression exactly as written above, or Postgres cannot infer the
--- index and the insert fails at runtime rather than at deploy time:
+-- An upsert names the plain column list, no expression:
 --
---   on conflict (district_id, metric, kind, period_start, (coalesce(rvd_class::text, '*')))
+--   on conflict (district_id, metric, kind, period_start, rvd_class)
+--
+-- Verified against the live table rather than reasoned about: re-inserting an existing
+-- population row, whose `rvd_class` is null, is refused. With the default NULLS DISTINCT it
+-- would have succeeded and quietly duplicated every all-classes figure in the table.
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 2. Houses are not flats, and RVD counts them separately
