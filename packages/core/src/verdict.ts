@@ -367,6 +367,36 @@ export function computeVerdict(
     });
   }
 
+  /*
+   * A missing management fee, which was silent until a backtest against RVD's own measured
+   * prices and rents went looking for why the net yield looked generous.
+   *
+   * The omission matters more than the one above it and was the one not reported. Agency and
+   * legal fees are one-off and enter only the acquisition total; a management fee is
+   * **recurring and comes straight off the rent**, and in Hong Kong it is close to universal —
+   * almost every flat sits in a multi-storey building with a deed of mutual covenant and a
+   * manager appointed under it. Measured on RVD's average Class B flat, adding a fee at
+   * HK$3.50 per square foot a month took the net yield from 2.80% to 2.30%: half a point, or
+   * an 18% overstatement of the return, from one blank field.
+   *
+   * Deliberately no default figure. Fees run from roughly HK$2 to well over HK$6 per square
+   * foot depending on the building's age and facilities, so any default would be an invented
+   * number in a field labelled as the reader's own — the thing this engine refuses everywhere.
+   * A warning that says what is missing and roughly what it costs is the honest instrument.
+   *
+   * Warning rather than info, matching the transaction-costs finding: both understate the
+   * return rather than merely resting on an assumption.
+   */
+  if (isZero(managementFees)) {
+    findings.push({
+      id: "no-management-fee",
+      severity: "warning",
+      title: "No management fee included",
+      detail:
+        "Nearly every Hong Kong flat pays a monthly management fee, and it comes off the rent every year rather than once at purchase — so the net yield here is overstated. Budget roughly HK$2 to HK$6 per square foot per month depending on the building's age and facilities; on a 600 sq ft flat that is HK$1,200 to HK$3,600 a month, which is enough to move the net yield by half a percentage point or more.",
+    });
+  }
+
   if (!rules.capitalGains.applies) {
     findings.push({
       id: "cgt-trading-risk",

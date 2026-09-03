@@ -4223,6 +4223,81 @@ first of these was quoted forward twice without being re-tested. So: **when addi
 been corrected in `ingest-official.mjs`, and the boundary URL is recorded there as available and
 deliberately unstored rather than as missing.
 
+## Backtesting the yields, against RVD's own measurements (03/09/2026)
+
+Asked to backtest the yield the product shows, check it is accurate, and cross the data to be
+sure the product gives value. `scripts/backtest-yield.mjs` is that test, committed rather than
+run once, because "is the number still right" is a question that recurs every time RVD updates.
+
+It runs on measured inputs only — RVD's published average prices and average rents, never a
+figure somebody typed. The one judgement call, a representative flat area per Class, is stated
+in the script and cancels out of every yield.
+
+### What passed
+
+**The parse.** 405 cells of `rvd-rents.ts` re-read from the live CSV and compared: identical.
+The generated module has not drifted from its source.
+
+**The gross yield.** The engine defines it as annual rent ÷ price, which is RVD's own
+definition, and the levels check out externally: our derived Class A yields run 3.76–4.58% by
+region against RVD's published 3.7%, while CBRE puts one- and two-bedroom gross yields at
+**3.5–4.2%** and Global Property Guide the market average at **3.55%** for Q1 2026. Different
+methods, same neighbourhood.
+
+**The headline claim.** *"An agent quotes the gross yield. Veela shows what you keep."* Run
+through `computeVerdict` on RVD's measured Class B flat — HK$6.8M, HK$20,405 a month — with a
+realistic cost set, gross 3.60% becomes net **2.30%**. The market study that produced the claim
+said roughly 3.7% gross against ~2.5% net. It holds.
+
+**The yield series as a trend.** Correlation between RVD's published yield and the ratio of its
+own rent and price indices, annually 1999–2025: **0.993 to 0.998** across all five Classes.
+Whatever its level, the series moves with the market. Charting it is licensed.
+
+### What failed, and it is the one that reaches a user
+
+**`estimateMonthlyRent` is biased low, structurally, by about 7% and by as much as 26%.**
+
+It derives a rent as `price × published gross yield ÷ 12`. That would be right if the published
+yield were the ratio of RVD's average rent to its average price. **It is not**, and the evidence
+is not marginal: the implied rent came in *below* the measured rent in **27 of 27 years**, mean
+−7.4% over the series, −11.7% at 2025, worst −25.9% for a Class A flat in Kowloon.
+
+**Why it matters.** The estimator exists to fill a blank rent on an imported for-sale listing.
+A rent 26% too low makes the net yield 26% too low, so the product tells someone a deal is
+materially worse than it is — the "confidently wrong" failure this codebase refuses everywhere,
+arrived at through arithmetic rather than a parse bug.
+
+**Why the yield is not that ratio is *not* established.** The plausible reading is that rents
+and prices are measured over different samples — let stock against sold stock — but RVD's
+technical notes could not be read (the PDF is font-encoded) and no source stating the method was
+found. **The measurement is settled; the explanation is a hypothesis and is labelled as one in
+the script.**
+
+**The fix is not calibration.** Applying a −7.4% correction would be inventing a constant. The
+right answer is to stop going through the yield at all: `RVD_AVG_RENT_PER_SQM` is a **direct
+measurement of rent** per Class *and region*, already committed, and an estimate built from it
+has no sampling gap to bridge. It needs a region, which the caller often knows and sometimes
+does not — that is a design decision, not a bug fix, so it is recorded here and not made
+unilaterally.
+
+### The finding the engine was not making
+
+Backtesting the gross-to-net gap turned up a second thing. The engine warns when agency and
+legal fees are missing. **It said nothing about a missing management fee** — which is the larger
+omission: agency and legal are one-off and touch only the acquisition total, while a management
+fee is recurring and comes off the rent every year. Nearly every Hong Kong flat pays one.
+
+On RVD's average Class B flat, adding a fee at HK$3.50 per square foot a month took the net
+yield from **2.80% to 2.30%** — half a point, an 18% overstatement of the return, from one blank
+field. Now a `no-management-fee` warning, in the same idiom as the others.
+
+**No default figure, deliberately.** Fees run from about HK$2 to well over HK$6 per square foot
+depending on the building's age and facilities; a default would be an invented number in a field
+labelled as the reader's own. The finding names the range and what it costs instead. Two new
+assertions, 70 engine tests: the warning fires on a blank fee, clears when one is supplied, and
+omitting a recurring cost must **overstate** the net yield — a direction and a floor rather than
+a pinned number, so the fixture figures stay free to change.
+
 ## Working conventions
 - Dates DD/MM/YYYY. Currency: **HKD** for Hong Kong, **VND** for Vietnam, **EUR** for
   France — always state which, never a bare number. Keep a single reporting currency

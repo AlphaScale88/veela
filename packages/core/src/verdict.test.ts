@@ -213,6 +213,54 @@ test("missing transaction costs are flagged", () => {
   assert.ok(v.findings.some((f) => f.id === "no-transaction-costs"));
 });
 
+test("a missing management fee is flagged, and is worth more than the one-off costs", () => {
+  const blank = computeVerdict(
+    baseInput({ costs: { ownerPaysRates: true, vacancyRate: 0.04 } }),
+    HK_RULE_SETS,
+  );
+  assert.ok(
+    blank.findings.some((f) => f.id === "no-management-fee"),
+    "a blank management fee went unreported until a backtest went looking for it",
+  );
+
+  const withFee = computeVerdict(
+    baseInput({
+      costs: {
+        ownerPaysRates: true,
+        vacancyRate: 0.04,
+        monthlyManagementFee: money(2_100, "HKD"),
+      },
+    }),
+    HK_RULE_SETS,
+  );
+  assert.equal(
+    withFee.findings.find((f) => f.id === "no-management-fee"),
+    undefined,
+    "supplying a fee must clear the finding",
+  );
+
+  /*
+   * The point of the finding, asserted rather than described: a management fee is recurring,
+   * so it moves the net yield, where agency and legal fees are one-off and move only the
+   * acquisition total. Measured on RVD's own average Class B flat this gap was half a
+   * percentage point. Asserted as a direction and a floor, not a pinned number — the figures
+   * in `baseInput` are free to change without this test becoming a maintenance chore.
+   */
+  const blankNet = blank.returns.netYield ?? 0;
+  const withFeeNet = withFee.returns.netYield ?? 0;
+  assert.ok(
+    blankNet > withFeeNet,
+    "omitting a recurring cost must overstate the net yield, never understate it",
+  );
+  assert.ok(
+    blankNet - withFeeNet > 0.002,
+    `a HK$2,100/month fee should move the net yield by more than 0.2 points, moved ${(
+      (blankNet - withFeeNet) *
+      100
+    ).toFixed(2)}`,
+  );
+});
+
 test("findings are ordered with critical first", () => {
   const v = computeVerdict(
     baseInput({
