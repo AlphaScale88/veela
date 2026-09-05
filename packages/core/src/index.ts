@@ -14,3 +14,4 @@ export { computeVerdict } from "./verdict.js";
 export type { PropertyInput, Verdict, Finding, Severity } from "./verdict.js";
 export * from "./mortgage.js";
 export * from "./projection.js";
+export * from "./holding.js";

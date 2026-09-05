@@ -4470,6 +4470,90 @@ price or area fields at all, which is how it surfaced. The 17/08 accessibility p
 `/login` and `/account` and did not reach this form — the longest one in the product, and the
 one every report starts from. Recorded here rather than folded into an unrelated change.
 
+## The true cost of holding, and a yield range (05/09/2026)
+
+Asked for a model taking in all maintenance and hidden costs, with a best and worst case, to
+give a range rather than a number. `packages/core/src/holding.ts`, 10 new tests, 80 in total.
+
+### What it charges that the report does not
+
+`computeVerdict` charges what the reader typed, which is right for a report about their
+figures and flatters anyone who left a box empty — the 03/09 backtest measured a blank
+management fee alone taking the net yield from 2.80% to 2.30%. This charges what an owner pays
+whether or not they thought about it:
+
+| New line | Kind |
+|---|---|
+| **Government rent** — 3% of rateable value a year | statutory |
+| **Stamp duty on the tenancy** — 0.25 / 0.5 / 1% by term, HK$5 a counterpart | statutory |
+| Letting agent's commission, once per tenancy, amortised | convention |
+| Repairs and replacement | convention |
+| **Major building works, annualised** | convention |
+| Rent not collected — arrears, a tenant who leaves early | convention |
+
+**Government rent is the one most often missed, and it is not rates.** Rates are a tax on
+occupation; Government rent is rent owed under the land lease, payable on leases granted after
+27 May 1985 and on leases extended to 2047 — most of the New Territories and most post-1985
+development. Whether a given flat pays it is a *fact about its lease*, so it is an input rather
+than an assumption: guessing would put 3% of rateable value on or off the bill for the wrong
+reason.
+
+**Major works is the one that hurts.** Buildings of thirty years and over fall under the
+Mandatory Building Inspection Scheme, and a common-parts overhaul arrives as a special
+assessment that can run to six figures a flat. Annualised as a share of value.
+
+### On the measured Class B flat, which is the whole argument
+
+RVD's own average Kowloon Class B — HK$6,800,530 at HK$20,405 a month:
+
+| | |
+|---|---|
+| Gross yield, what an agent quotes | **3.60%** |
+| Best case | 2.27% |
+| **Realistic** | **1.63%** |
+| Bad run | **0.13%** |
+
+An agent's figure is more than double the realistic one, and a bad year takes the return to
+nothing. That is the product's thesis in one row, on measured inputs rather than typed ones.
+
+### The honesty conditions, which shaped the design
+
+**The range is an assumption band, not a confidence interval**, and the panel says so where the
+numbers are rather than in a footnote. "Bad run" is every convention landing badly in the same
+year — unlikely, and the point: it answers *can this survive a bad run*, not *what will
+happen*. Calling it a forecast would be the invented-precision failure this codebase refuses.
+
+**Statutory and assumed lines are marked differently on screen**, because a reader can check
+the first against the government and can only argue with the second. The distinction lives in
+the engine as `sourced`, not in the component — so a new cost line cannot be added without
+deciding which it is.
+
+**`HK_HOLDING_DEFAULT.unverified` is set**, and the caveat is keyed off it, exactly as the
+mortgage page's is keyed off `HK_LENDING_DEFAULT.unverified`. A test asserts the flag is still
+true, so clearing it without sourcing every convention would also have to be a deliberate
+decision to delete the paragraph.
+
+**A figure the reader entered always wins.** The band stands in for a blank field, never
+corrects a filled one, and the entered line is marked as theirs.
+
+**`@veela/core` cannot read the fixtures**, by the dependency rule, so the vacancy band is a
+caller-supplied assumption with a documented default rather than RVD's measured Class vacancy
+reached for directly. That is the more honest shape anyway: the module states what it assumes.
+
+The tests pin arithmetic and ordering, never the bands — best above base above worst, the
+gross yield identical to the report's, net-on-acquisition always below net-on-price, the IRD's
+duty tiers including the round-up to the nearest HK$100, and once-per-tenancy costs halving
+when the tenancy doubles. A test asserting "vacancy at worst is 9%" would fail for the right
+reason the day somebody sources a better figure and be deleted for the wrong one.
+
+**Deliberately not modelled:** capital growth, a rate path, refinancing, sale costs.
+`projectHold()` already owns the forward-looking half with its own required growth rates, and
+each of these would stack a second invisible assumption on the first.
+
+*Worth knowing: deleting a temporary harness route leaves its generated types behind in
+`.next/types`, and the next typecheck fails on a module that no longer exists. Remove the
+directory under `.next/types/app/` too.*
+
 ## Working conventions
 - Dates DD/MM/YYYY. Currency: **HKD** for Hong Kong, **VND** for Vietnam, **EUR** for
   France — always state which, never a bare number. Keep a single reporting currency

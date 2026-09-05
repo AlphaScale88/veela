@@ -53,6 +53,7 @@ import {
   photoNumberForListing,
 } from "../../components/property-finder";
 import { VerdictView } from "../../components/verdict-view";
+import { YieldRangePanel } from "../../components/yield-range";
 
 /**
  * The property summary the chat assistant reads. Prose, not the `Verdict` shape itself
@@ -1057,6 +1058,18 @@ export default function AnalysePage(): React.JSX.Element {
 
             <div className="mt-6">
               <VerdictView verdict={verdict} />
+            </div>
+
+            {/*
+              * The true-cost range, directly under the report it corrects.
+              *
+              * Placed after rather than inside `VerdictView` because that component takes a
+              * `Verdict` and nothing else — deliberately, so it can render a stored snapshot
+              * from the portfolio, where the original inputs are not in hand. This panel needs
+              * the inputs to charge costs the verdict never saw, so it sits alongside.
+              */}
+            <div className="mt-10">
+              <YieldRangePanel input={draftToCoreInput(draft)} />
             </div>
 
             {/**
