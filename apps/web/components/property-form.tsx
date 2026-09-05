@@ -8,7 +8,7 @@ import {
   rvdClassForAreaSqft,
 } from "@veela/fixtures";
 import type { CreatePropertyInput } from "@veela/types";
-import type { ReactNode } from "react";
+import { useId, type ReactNode } from "react";
 
 /**
  * The whole input surface of the product. Kept to one screen on purpose: if evaluating
@@ -660,6 +660,25 @@ function Section({
   );
 }
 
+/**
+ * The label, unit and hint around one control.
+ *
+ * **The hint sits outside the `<label>` and is wired up with `aria-describedby`.** It used to
+ * be inside it, which is valid HTML and quietly wrong: everything a label contains becomes the
+ * control's accessible *name*, so "Saleable area" announced itself as *"Saleable area, sq ft,
+ * saleable not gross, the two differ by roughly a quarter in Hong Kong and the difference is
+ * yours to pay for"* — a paragraph, every time the field took focus, on five of the fields
+ * here. A name identifies; a description explains, and screen readers announce them
+ * differently for that reason.
+ *
+ * Found by resolving each control's name the way a browser does rather than by reading the
+ * markup — the same method the 17/08 pass used, which covered `/login` and `/account` and
+ * never reached this form, the longest in the product.
+ *
+ * `children` is a function so the generated id reaches the input without every caller having
+ * to invent one. `useId` rather than a counter: this component renders on the server too, and
+ * two forms on one page must not collide.
+ */
 function Shell({
   label,
   unit,
@@ -673,23 +692,28 @@ function Shell({
   readonly unit?: string | undefined;
   readonly hint?: string | undefined;
   readonly span?: boolean | undefined;
-  readonly children: ReactNode;
+  readonly children: (describedBy: string | undefined) => ReactNode;
 }): React.JSX.Element {
+  const hintId = useId();
   return (
-    <label className={`block ${span === true ? "sm:col-span-2" : ""}`}>
-      <span className="flex items-baseline justify-between gap-2">
-        <span className="text-sm font-medium">{label}</span>
-        {unit !== undefined && (
-          <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-muted">
-            {unit}
-          </span>
-        )}
-      </span>
-      {children}
+    <div className={span === true ? "sm:col-span-2" : undefined}>
+      <label className="block">
+        <span className="flex items-baseline justify-between gap-2">
+          <span className="text-sm font-medium">{label}</span>
+          {unit !== undefined && (
+            <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-muted">
+              {unit}
+            </span>
+          )}
+        </span>
+        {children(hint === undefined ? undefined : hintId)}
+      </label>
       {hint !== undefined && (
-        <span className="mt-1.5 block text-xs leading-snug text-muted">{hint}</span>
+        <p id={hintId} className="mt-1.5 text-xs leading-snug text-muted">
+          {hint}
+        </p>
       )}
-    </label>
+    </div>
   );
 }
 
@@ -713,12 +737,15 @@ function Field({
 }): React.JSX.Element {
   return (
     <Shell label={label} hint={hint} span={span}>
-      <input
-        type={type}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className={INPUT}
-      />
+      {(describedBy) => (
+        <input
+          type={type}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          aria-describedby={describedBy}
+          className={INPUT}
+        />
+      )}
     </Shell>
   );
 }
@@ -750,14 +777,17 @@ function Num({
 }): React.JSX.Element {
   return (
     <Shell label={label} unit={unit} hint={hint}>
-      <input
-        type="number"
-        // `Number("")` is 0, so clearing the box round-trips back to zero without extra work.
-        value={blankWhenZero && value === 0 ? "" : value}
-        step={step}
-        onChange={(e) => onChange(Number(e.target.value))}
-        className={`${INPUT} font-mono`}
-      />
+      {(describedBy) => (
+        <input
+          type="number"
+          // `Number("")` is 0, so clearing the box round-trips back to zero without extra work.
+          value={blankWhenZero && value === 0 ? "" : value}
+          step={step}
+          onChange={(e) => onChange(Number(e.target.value))}
+          aria-describedby={describedBy}
+          className={`${INPUT} font-mono`}
+        />
+      )}
     </Shell>
   );
 }
@@ -779,21 +809,25 @@ function Money({
 }): React.JSX.Element {
   return (
     <Shell label={label} unit={unit}>
-      <span className="relative block">
-        <span className="pointer-events-none absolute left-3 top-1/2 mt-[3px] -translate-y-1/2 font-mono text-sm text-muted">
-          HK$
-        </span>
-        <input
-          type="number"
-          /* Money is always "not entered" at zero — no listing costs HK$0 and no rent is
-             HK$0 — so an empty box is the honest rendering of an unfilled form. Same
-             reasoning as `Num`'s `blankWhenZero`, which is opt-in because rates differ. */
-          value={value === 0 ? "" : value}
-          onChange={(e) => onChange(Number(e.target.value))}
-          className={`${INPUT} pl-12 font-mono`}
-        />
-      </span>
-      {below}
+      {() => (
+        <>
+          <span className="relative block">
+            <span className="pointer-events-none absolute left-3 top-1/2 mt-[3px] -translate-y-1/2 font-mono text-sm text-muted">
+              HK$
+            </span>
+            <input
+              type="number"
+              /* Money is always "not entered" at zero — no listing costs HK$0 and no rent is
+                 HK$0 — so an empty box is the honest rendering of an unfilled form. Same
+                 reasoning as `Num`'s `blankWhenZero`, which is opt-in because rates differ. */
+              value={value === 0 ? "" : value}
+              onChange={(e) => onChange(Number(e.target.value))}
+              className={`${INPUT} pl-12 font-mono`}
+            />
+          </span>
+          {below}
+        </>
+      )}
     </Shell>
   );
 }
@@ -809,20 +843,37 @@ function Check({
   readonly onChange: (v: boolean) => void;
   readonly hint?: string;
 }): React.JSX.Element {
+  /*
+   * Same fix as `Shell`, and it needed a second pass to actually work.
+   *
+   * A checkbox's `<label>` has to wrap the input for click-to-toggle, and **everything inside
+   * that label becomes the accessible name** — so adding `aria-describedby` while leaving the
+   * hint inside changed nothing: "I already own residential property" still announced itself
+   * with its whole explanatory sentence attached. Measuring after the first attempt is what
+   * caught it; the attribute was correct and the name was still wrong.
+   *
+   * The hint is now a sibling of the label rather than a child. The clickable area shrinks to
+   * the checkbox and its label text, which is the right target anyway — clicking a paragraph
+   * of explanation should not toggle a tax question.
+   */
+  const hintId = useId();
   return (
-    <label className="flex cursor-pointer items-start gap-2.5 rounded-card bg-surfaceMuted px-3.5 py-3 text-sm sm:col-span-2">
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-        className="mt-0.5 size-4 shrink-0 accent-accent"
-      />
-      <span>
-        {label}
-        {hint !== undefined && (
-          <span className="mt-0.5 block text-xs leading-snug text-muted">{hint}</span>
-        )}
-      </span>
-    </label>
+    <div className="rounded-card bg-surfaceMuted px-3.5 py-3 text-sm sm:col-span-2">
+      <label className="flex cursor-pointer items-start gap-2.5">
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={(e) => onChange(e.target.checked)}
+          aria-describedby={hint === undefined ? undefined : hintId}
+          className="mt-0.5 size-4 shrink-0 accent-accent"
+        />
+        <span>{label}</span>
+      </label>
+      {hint !== undefined && (
+        <p id={hintId} className="mt-0.5 pl-[26px] text-xs leading-snug text-muted">
+          {hint}
+        </p>
+      )}
+    </div>
   );
 }

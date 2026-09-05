@@ -1,7 +1,7 @@
 "use client";
 
 import type { ImportedListing } from "@veela/types";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { ErrorToast } from "./toast";
 
@@ -50,6 +50,7 @@ async function readRejectionMessage(res: Response): Promise<string> {
 }
 
 export function ListingImporter({ onImported, initialUrl }: Props): React.JSX.Element {
+  const urlFieldId = useId();
   const [url, setUrl] = useState(initialUrl ?? "");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -119,7 +120,17 @@ export function ListingImporter({ onImported, initialUrl }: Props): React.JSX.El
         }}
         className="mt-3 flex flex-col gap-2 sm:flex-row"
       >
+        {/* A placeholder is not a label: it is the accessible name only as a last resort, it
+            disappears the moment anything is typed, and here it announced the field as
+            "https://…". The same defect the 17/08 pass fixed on /login, in the one control on
+            this form that had no wrapping label to fall back on. `sr-only` rather than a
+            visible label because the paragraph above already explains the box — a real label
+            element, not `aria-label`, so page-translation tools pick it up. */}
+        <label htmlFor={urlFieldId} className="sr-only">
+          Link to a Hong Kong property listing
+        </label>
         <input
+          id={urlFieldId}
           type="url"
           value={url}
           onChange={(e) => setUrl(e.target.value)}
