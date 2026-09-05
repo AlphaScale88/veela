@@ -23,6 +23,8 @@ export default function HomePage(): React.JSX.Element {
   return (
     <>
       <Hero />
+      <Doors />
+      <TryItNow />
       <MapTeaser />
       <Provenance />
       <Answers />
@@ -155,7 +157,28 @@ function Hero(): React.JSX.Element {
         </div>
       </div>
 
-      <div className="col pb-16 sm:pb-24">
+    </section>
+  );
+}
+
+/**
+ * The live preview, lifted out of the Hero on 05/09/2026 so that the three doors can sit
+ * between them.
+ *
+ * Measured before moving anything: the doors had landed at 1,812px on a 900px viewport —
+ * two full screens down — because the Hero carried the headline, the search box, the proof
+ * tiles *and* this demo. Wayfinding two screens below the fold is not wayfinding; a reader
+ * who is not the search box's target has already decided by then.
+ *
+ * The demo goes after, not before, and that is the deliberate half of the trade. It answers
+ * "what does the report look like", which is a question only the visitor who came to
+ * evaluate a property is asking — and that visitor already has the search box at the very
+ * top. The other two arrive with no place to go, so they get the signpost first.
+ */
+function TryItNow(): React.JSX.Element {
+  return (
+    <section className="pb-16 sm:pb-24">
+      <div className="col">
         <p className="eyebrow mb-4">Try it now</p>
         <HeroDemo />
       </div>
@@ -443,6 +466,97 @@ function Fact({
   );
 }
 
+/**
+ * Three doors, one per job somebody arrives with.
+ *
+ * **Why this exists.** The hero asks for a listing link, which serves exactly one visitor:
+ * the person who has already found a flat and wants the real numbers. Everybody else — the
+ * reader who only wants to understand the market, and the owner who wants to keep watch on
+ * what they hold — met a page whose single action was not theirs, and had to find their own
+ * way through a header. That is the "I do not know where to click" complaint arriving at the
+ * front door rather than inside the app.
+ *
+ * Named by **what the reader wants**, not by what the feature is called. "Market Explorer"
+ * and "My properties" are names for things we built; "I want to understand the market" is a
+ * sentence somebody would actually say, and the whole point of this block is that it is read
+ * by a person who does not yet know our vocabulary.
+ *
+ * **The middle door is deliberately not called "find me a property".** Hong Kong has no
+ * listings feed we can lawfully carry — see the data-landscape notes — so a door promising
+ * discovery would break at the first click. What we genuinely do is evaluate a property you
+ * have already found, and the door says that.
+ *
+ * Each one states whether an account is needed, because that is the question a visitor asks
+ * before clicking and the answer differs across the three.
+ */
+function Doors(): React.JSX.Element {
+  const doors = [
+    {
+      href: "/map",
+      hint: "No account",
+      title: "I want to understand the market",
+      detail:
+        "Supply, vacancy, completions, rents, household income and what is being built next — for all eighteen districts, from the Rating and Valuation Department and the Census.",
+      action: "Open the market map",
+    },
+    {
+      href: "/analyse",
+      hint: "Preview free, report needs an account",
+      title: "I have found a flat and want the real numbers",
+      detail:
+        "Paste the listing link or type the figures yourself. You get the net yield after stamp duty, property tax, rates, fees and vacancy — with every rule dated and cited.",
+      action: "Analyse a property",
+    },
+    {
+      href: "/portfolio",
+      hint: "Needs an account",
+      title: "I already own, and want to keep watch",
+      detail:
+        "Keep what you own in one place, compare them side by side, and be told when the market indices or the stamp duty rules move against a figure you relied on.",
+      action: "Open my properties",
+    },
+    /* `as const` is load-bearing, not decoration: Next's typed routes want a literal href,
+       and without it every one of these widens to `string` and the build fails. */
+  ] as const;
+
+  return (
+    <section className="band">
+      <div className="col">
+        <p className="eyebrow">Where to start</p>
+        <h2 className="mt-3 max-w-[30ch] font-display text-display-2 font-semibold">
+          Three ways in, depending on what you came for
+        </h2>
+        <p className="mt-4 max-w-prose text-[16px] leading-relaxed text-muted">
+          Veela is used for three different jobs and they need different pages. Pick the one
+          that sounds like you — nothing is hidden from the others.
+        </p>
+        <div className="mt-10 grid gap-5 md:grid-cols-3">
+          {doors.map((d) => (
+            <Link
+              key={d.href}
+              href={d.href}
+              /* `card` as well as `card-hover`: the first gives the white surface, radius
+                 and shadow, the second only the lift on hover. With just the latter these
+                 read as three plain text columns on the page background rather than as
+                 three things you can click — caught on a screenshot, not in the markup. */
+              className="card card-hover flex flex-col no-underline"
+            >
+              <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-muted">
+                {d.hint}
+              </span>
+              <span className="mt-3 font-display text-[19px] font-semibold leading-snug tracking-[-0.01em] text-mist">
+                {d.title}
+              </span>
+              <span className="mt-3 flex-1 text-sm leading-relaxed text-muted">{d.detail}</span>
+              <span className="mt-5 text-[15px] font-medium text-accent">{d.action} &rarr;</span>
+            </Link>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function MapTeaser(): React.JSX.Element {
   return (
     /* Moved to directly follow the Hero, and given the Hero's own shape — a text row,
@@ -477,11 +591,22 @@ function MapTeaser(): React.JSX.Element {
           <MapPreview heightClassName="h-[420px] sm:h-[520px]" showZoomControl />
         </div>
 
+        {/* This said "currently synthetic — the ingestion job for the RVD series is not
+            built" until 05/09/2026, which stopped being true when the collector started
+            writing: every figure in a district panel is now measured. What is still
+            schematic is the *geometry*, and that is a narrower and different claim. The
+            Home Affairs Department publishes real district polygons and nothing here draws
+            them yet — recorded rather than glossed, because the previous sentence was
+            quoted forward for weeks after it went stale. */}
         <p className="mt-4 max-w-prose border-l-2 border-caution pl-5 text-sm leading-relaxed text-muted">
-          <span className="font-medium text-mist">Currently synthetic.</span> The
-          ingestion job for Lands Department geometry and the RVD series is not built, so
-          the map ships with fixtures and says so on the page. Inventing plausible numbers
-          would be the fastest way to lose an investor&apos;s trust.
+          <span className="font-medium text-mist">The figures are measured; the outlines are
+          not.</span>{" "}
+          Stock, vacancy, completions, rents, income and forward supply all come from the
+          Rating and Valuation Department and the Census. The district shapes are still
+          schematic circles rather than real boundaries, and the map says so where it draws
+          them. Inventing plausible numbers would be the fastest way to lose an
+          investor&apos;s trust; drawing invented coastlines over a real basemap is the same
+          mistake in another medium.
         </p>
       </div>
     </section>

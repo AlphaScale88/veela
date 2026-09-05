@@ -4298,6 +4298,96 @@ assertions, 70 engine tests: the warning fires on a blank fee, clears when one i
 omitting a recurring cost must **overstate** the net yield — a direction and a floor rather than
 a pinned number, so the fixture figures stay free to change.
 
+## Three jobs, and the two nobody had named (05/09/2026)
+
+Asked whether there are use cases beyond three the founder listed — market readers, investors
+looking to buy, and owners managing a portfolio — and to make the navigation comfortable for
+each.
+
+### Two more, and one deliberate exclusion
+
+**The developer buying the API.** Absent from the three and, per this repository's own
+business review, **the actual revenue line**: comparable revenue from ~20 relationships rather
+than ~2,000 consumers, against an engine a competitor cannot scrape. `/developers` and
+`/pricing` exist and are already outside the app shell for exactly this reader. Their journey
+is read the docs, judge the engine, start a conversation — and it shares almost nothing with
+the other three.
+
+**The one-answer visitor.** Arrives from a search engine with a single transactional question:
+what duty do I owe on HK$9M, is this agent licensed, how much would a bank lend. The four
+service pages plus the duty calculator are built for precisely this and render with the
+marketing header. Distinct from the market reader: they are not exploring, they want one
+number and to leave. It is also the top of the funnel that feeds the investor.
+
+**Not a use case, by an existing decision: the owner-occupier.** *"Investors, deliberately.
+Not buyers looking for a home, not renters, not agents."* Rent-vs-buy sits on the
+missing-features list and stays there, because building it would serve the audience this
+product excludes. Worth restating as an exclusion rather than quietly rediscovering it.
+
+**A variant, not a use case: the overseas buyer.** Different duty and financing, same journey.
+The buyer questions already carry it; separate navigation would be a fourth path to maintain
+for a difference the engine handles in three checkboxes.
+
+### What was uncomfortable, measured rather than felt
+
+**Every visitor met one door.** The hero asks for a listing link, which serves exactly one of
+the three. The market reader and the owner arrived at a page whose single action was not
+theirs and had to navigate out through a header — the *"I do not know where to click"*
+complaint arriving at the front door rather than inside the app.
+
+**The dashboard was a list of our vocabulary.** Eight tiles named "Market Explorer", "My
+Workspace", "Manage" — a flat grid at equal weight, asking the reader to hold the whole
+product in their head before choosing. Renaming the sidebar on 01/09 fixed the labels; this
+page still made you choose between features rather than between jobs.
+
+### What changed
+
+**Three doors on the landing page**, named by what the reader wants rather than by what we
+called the feature — *"I want to understand the market"*, *"I have found a flat and want the
+real numbers"*, *"I already own, and want to keep watch"*. Each states whether an account is
+needed, because that is the question asked before clicking and the answer differs across the
+three.
+
+**The middle door is deliberately not "find me a property".** Hong Kong has no listings feed
+this product can lawfully carry, so a door promising discovery breaks at the first click. What
+Veela genuinely does is evaluate a property you have already found, and the door says that.
+
+**Position was measured, not eyeballed.** The doors first landed at **1,812px** on a 900px
+viewport — two full screens down — because the Hero carried the headline, the search box, the
+proof tiles *and* the live demo. Wayfinding two screens below the fold is not wayfinding. The
+demo was lifted into its own `TryItNow` section so the doors sit at **1,105px**, one scroll
+from the fold. The demo going second is the deliberate half: it answers a question only the
+evaluating visitor asks, and that visitor already has the search box at the very top.
+
+**`/dashboard` rebuilt around the three jobs** — *Understand the market*, *Evaluate a
+property*, *Look after what you own* — with every existing page falling into exactly one
+group. That nothing had to be invented and nothing was left over is the test that the grouping
+is real rather than decorative. The portfolio count moved into the group it belongs to instead
+of floating above everything. Still not a metrics dashboard: at single-digit portfolios a
+count and a link say what a chart would without a chart's implied precision.
+
+### Two stale things fixed on the way
+
+The landing page still said the map was *"currently synthetic — the ingestion job for the RVD
+series is not built"*. That stopped being true when the collector started writing: every
+figure in a district panel is measured now. What is still schematic is the **geometry**, which
+is a narrower and different claim, and the paragraph now makes it.
+
+And a screenshot caught what the markup did not: the door cards carried `card-hover` without
+`card`, so they had the lift on hover and no white surface — three plain text columns on the
+page background rather than three things you can click.
+
+### Not done, and why
+
+**The sidebar still shows all seventeen items to everyone.** Tempting to vary it by job and
+wrong to: the 01/09 lesson from a real reader was that a lost person needs to *see* the path,
+and hiding two thirds of the product to tidy the view for one job is how the next reader gets
+lost. Entry differentiation solves the same problem without concealment.
+
+**No adaptive primary action.** Making the sidebar's pill switch to "My properties" for
+someone who owns things needs a portfolio count in the shell, which means a request on every
+app page for a cosmetic reordering. Recorded as an option, not taken.
+
 ## Working conventions
 - Dates DD/MM/YYYY. Currency: **HKD** for Hong Kong, **VND** for Vietnam, **EUR** for
   France — always state which, never a bare number. Keep a single reporting currency
