@@ -1551,61 +1551,48 @@ export const RVD_SECONDARY_SALES_VALUE_HKDM: readonly (number | null)[] = [9966,
 // Estimating a rent from a price
 // ═══════════════════════════════════════════════════════════════════════════
 
-/**
- * **A sale listing publishes no rent, and a yield product cannot work without one.**
+/*
+ * `estimateMonthlyRent()` used to live here and was **deleted on 05/09/2026. Do not put it
+ * back.**
  *
- * Importing a for-sale listing gave a price and an area but no rent, and the report duly
- * showed a **0.00% net yield** — arithmetically true and completely misleading, because it
- * reads as a finding about the property rather than a missing input. The honest options were
- * to refuse to compute, or to estimate from something real and say so. This is the second.
+ * It derived a rent as `price × RVD's published gross yield ÷ 12`, which is only correct if
+ * the published yield is the ratio of RVD's average rent to its average price. A backtest
+ * against RVD's own measurements — `scripts/backtest-yield.mjs` — found it is not: the
+ * derived rent came in **below** the measured rent in **27 of 27 years**, mean −7.4% over
+ * the series and −25.9% at worst for a small Kowloon flat. A rent a quarter too low makes
+ * the net yield a quarter too low, so this was telling readers a deal was materially worse
+ * than it is.
  *
- * ## Why RVD's market yield, and not "similar homes nearby"
+ * Why the published yield is not that ratio was not established. The plausible reading is
+ * different samples — let stock against sold stock — but RVD's technical notes are a
+ * font-encoded PDF and no source stating the method was found. The measurement is settled;
+ * the explanation is a hypothesis.
  *
- * The obvious approach — find comparable flats nearby and average their rents — needs a
- * listings database Hong Kong does not give away. The Land Registry sells transactions one at
- * a time at HK$10 with no bulk option and publishes **no rents at all**; Centaline and Midland
- * hold the de-facto rental datasets and this project has repeatedly declined to scrape them
- * (see "Hong Kong data landscape"). Building a comparables engine on data we do not have would
- * mean inventing the comparables.
+ * **The replacement is not a correction factor**, which would be an invented constant. It is
+ * `averageRentForFlat()` / `averageRentAcrossRegions()` in `rvd-rents.ts`, which read RVD's
+ * published average rent per square metre by Class **and region** — a direct measurement of
+ * the thing being estimated, with no sampling gap to bridge. They need a region, and the two
+ * call sites ask for one rather than blending three real figures into a number that describes
+ * nowhere.
  *
- * **RVD publishes the answer directly.** The Rating and Valuation Department computes market
- * *yields* for private domestic property monthly, by Class, from its own rental and price
- * records — it is the valuer's own figure, free, official, and already ingested here as
- * `RVD_YIELDS_BY_CLASS`. Yield relates rent to price, which is precisely the conversion
- * needed:
- *
- *     monthly rent ≈ price × (gross yield ÷ 100) ÷ 12
- *
- * ## Class is decided by area, and that is why the area matters
- *
- * RVD's Classes are defined by **saleable area in square metres**, so an estimate needs the
- * area as well as the price — a 400 sqft studio and a 1,600 sqft flat at the same price are
- * different Classes with yields more than a point apart. Without an area there is no defensible
- * Class and this returns `null` rather than guessing at the middle of the range.
- *
- * ## What this estimate is not
- *
- * It is a **territory-wide figure for a size band**, not a valuation of this flat. RVD
- * publishes no per-district domestic series (checked against the department's full file list,
- * not assumed — see the note on `RVD_YIELDS_BY_CLASS`), so "the average rent in *this area*"
- * is not available at any price. A flat on the Peak and one in Tuen Mun of the same size share
- * this number. Every caller must show it as an estimate, name the Class and the yield it came
- * from, and let it be overwritten — which is what the UI does.
+ * What remains true from the old note, and is why the replacement still carries a caveat:
+ * RVD publishes nothing finer than three regions for domestic rents, so this is an average
+ * over a whole region and never a statement about one building.
  */
-export interface RentEstimate {
-  /** HK$ per month, rounded to the nearest hundred — the precision the input deserves. */
-  readonly monthlyRentHkd: number;
-  readonly classKey: RvdClassKey;
-  readonly classLabel: string;
-  /** The gross yield used, per cent, exactly as RVD published it. */
-  readonly grossYieldPct: number;
-  /** The month that yield is from, e.g. "2026-06-01". Recent months are provisional. */
-  readonly period: string;
-}
 
+/**
+ * Which RVD Class a flat falls in, from its saleable area.
+ *
+ * Survived the deletion above because it is not part of the discredited derivation — it is
+ * just RVD's own size bands, in square metres, written down. Three components read it: the
+ * rent estimate on the form, the area-rent panel, and the comparable-listings ranking.
+ *
+ * Returns null rather than guessing at the middle of the range when there is no area, because
+ * a Class is the one input every rent and yield figure here is banded by.
+ */
+/** RVD states its Class bands in square metres; every area in this app is in square feet. */
 const SQFT_PER_SQM = 10.7639;
 
-/** RVD's own Class boundaries, in square metres of saleable area. */
 export function rvdClassForAreaSqft(saleableAreaSqft: number): RvdClassKey | null {
   if (!Number.isFinite(saleableAreaSqft) || saleableAreaSqft <= 0) return null;
   const sqm = saleableAreaSqft / SQFT_PER_SQM;
@@ -1614,47 +1601,6 @@ export function rvdClassForAreaSqft(saleableAreaSqft: number): RvdClassKey | nul
   if (sqm < 100) return "C";
   if (sqm < 160) return "D";
   return "E";
-}
-
-/**
- * The most recent month RVD actually published a yield for this Class.
- *
- * Walks backwards rather than taking the last element: `RVD_YIELDS_BY_CLASS` stores `null`
- * where RVD reported nothing that month (fewer than 20 transactions), and those holes are kept
- * rather than interpolated. Class E in particular goes quiet for months at a time.
- */
-function latestYield(classKey: RvdClassKey): { pct: number; period: string } | null {
-  const series = RVD_YIELDS_BY_CLASS[classKey];
-  for (let i = series.length - 1; i >= 0; i--) {
-    const pct = series[i];
-    const period = RVD_YIELD_PERIODS[i];
-    if (pct !== null && pct !== undefined && pct > 0 && period !== undefined) {
-      return { pct, period };
-    }
-  }
-  return null;
-}
-
-/** `null` when there is no price, no area, or no published yield for the Class — never a
- *  guess. A caller with `null` should ask for the rent rather than invent one. */
-export function estimateMonthlyRent(
-  priceHkd: number,
-  saleableAreaSqft: number,
-): RentEstimate | null {
-  if (!Number.isFinite(priceHkd) || priceHkd <= 0) return null;
-  const classKey = rvdClassForAreaSqft(saleableAreaSqft);
-  if (classKey === null) return null;
-  const found = latestYield(classKey);
-  if (found === null) return null;
-
-  const annual = priceHkd * (found.pct / 100);
-  return {
-    monthlyRentHkd: Math.round(annual / 12 / 100) * 100,
-    classKey,
-    classLabel: RVD_CLASS_LABELS[classKey],
-    grossYieldPct: found.pct,
-    period: found.period,
-  };
 }
 
 /**

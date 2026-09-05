@@ -25,7 +25,7 @@
  * things this product could do, and the share is what stops it. Any UI showing the rent must show
  * the share, and `rentContext()` below returns them together so it is awkward not to.
  *
- * **For what a private flat actually rents for**, use `estimateMonthlyRent()` in `rvd-real.ts` —
+ * **For what a private flat actually rents for**, use `averageRentForFlat()` in `rvd-rents.ts` —
  * RVD market yields by size Class, which is a private-market measure. It is territory-wide, so the
  * two are complements: RVD says what a flat of this size rents for, this says what renting
  * households in this district actually pay and how much of the district is subsidised.

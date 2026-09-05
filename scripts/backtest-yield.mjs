@@ -18,10 +18,10 @@
  *      published figure should sit inside the range the three regions imply. If it does, three
  *      independent parses agree on an arithmetic identity and all three are probably right.
  *
- *   C. **`estimateMonthlyRent`.** It turns a price and an area into a rent using the
- *      territory-wide yield for that Class. Prices and rents differ by region, so the estimate
- *      must be wrong by region — the question is by how much, and the answer belongs on screen
- *      next to the estimate rather than in a comment.
+ *   C. **The two ways to estimate a rent.** The old one derived it from the published
+ *      yield; the new one reads RVD's measured average rent per square metre. This is the
+ *      test that changed the product: it found the derivation wrong in one direction in
+ *      every year on record, so the function was deleted rather than calibrated.
  *
  *   D. **The gross-to-net gap, through the real engine.** `computeVerdict` on RVD's measured
  *      average price and measured average rent, rather than on figures somebody typed. This is
@@ -213,11 +213,16 @@ console.log(`\n   ${insideCount}/${testedCount} classes consistent.`);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-rule("C. How wrong is estimateMonthlyRent, by region?");
+rule("C. Deriving a rent from the yield, against measuring it");
 // ─────────────────────────────────────────────────────────────────────────────
-console.log("   It applies the territory-wide Class yield to any flat. Prices and rents differ");
-console.log("   by region, so the error is structural. Measured against RVD's own average rent");
-console.log(`   for the same Class and region, at ${LATEST}.\n`);
+console.log("   OLD (deleted 05/09/2026): rent = price x published Class yield / 12. Applies a");
+console.log("   territory-wide yield to any flat, so the error is structural by region.");
+console.log("   NEW: RVD's measured average rent per m2 for that Class AND region.");
+console.log(`   Both compared against RVD's own average rent, at ${LATEST}.`);
+console.log("   Note: this reconstruction reads the ANNUAL yield, where the deleted function");
+console.log("   read the latest monthly one, so the single-year figure differs a little from");
+console.log("   the -25.9% first measured. The 27-year result below is unaffected — it always");
+console.log("   used the annual series — and it is the robust number.\n");
 /* Areas are Class midpoints. They cancel out of a yield, and matter only for the absolute
    rent figures below — stated rather than hidden because they are the one chosen input. */
 const AREA_M2 = { A: 30, B: 55, C: 85, D: 130, E: 200 };
@@ -232,12 +237,15 @@ for (const k of CLASSES) {
     const areaM2 = AREA_M2[k];
     const totalPrice = pricePerM2 * areaM2;
     const actualRent = rentPerM2 * areaM2;
-    const est = fixtures.estimateMonthlyRent(totalPrice, areaM2 * SQFT);
-    if (est === null) continue;
-    const err = (est.monthlyRentHkd - actualRent) / actualRent;
+    /* The old derivation, computed inline because the function it used to live in has been
+       deleted. Kept as the record of why: a number nobody can reproduce is not evidence. */
+    const yld = yields[LATEST][k];
+    if (yld === null) continue;
+    const oldEst = Math.round(((totalPrice * (yld / 100)) / 12) / 100) * 100;
+    const err = (oldEst - actualRent) / actualRent;
     errors.push({ k, r, err });
     console.log(
-      `   ${("Class " + k).padEnd(8)}${r.padEnd(17)}${Math.round(actualRent).toLocaleString("en-HK").padStart(13)}${est.monthlyRentHkd.toLocaleString("en-HK").padStart(12)}${((err * 100).toFixed(1) + "%").padStart(10)}`,
+      `   ${("Class " + k).padEnd(8)}${r.padEnd(17)}${Math.round(actualRent).toLocaleString("en-HK").padStart(13)}${oldEst.toLocaleString("en-HK").padStart(12)}${((err * 100).toFixed(1) + "%").padStart(10)}`,
     );
   }
 }
@@ -285,6 +293,43 @@ for (const k of CLASSES) {
   console.log("   RVD's technical notes could not be read (the PDF is font-encoded) and no");
   console.log("   source stating the method was found. The measurement is settled; the");
   console.log("   explanation is a hypothesis and is labelled as one wherever it is repeated.");
+
+  /*
+   * The replacement, and an honest note on what this can and cannot show.
+   *
+   * `averageRentForFlat` reads the published average rent for that Class and region, so on
+   * the class-region average it agrees with the source **by construction** — that is a
+   * consistency check on the parse, not evidence the estimate is good. What it does settle
+   * is that the sampling gap the old method had to bridge is gone: there is nothing left to
+   * be biased about, because the figure and the benchmark are the same measurement.
+   *
+   * The residual error on a *particular* flat is dispersion within its Class and region, and
+   * published aggregates cannot measure it. Saying so is the point: the new estimate is
+   * unbiased and still not precise, and the UI says the same.
+   */
+  let exact = 0;
+  let compared = 0;
+  for (const k of CLASSES) {
+    for (const [fxRegion, csvRegion] of Object.entries({
+      hongKong: "Hong Kong",
+      kowloon: "Kowloon",
+      newTerritories: "New Territories",
+    })) {
+      const rentPerM2 = rents[LATEST][`${k}|${csvRegion}`];
+      if (!rentPerM2) continue;
+      const areaM2 = AREA_M2[k];
+      const got = fixtures.averageRentForFlat(k, fxRegion, areaM2 * SQFT);
+      if (got === null) continue;
+      compared += 1;
+      if (Math.abs(got.monthlyRentHkd - rentPerM2 * areaM2) <= 1) exact += 1;
+    }
+  }
+  console.log("");
+  console.log(`   NEW method: ${exact}/${compared} class-region cells reproduce the published`);
+  console.log("   figure exactly. That is a parse check, not a quality claim — the estimate IS");
+  console.log("   the measurement now, so there is no sampling gap left to be biased about.");
+  console.log("   What remains is dispersion inside a Class and region, which published");
+  console.log("   aggregates cannot measure. Unbiased, still not precise, and the UI says so.");
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

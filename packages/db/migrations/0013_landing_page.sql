@@ -1,0 +1,21 @@
+-- 0013 — where a reader lands after signing in
+--
+-- Veela is used for three different jobs and they do not share a home: someone managing a
+-- portfolio wants their properties, someone reading the market wants the map, someone
+-- evaluating a flat wants the form. Everybody currently lands on the same page.
+--
+-- This is the small, non-destructive half of a bigger idea that was considered and turned
+-- down: asking a profile question at signup and varying the menus from the answer. Two of
+-- the three jobs never create an account — nothing is gated — so that question would have
+-- reached exactly the people who needed it least, and hiding menu items would have made the
+-- "I am completely lost" feedback worse rather than better. One preference, nothing hidden.
+--
+-- Nullable, and null means today's behaviour. An explicit `?next=` still wins: it is a more
+-- specific intent than a standing preference.
+--
+-- Text rather than an enum. The allowed values are a route whitelist that lives with the
+-- routes (`LANDING_PAGES` in @veela/types), so adding a page does not need a migration — and
+-- the value is never used as a destination without passing that whitelist first, because it
+-- reaches `window.location.assign` and an open field there would be a stored redirect.
+
+alter table profiles add column if not exists landing_page text;

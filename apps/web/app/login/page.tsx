@@ -1,5 +1,7 @@
 "use client";
 
+import { LANDING_PAGES } from "@veela/types";
+
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
@@ -63,18 +65,58 @@ const AUTH_ERRORS: Record<string, string> = {
 export default function LoginPage(): React.JSX.Element {
   const { user, configured } = useAuth();
   const [next, setNext] = useState("/portfolio");
+  /*
+   * True when the URL carried no `?next=`, which is the only case where a standing
+   * preference should decide the destination. Somebody bounced here from a gated page has a
+   * more specific intent than a setting made weeks ago, and that intent wins.
+   */
+  const [freeChoice, setFreeChoice] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    setNext(safeNext(params.get("next")));
+    const requested = params.get("next");
+    setNext(safeNext(requested));
+    setFreeChoice(requested === null || requested === "");
     const reason = params.get("error");
     if (reason !== null && reason !== "") setAuthError(reason);
   }, []);
 
   useEffect(() => {
-    if (user !== null) window.location.assign(next);
-  }, [user, next]);
+    if (user === null) return;
+    if (!freeChoice) {
+      window.location.assign(next);
+      return;
+    }
+    /*
+     * One request, on the one screen where it pays for itself. The alternative considered was
+     * a portfolio count in the app shell so the sidebar could reorder itself — that is a
+     * request on *every* page for a cosmetic change, where this is a request on one page that
+     * decides where the reader actually goes.
+     *
+     * The value is checked against the whitelist rather than trusted: it reaches
+     * `window.location.assign`, and a stored destination is a stored redirect if nobody
+     * checks it. Any failure falls through to the default, because a preference is a
+     * convenience and must never be able to strand somebody at a sign-in screen.
+     */
+    let cancelled = false;
+    fetch("/api/profile")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json: { profile?: { landingPage?: string | null } } | null) => {
+        if (cancelled) return;
+        const wanted = json?.profile?.landingPage;
+        const allowed = LANDING_PAGES as readonly string[];
+        window.location.assign(
+          typeof wanted === "string" && allowed.includes(wanted) ? wanted : next,
+        );
+      })
+      .catch(() => {
+        if (!cancelled) window.location.assign(next);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user, next, freeChoice]);
 
   if (!configured) {
     return (

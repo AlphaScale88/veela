@@ -1,6 +1,12 @@
 "use client";
 
-import { RVD_PRICE_INDEX, estimateMonthlyRent } from "@veela/fixtures";
+import {
+  RVD_CLASS_LABELS,
+  RVD_PRICE_INDEX,
+  RVD_REGION_LABEL,
+  averageRentAcrossRegions,
+  rvdClassForAreaSqft,
+} from "@veela/fixtures";
 import { useMemo, useState } from "react";
 
 import { CalculatorIcon, ScaleIcon, TrendIcon } from "../../components/service-icons";
@@ -92,10 +98,27 @@ export default function ValuationPage(): React.JSX.Element {
     return { then, movePct, implied };
   }, [paid, when, latest]);
 
-  const rentEstimate = useMemo(
-    () => (result === null ? null : estimateMonthlyRent(result.implied, area)),
-    [result, area],
-  );
+  /*
+   * What flats of this size actually let for, by region — a **measurement**, where this used
+   * to be `implied value x RVD's published gross yield`.
+   *
+   * A backtest against RVD's own average rents found that derivation understated the rent in
+   * 27 of 27 years (mean -7.4%, worst -25.9%), because the published yield is not the ratio
+   * of RVD's average rent to its average price. This card carried that error straight to the
+   * screen. It does not depend on the implied value at all any more, which is the point: rent
+   * is published directly and there was never a reason to route it through a price.
+   *
+   * Three regions rather than one blended number. This is a read-only card, so it can show
+   * the range honestly instead of picking a region on the reader's behalf.
+   */
+  const rentByRegion = useMemo(() => {
+    const classKey = rvdClassForAreaSqft(area);
+    if (classKey === null) return null;
+    const rows = averageRentAcrossRegions(classKey, area).flatMap((r) =>
+      r.result === null ? [] : [r.result],
+    );
+    return rows.length === 0 ? null : { classKey, rows };
+  }, [area]);
 
   return (
     <div className="col py-12 sm:py-16">
@@ -196,17 +219,26 @@ export default function ValuationPage(): React.JSX.Element {
                 </p>
               </div>
 
-              {rentEstimate !== null && (
+              {rentByRegion !== null && (
                 <div className="card">
-                  <div className="eyebrow">What it might let for</div>
-                  <p className="tnum mt-2 font-display text-[24px] font-semibold tracking-[-0.02em]">
-                    {fmt(rentEstimate.monthlyRentHkd)}
-                    <span className="ml-1 text-sm font-normal text-muted">/month</span>
-                  </p>
-                  <p className="mt-2 text-xs leading-relaxed text-muted">
-                    From RVD&apos;s published market yield for {rentEstimate.classLabel} —{" "}
-                    {rentEstimate.grossYieldPct}% as at {rentEstimate.period.slice(0, 7)} — applied
-                    to the figure above. A size band, territory-wide, not this building.
+                  <div className="eyebrow">What flats this size let for</div>
+                  <dl className="mt-2 space-y-1.5">
+                    {rentByRegion.rows.map((r) => (
+                      <div key={r.region} className="flex items-baseline justify-between gap-4">
+                        <dt className="text-xs text-muted">{RVD_REGION_LABEL[r.region]}</dt>
+                        <dd className="tnum font-display text-[17px] font-semibold tracking-[-0.02em]">
+                          {fmt(r.monthlyRentHkd)}
+                          <span className="ml-1 text-xs font-normal text-muted">/mo</span>
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                  <p className="mt-3 text-xs leading-relaxed text-muted">
+                    RVD&apos;s measured average rent for{" "}
+                    {RVD_CLASS_LABELS[rentByRegion.classKey]} flats in {rentByRegion.rows[0]?.year},
+                    at your area. Three regions is the finest geography RVD publishes for rents,
+                    and this is an average across a whole region rather than anything about this
+                    building.
                   </p>
                 </div>
               )}

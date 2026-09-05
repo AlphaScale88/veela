@@ -4388,6 +4388,88 @@ lost. Entry differentiation solves the same problem without concealment.
 someone who owns things needs a portfolio count in the shell, which means a request on every
 app page for a cosmetic reordering. Recorded as an option, not taken.
 
+## The rent estimator, replaced rather than corrected (05/09/2026)
+
+The backtest of 03/09 found `estimateMonthlyRent()` understating the rent in **27 of 27
+years** — mean −7.4%, and up to a quarter low on a small Kowloon flat — because it derived a
+rent as `price × RVD's published gross yield ÷ 12`, and that yield is demonstrably not the
+ratio of RVD's average rent to its average price. A rent a quarter too low makes the net yield
+a quarter too low: the product was telling people a deal was materially worse than it is.
+
+**Deleted, not calibrated.** A −7.4% correction factor would be an invented constant, which is
+the failure this engine refuses everywhere else. The replacement was already in the repository
+and unused: `averageRentForFlat()` reads RVD's **measured** average rent per square metre by
+Class *and region*. There is no sampling gap left to bridge, because the estimate and the
+benchmark are now the same measurement.
+
+**The region is asked for, not guessed.** Blending three real regional figures into one number
+would describe nowhere. The form offers all three and the reader picks — which region their
+flat is in is a question they can certainly answer, unlike the rent, which is why they came.
+`/home-valuation` shows all three as a range, since it is a read-only card and can.
+
+The old function is gone from `rvd-real.ts` and replaced by a **do-not-restore note** carrying
+the measurement, because three comments elsewhere in the package actively recommended it and
+a deleted function with no explanation gets rewritten. `rvdClassForAreaSqft` and
+`SQFT_PER_SQM` were caught in the same block and restored — they are RVD's size bands written
+down, not part of the discredited derivation.
+
+Test C of the backtest now compares the two methods and says what it can and cannot prove: the
+new one reproduces 15/15 published class-region cells exactly, which is **a parse check, not a
+quality claim**. What remains is dispersion inside a Class and region, which published
+aggregates cannot measure. Unbiased, still not precise, and the UI says so.
+
+*Worth knowing: the inline reconstruction of the old method reads the annual yield where the
+deleted function read the latest monthly one, so its single-year error prints as −19.1% rather
+than the −25.9% first measured. The 27-year result is unaffected and is the robust number.*
+
+## One preference, and the profile question that was turned down (05/09/2026)
+
+Asked whether to ask a user's objective at signup and adapt the menus from it, with tick-boxes
+in settings to re-open what was hidden.
+
+**Turned down, and the decisive argument is structural: two of the five use cases never create
+an account.** `AUTH_REQUIRED_PREFIXES` is empty — the map, the indices, the duty rules and the
+calculator are all open. A market reader can use Veela indefinitely without signing up, and
+the one-answer visitor never will. So the question would have been asked of exactly the
+population that needs it least, and missed the two that need it most.
+
+Three more reasons, in order of weight. A declared identity predicts worse than observed
+behaviour, and *do you have saved properties* is free and always current. The three jobs are a
+**lifecycle**, not a taxonomy — this product's own thesis is buy, hold, sell — so a profile set
+once at signup is stale immediately. And this repository already has evidence on hiding: the
+01/09 feedback was *"I am completely lost"* from a real reader looking at the **full**
+navigation, and the fix was organisation rather than subtraction. Not finding something you
+know exists is worse than seeing an item you do not need.
+
+**The settings escape hatch is the tell.** If navigation needs a settings page to restore it,
+navigation has become a thing to configure — a second surface to learn, whose most likely
+users are the least likely to find it.
+
+### What was built instead
+
+`profiles.landing_page`, one nullable column: *where to land after signing in*. It hides
+nothing and moves one page. Null keeps today's behaviour, and an explicit `?next=` always wins
+— somebody bounced here from a gated page has a more specific intent than a setting made weeks
+ago.
+
+**A closed whitelist, not free text.** `LANDING_PAGES` lives in `@veela/types` beside the
+routes. The value reaches `window.location.assign`, so a free field would be a *stored*
+redirect — the same hole `safeNext()` closed on `/login?next=`, and worse for persisting. It
+is re-checked against the whitelist at use, and any failure falls through to the default,
+because a convenience must never be able to strand somebody at a sign-in screen.
+
+The one request it costs lands on `/login` only. The alternative considered — a portfolio
+count in the app shell so the sidebar could reorder itself — is a request on *every* app page
+for a cosmetic change, where this is a request on one page that decides where the reader
+actually goes.
+
+### Found while testing, not fixed
+
+**The property form's inputs have no `id` and no `label[for]`.** `getByLabel` cannot find the
+price or area fields at all, which is how it surfaced. The 17/08 accessibility pass fixed
+`/login` and `/account` and did not reach this form — the longest one in the product, and the
+one every report starts from. Recorded here rather than folded into an unrelated change.
+
 ## Working conventions
 - Dates DD/MM/YYYY. Currency: **HKD** for Hong Kong, **VND** for Vietnam, **EUR** for
   France — always state which, never a bare number. Keep a single reporting currency

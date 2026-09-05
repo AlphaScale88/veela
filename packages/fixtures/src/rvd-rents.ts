@@ -26,7 +26,7 @@
  * (RVD's own Remarks columns exist because thin sampling makes some cells unreliable), and the
  * **latest row is annual**, so it lags the monthly rent index in `rvd-real.ts`.
  *
- * The two are complements rather than rivals. `estimateMonthlyRent()` in `rvd-real.ts` derives a
+ * The two are complements rather than rivals. `averageRentForFlat()` below reads a
  * rent from RVD's monthly *yield* by Class and is more current; this gives the actual average
  * rent per square metre and is the only one that knows about regions. Where they disagree, they
  * disagree for a reason a reader can see: one is territory-wide and monthly, the other is
@@ -97,7 +97,7 @@ export interface AverageRentResult {
  * implies for a flat of this size.
  *
  * Walks the series **backwards to the last year RVD actually published**, rather than assuming
- * the final element is present — the same guard `estimateMonthlyRent()` needs, because these
+ * the final element is present, because these
  * arrays carry `null` holes where a cell was too thinly sampled to report.
  */
 export function averageRentForFlat(

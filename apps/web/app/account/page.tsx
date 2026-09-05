@@ -1,5 +1,7 @@
 "use client";
 
+import { LANDING_PAGES } from "@veela/types";
+
 import type { Profile } from "@veela/db";
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -38,6 +40,14 @@ const TABS = [
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
+
+/** Named for the job each page serves, not for the route. */
+const LANDING_PAGE_LABEL: Record<string, string> = {
+  "/dashboard": "Dashboard",
+  "/map": "Market map",
+  "/analyse": "Analyse a property",
+  "/portfolio": "My properties",
+};
 
 export default function SettingsPage(): React.JSX.Element {
   const { user, loading, configured, signOut, updateEmail, updatePassword, hasPasswordIdentity } =
@@ -129,6 +139,7 @@ export default function SettingsPage(): React.JSX.Element {
 function ProfileSection(): React.JSX.Element {
   const { user } = useAuth();
   const [displayName, setDisplayName] = useState("");
+  const [landingPage, setLandingPage] = useState<string>("");
   const [state, setState] = useState<"idle" | "saving" | "saved" | "error">("idle");
 
   useEffect(() => {
@@ -136,7 +147,10 @@ function ProfileSection(): React.JSX.Element {
     fetch("/api/profile")
       .then((res) => (res.ok ? res.json() : null))
       .then((json: { profile: Profile } | null) => {
-        if (json !== null) setDisplayName(json.profile.displayName ?? "");
+        if (json !== null) {
+          setDisplayName(json.profile.displayName ?? "");
+          setLandingPage(json.profile.landingPage ?? "");
+        }
       })
       .catch(() => undefined);
   }, [user]);
@@ -147,7 +161,10 @@ function ProfileSection(): React.JSX.Element {
       const res = await fetch("/api/profile", {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ displayName: displayName.trim() || null }),
+        body: JSON.stringify({
+          displayName: displayName.trim() || null,
+          landingPage: landingPage === "" ? null : landingPage,
+        }),
       });
       setState(res.ok ? "saved" : "error");
     } catch {
@@ -157,6 +174,37 @@ function ProfileSection(): React.JSX.Element {
 
   return (
     <SettingsSection title="Profile">
+      {/*
+        * Where to land after signing in.
+        *
+        * The small, non-destructive half of an idea that was considered and turned down:
+        * asking what kind of user you are at signup and varying the menus from the answer.
+        * Two of the three jobs this product serves never create an account — nothing is
+        * gated — so that question would have reached exactly the people who needed it least,
+        * and hiding menu items would have made a real reader's "I am completely lost" worse.
+        *
+        * This hides nothing. It moves one page.
+        */}
+      <SettingRow
+        label="Land here after signing in"
+        hint="Nothing is hidden either way — this only changes where you start."
+        htmlFor="account-landing-page"
+      >
+        <select
+          id="account-landing-page"
+          value={landingPage}
+          onChange={(e) => setLandingPage(e.target.value)}
+          className="w-56 rounded-card border border-line bg-surfaceMuted px-3 py-2 text-sm outline-none focus:border-accent focus:bg-surface"
+        >
+          <option value="">Wherever I was heading</option>
+          {LANDING_PAGES.map((href) => (
+            <option key={href} value={href}>
+              {LANDING_PAGE_LABEL[href]}
+            </option>
+          ))}
+        </select>
+      </SettingRow>
+
       <SettingRow
         label="Display name"
         hint="Optional. Only you see it for now."

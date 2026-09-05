@@ -1,7 +1,12 @@
 "use client";
 
 import { money, type PropertyInput } from "@veela/core";
-import { estimateMonthlyRent } from "@veela/fixtures";
+import {
+  RVD_CLASS_LABELS,
+  RVD_REGION_LABEL,
+  averageRentAcrossRegions,
+  rvdClassForAreaSqft,
+} from "@veela/fixtures";
 import type { CreatePropertyInput } from "@veela/types";
 import type { ReactNode } from "react";
 
@@ -425,41 +430,68 @@ function RentEstimateHint({
 }): React.JSX.Element | null {
   if (draft.monthlyRent > 0 || draft.price <= 0) return null;
 
-  const estimate = estimateMonthlyRent(draft.price, draft.saleableAreaSqft);
-  if (estimate === null) {
-    // Price but no area: RVD's Classes are defined by area, so there is no defensible band to
-    // read a yield from. Say what is missing instead of guessing at the middle of the range.
+  const classKey = rvdClassForAreaSqft(draft.saleableAreaSqft);
+  if (classKey === null) {
+    // No area: RVD's Classes are size bands, so there is no band to read a rent from. Say what
+    // is missing rather than guessing at the middle of the range.
     return (
       <p className="mt-1.5 text-xs leading-relaxed text-muted">
         No rent yet — a yield needs one. Add the <strong className="text-mist">saleable area</strong>{" "}
-        and we can estimate it from the government&apos;s own market yields.
+        and we can read what flats of that size actually let for.
       </p>
     );
   }
 
+  /* `AverageRentResult` already carries `region`, so the result alone is the whole record. */
+  const regions = averageRentAcrossRegions(classKey, draft.saleableAreaSqft).flatMap((r) =>
+    r.result === null ? [] : [r.result],
+  );
+  if (regions.length === 0) return null;
+
   return (
     <div className="mt-1.5 rounded-card border border-accent/30 bg-accent/[0.04] px-3 py-2.5">
       <p className="text-xs leading-relaxed text-mist">
-        No rent on this listing. The Rating and Valuation Department&apos;s market yield for{" "}
-        <strong className="font-medium">{estimate.classLabel}</strong> is{" "}
-        <strong className="font-medium">{estimate.grossYieldPct}%</strong> ({estimate.period.slice(0, 7)}),
-        which implies about{" "}
-        <strong className="font-medium">
-          HK${estimate.monthlyRentHkd.toLocaleString("en-HK")}/month
-        </strong>
-        .
+        No rent on this listing. What the Rating and Valuation Department measured{" "}
+        <strong className="font-medium">{RVD_CLASS_LABELS[classKey]}</strong> flats letting for
+        in {regions[0]?.year}, for an area this size:
       </p>
-      <button
-        type="button"
-        onClick={() => onUse(estimate.monthlyRentHkd)}
-        className="btn-secondary mt-2 !px-3 !py-1.5 !text-xs"
-      >
-        Use this estimate
-      </button>
+      {/*
+        * Three buttons rather than one number, and this is the substance of the change.
+        *
+        * Until 05/09/2026 this box derived a rent as `price x RVD's published gross yield`.
+        * A backtest against RVD's own average rents found that method **understated the rent
+        * in 27 of 27 years** — mean -7.4%, worst -25.9% for a small Kowloon flat — because
+        * the published yield is demonstrably not the ratio of RVD's average rent to its
+        * average price. A rent 26% low makes the net yield 26% low, so the product was
+        * telling people a deal was materially worse than it is.
+        *
+        * The fix is not a correction factor, which would be an invented constant. It is to
+        * stop going through the yield: RVD publishes average rent per square metre by Class
+        * **and region**, which is a direct measurement of the thing being estimated.
+        *
+        * That needs a region, and rather than blend the three into a number that describes
+        * nowhere, the reader picks. Which region their flat is in is a question they can
+        * certainly answer — unlike the rent, which is why they are here.
+        */}
+      <div className="mt-2 flex flex-wrap gap-2">
+        {regions.map((r) => (
+          <button
+            key={r.region}
+            type="button"
+            onClick={() => onUse(r.monthlyRentHkd)}
+            className="btn-secondary !px-3 !py-1.5 !text-xs"
+          >
+            {RVD_REGION_LABEL[r.region]}
+            <span className="ml-2 font-mono tnum text-mist">
+              HK${r.monthlyRentHkd.toLocaleString("en-HK")}
+            </span>
+          </button>
+        ))}
+      </div>
       <p className="mt-2 text-[11px] leading-relaxed text-muted">
-        A territory-wide figure for flats of this size, not a valuation of this one — RVD
-        publishes no per-district domestic series. Treat it as a starting point and replace it
-        with a real asking rent when you have one.
+        Pick the region this flat is in. These are measured averages for flats of this size in
+        that region, not a valuation of this one, and RVD publishes nothing finer than three
+        regions for rents. Replace it with a real asking rent when you have one.
       </p>
     </div>
   );

@@ -58,6 +58,25 @@ export const profiles = pgTable("profiles", {
    *  array on the profile, not a join table: there's no per-favourite metadata (no
    *  date, no note), so a table would only exist to hold a list this already is. */
   favoriteDistricts: jsonb("favorite_districts").notNull().default([]).$type<string[]>(),
+  /**
+   * Where to land after signing in, when nothing more specific was asked for.
+   *
+   * Added because Veela is used for three different jobs and they do not share a home: a
+   * portfolio owner wants their properties, a market reader wants the map, somebody
+   * evaluating a flat wants the form. One preference, and **nothing is hidden** — this was
+   * chosen over asking a profile question at signup and varying the menus, because two of
+   * the three jobs never create an account at all (nothing is gated), so that question would
+   * have been asked of exactly the people who needed it least.
+   *
+   * Null means the previous behaviour, which is where the reader was heading anyway or
+   * `/portfolio`. An explicit `?next=` always wins: it is a more specific intent than a
+   * standing preference.
+   *
+   * Text rather than an enum: the allowed set is a route whitelist that belongs with the
+   * routes, in `@veela/types`, and a database enum would need a migration every time a page
+   * is added. The column is never interpolated into a URL without passing that whitelist.
+   */
+  landingPage: text("landing_page"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

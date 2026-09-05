@@ -338,6 +338,25 @@ export type ImportedListing = z.infer<typeof importedListingSchema>;
 // an existing row, never a create. `homeJurisdiction` is left out on purpose: the
 // product is Hong Kong only right now, so there is nothing else to set it to.
 
+/**
+ * The pages a reader may choose to land on after signing in.
+ *
+ * **A closed set, not free text.** This value ends up in `window.location.assign`, so an
+ * open field would be a stored redirect — the same class of hole `safeNext()` was written to
+ * close on `/login?next=`, and worse because it survives across sessions. A whitelist cannot
+ * be talked into pointing off-site.
+ *
+ * Ordered as the three jobs are ordered everywhere else: understand the market, evaluate a
+ * property, look after what you own.
+ */
+export const LANDING_PAGES = [
+  "/dashboard",
+  "/map",
+  "/analyse",
+  "/portfolio",
+] as const;
+export type LandingPage = (typeof LANDING_PAGES)[number];
+
 export const updateProfileSchema = z.object({
   displayName: z.string().min(1).max(120).nullable().optional(),
   /** Consent to feed this account's own property data into Veela's aggregate
@@ -349,6 +368,8 @@ export const updateProfileSchema = z.object({
    *  just fetched it to render the star toggle), so there's no lost-update risk, and
    *  one shape covers star and un-star instead of two endpoints. */
   favoriteDistricts: z.array(z.string()).optional(),
+  /** Where to land after signing in. See `LANDING_PAGES` for why this is a closed set. */
+  landingPage: z.enum(LANDING_PAGES).nullable().optional(),
 });
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
 
