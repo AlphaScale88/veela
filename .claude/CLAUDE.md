@@ -4634,6 +4634,50 @@ a PICS has to state. Building a page for an empty aggregate that cannot lawfully
 would be theatre — this is the exception to "data with no screen is not delivered", and the
 reason is stated rather than implied.
 
+### Centaline's own portal: the licence is better than expected, the access is not
+
+Followed up the next day by reading Centamap's **Intellectual Property Rights Notice**
+(`hkdata.centanet.com/BigData/en-US/CopyRight/IPRN`) rather than inferring from the landing
+page. It is more permissive than this file had assumed for two months:
+
+> *"visitors of this website may download, print, adapt, distribute, reproduce and/or
+> hyperlink to the Specified Statistical Information and/or the Specified Boundaries **free of
+> charge for commercial and/or non-commercial purposes**, provided that they shall comply with
+> the following conditions"* — the condition being acknowledgement, to C&SD, to Centamap, or to
+> both, depending on which layer.
+
+**What that licence actually covers matters more than the permission.** "Specified Statistical
+Information" is the Population Census figures Centamap republishes — which this project already
+takes **first-hand from C&SD**, so there is nothing to gain. The valuable half is "Specified
+Boundaries": **Building Groups** (C&SD and Centamap jointly), **Housing Market Areas**
+(Centamap), and **Large Subunit / Large Street Block Groups** (C&SD). That is sub-district
+geometry, and sub-district geometry is what the map has never had.
+
+**It is not their transaction database, and nothing on that portal is.**
+
+### And two reasons not to take it yet
+
+**The notice is marked "(TBC)".** Both its own heading and the dataset heading carry it — *to be
+confirmed*. A licence that labels itself provisional is not a foundation for a commercial
+product's data pipeline without asking first.
+
+**There are no files.** The portal is a browsing viewer, not a repository: no CSV, no GeoJSON,
+no download link anywhere on it. Its data comes from `/BigData/api/PageData/GetModel`, which
+answers `405` to a GET — a POST-only internal endpoint.
+
+So exercising a granted right would mean reverse-engineering an internal API. **That is the
+same line drawn against SRPE an hour earlier**, and drawing it there and not here would be
+deciding by convenience rather than by principle. Stopped.
+
+**The route is the one this file has always named: ask.** Centamap has published a notice
+granting commercial re-use and marked it TBC; a short request to confirm it and to point at a
+distribution route is exactly the "licensing is the route, not a crawler" posture, and it is a
+founder's email rather than an engineering task.
+
+**Still available and still unbuilt, for anyone reaching for boundaries:** the Home Affairs
+Department publishes the eighteen district polygons free and unambiguously — verified on
+03/09/2026, 18 features, WGS84, 17,435 coordinates. Coarser than Centamap's, and already ours.
+
 ### Found on the way, not fixed
 
 **The `estates` table has been collecting things that are not estates.** Five rows written
