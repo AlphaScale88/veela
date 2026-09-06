@@ -108,6 +108,20 @@ export const EMPTY_DRAFT: Draft = {
  * It rides alongside, at the one moment it matters — the save.
  */
 export interface ListingProvenance {
+  /**
+   * Which of the eighteen districts this property is in.
+   *
+   * `properties.district_id` has existed since the first migration and **was never once
+   * written** — found on 06/09/2026 when the community aggregate turned out to have two
+   * blockers rather than one: nobody had consented, and nothing had a district, so every cell
+   * would have grouped under null and been suppressed even if they had.
+   *
+   * It rides with provenance rather than in `Draft` for the same reason the rest of this
+   * interface does: it is not editable, not a number, and changes nothing the engine computes.
+   * The value is resolved by the building picker against the Government's Address Lookup
+   * Service, so it is looked up rather than guessed.
+   */
+  readonly districtId?: string | undefined;
   readonly sourceUrl?: string | undefined;
   readonly address?: string | undefined;
   readonly latitude?: number | undefined;
@@ -121,6 +135,7 @@ export function draftToApiInput(d: Draft, source?: ListingProvenance): CreatePro
   return {
     /* Spread conditionally rather than assigning `undefined`: `exactOptionalPropertyTypes` is
        on, so `{ sourceUrl: undefined }` is not the same type as an absent key. */
+    ...(source?.districtId !== undefined && { districtId: source.districtId }),
     ...(source?.sourceUrl !== undefined && { sourceUrl: source.sourceUrl }),
     ...(source?.address !== undefined && { address: source.address }),
     ...(source?.latitude !== undefined && { latitude: source.latitude }),

@@ -533,6 +533,101 @@ ${area}`,
   // The row always exists by the time this runs: `handle_new_user` (see
   // packages/db/migrations/0001_postgis_and_rls.sql) creates it on signup, before any
   // client ever calls this route. So GET here is a lookup, never a create-on-read.
+  /**
+   * What Veela's own users report — the aggregate the product has always promised and never
+   * built.
+   *
+   * The thesis in `.claude/CLAUDE.md` is that "every property a user enters accumulates into a
+   * proprietary dataset. Aggregation becomes the **output** of adoption, not its precondition."
+   * `profiles.aggregate_consent` has been collected, stamped and stored since 16/08/2026 and
+   * **read by nothing that aggregates**. This is the thing it was collected for.
+   *
+   * It answers a question no public source can: Hong Kong publishes no rent or price series per
+   * district, so what people here actually pay and actually get is unobtainable from the
+   * government at any price. It is obtainable from the people who typed it in.
+   *
+   * ## Four conditions, all enforced here rather than assumed
+   *
+   * **1. Consent, checked in the query.** RLS is enabled on `properties` but **not forced**, so
+   * this pooled connection reads across owners — which is what makes the aggregate possible and
+   * is exactly why the consent filter cannot be left to the database. It is a `where` clause,
+   * and it is the first one.
+   *
+   * **2. Fabricated samples are excluded.** Hearting a sample listing writes invented figures
+   * into `properties` — a trade-off taken deliberately, with `demo_listing_id` added to make
+   * those rows identifiable. This is the call site that needs it: an aggregate of what users
+   * report must not contain what the fixture generator made up.
+   *
+   * **3. A minimum cell size.** No group smaller than `MIN_CELL` is returned, at all. With a
+   * handful of properties every cell is one property, and a "median" over one property is that
+   * person's price republished. The count of suppressed cells is returned so the page can say
+   * *why* it is empty rather than looking broken.
+   *
+   * **4. Nothing identifying leaves.** Counts and medians only — no address, no coordinates, no
+   * per-property row, no owner.
+   *
+   * ## The blocker this cannot clear by itself
+   *
+   * `/privacy` still names no operator, and aggregating members' property data is a purpose a
+   * PICS has to state. The endpoint is built and the consent is real; **publishing the output
+   * waits on the entity being named**, which is the founder's item, not an engineering one.
+   */
+  .get("/market/community", async (c) => {
+    const db = c.get("db");
+
+    /* Five, not three. Three medians over three properties is still close enough to
+       republishing one person's figures, and this dataset will be small for a long time. */
+    const MIN_CELL = 5;
+
+    const rows = await db.execute(sql`
+      with contributing as (
+        select
+          p.district_id,
+          p.price_minor,
+          p.monthly_rent_minor,
+          p.saleable_area_sqft,
+          (
+            select v.net_yield from verdicts v
+            where v.property_id = p.id
+            order by v.computed_at desc
+            limit 1
+          ) as net_yield
+        from properties p
+        join profiles pr on pr.id = p.owner_id
+        where pr.aggregate_consent = true
+          and p.demo_listing_id is null
+          and p.price_minor > 0
+      )
+      select
+        district_id,
+        count(*)::int as n,
+        percentile_cont(0.5) within group (order by price_minor)::bigint as median_price_minor,
+        percentile_cont(0.5) within group (order by monthly_rent_minor)::bigint as median_rent_minor,
+        percentile_cont(0.5) within group (order by net_yield) as median_net_yield
+      from contributing
+      group by district_id
+    `);
+
+    const all = (rows as unknown as Record<string, unknown>[]).map((r) => ({
+      districtId: r["district_id"] === null ? null : String(r["district_id"]),
+      count: Number(r["n"]),
+      medianPriceMinor: Number(r["median_price_minor"]),
+      medianRentMinor: Number(r["median_rent_minor"]),
+      medianNetYield: r["median_net_yield"] === null ? null : Number(r["median_net_yield"]),
+    }));
+
+    const cells = all.filter((r) => r.count >= MIN_CELL && r.districtId !== null);
+
+    return c.json({
+      minimumCellSize: MIN_CELL,
+      /** Everyone who opted in and is not a fabricated sample — the honest denominator. */
+      contributing: all.reduce((n, r) => n + r.count, 0),
+      /** Groups that exist and are withheld for being too small to publish. */
+      withheldCells: all.length - cells.length,
+      cells,
+    });
+  })
+
   .get("/profile", async (c) => {
     const userId = requireUser(c.get("userId"));
     const db = c.get("db");

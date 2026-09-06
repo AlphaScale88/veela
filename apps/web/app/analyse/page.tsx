@@ -699,6 +699,10 @@ export default function AnalysePage(): React.JSX.Element {
          — the first thing you want when a price is months old. */
       const parsed = createPropertySchema.safeParse(
         draftToApiInput(lastSubmittedDraft, {
+          /* The district the report was built against — from the building picker's Address
+             Lookup Service match, or the sample listing's own district. Never written before
+             today, which is why nothing per-district could ever be aggregated. */
+          districtId: reportDistrict?.id ?? undefined,
           sourceUrl: imported?.sourceUrl,
           address: imported?.address ?? undefined,
           latitude: imported?.latitude ?? undefined,

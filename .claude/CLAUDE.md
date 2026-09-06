@@ -4554,6 +4554,95 @@ each of these would stack a second invisible assumption on the first.
 `.next/types`, and the next typecheck fails on a module that no longer exists. Remove the
 directory under `.next/types/app/` too.*
 
+## Accumulating listings — three routes, and what each one turned out to be (06/09/2026)
+
+Asked how to accumulate listings. Three tracks were opened; one closed, one landed, one turned
+out to be blocked on something nobody had noticed.
+
+### 1. The first-hand register: real, official, and not reachable in bulk
+
+Under Cap. 621 developers **must** publish price lists, brochures and registers of transactions
+— the latter within 24 hours of a preliminary agreement — on a centralised government platform,
+[srpe.gov.hk](https://www.srpe.gov.hk/opip/index.htm). That is a free, official, near-real-time
+record of the entire primary market, with prices, units and saleable area. Nothing equivalent
+exists for the secondary market.
+
+**And there is no way in.** It serves a 1.2 KB single-page-app shell; the bundle loads (163 KB)
+but renders nothing to a headless browser and issues no XHR that could be read. Its data
+endpoints live in lazily-loaded chunks.
+
+**Stopped there deliberately.** Chasing undocumented internal endpoints of a government SPA is
+reverse-engineering, not reading what a site publishes — a different activity from the metadata
+the listing importer reads, and the same line the Spacious bypass was declared not to be a
+precedent for. SRPE publishes documents per development to be read, not a feed to be drained.
+The legitimate next step is a request to the SRPA or through data.gov.hk annual open-data
+plan process, which is a conversation rather than code.
+
+### 2. Centaline on data.gov.hk — a five-week-old question, answered
+
+This file carried, from 30/07/2026: *"Terms, cost and true granularity are NOT yet verified —
+this is the single highest-value thing left to check."*
+
+Checked. **Centaline Property Agency publishes on data.gov.hk**, under the portal terms:
+re-use for commercial and non-commercial purposes, free of charge, with attribution. The
+dataset is [Property information of the CCI constituent estates](https://data.gov.hk/en-data/dataset/centaline-centanetod-ccipropertyinfo).
+
+**It is not their transaction database** — it is the ~143 estates constituting the Centaline
+City Index: names in both languages, address, region, occupation years, building count,
+developer. Reference data. But it is precisely the layer this file has wanted from the
+beginning, whose own note on the hard problem reads *"a building polygon must be joined to an
+estate name to an RVD class. Building names are the natural key, and they will be messy."*
+Here they are, spelled the way the market spells them.
+
+**The district is resolved, not guessed.** `estates.district_id` is NOT NULL and the file
+carries a *region* — three buckets where eighteen are needed. Reading a district out of the
+address string would invent a resolution the file does not have, so every address goes to the
+Government Address Lookup Service, the same service the building picker uses.
+**143 of 143 resolved, none unplaced**, and an estate ALS could not place would have been
+reported and skipped rather than filed under a guess. `scripts/ingest-estates.mjs`.
+
+### 3. What users bring — and the two blockers, only one of which was known
+
+The product own thesis is that *"aggregation becomes the output of adoption, not its
+precondition."* `profiles.aggregate_consent` has been collected, stamped and stored since
+16/08/2026 and **read by nothing that aggregates**. `GET /market/community` is what it was
+collected for: medians of price, rent and net yield by district, from members who opted in.
+
+Four conditions, all enforced in the query rather than assumed:
+
+- **Consent is a `where` clause, and the first one.** RLS is enabled on `properties` but **not
+  forced**, so this pooled connection reads across owners — which is what makes the aggregate
+  possible and exactly why the filter cannot be left to the database.
+- **Fabricated samples are excluded.** Hearting a sample writes invented figures into
+  `properties`; `demo_listing_id` was added to make those rows identifiable, and this is the
+  call site that needed it. **Five of the eleven saved properties are fabricated** — the filter
+  is doing real work, not hypothetical work.
+- **A minimum cell of five.** A median over one property is that person price republished.
+  Suppressed cells are counted and returned so a page can say why it is empty rather than
+  looking broken.
+- **Nothing identifying leaves.** Counts and medians only.
+
+**The blocker nobody had noticed: `properties.district_id` has existed since the first
+migration and was never once written.** So even with consent, every cell would group under null
+and be suppressed. Fixed — the district now rides with provenance at the save, resolved by the
+building picker Address Lookup match. It was already in `createPropertySchema`, already in
+the schema, and simply never passed.
+
+**No screen, and that is deliberate.** The endpoint returns nothing today, and publishing it
+waits on `/privacy` naming an operator, because aggregating members property data is a purpose
+a PICS has to state. Building a page for an empty aggregate that cannot lawfully be published
+would be theatre — this is the exception to "data with no screen is not delivered", and the
+reason is stated rather than implied.
+
+### Found on the way, not fixed
+
+**The `estates` table has been collecting things that are not estates.** Five rows written
+between 11 and 26 August — "THE UNIVERSITY OF HONG KONG", "HARBOUR PATROL SECTION, MARINE
+DEPARTMENT", "THE HONG KONG ICE & COLD STORAGE CO., LTD." — all at confidence 1. The building
+picker appears to write whatever ALS returns. Not deleted: this workspace standing rule is
+that nothing gets removed without agreement, and the fix belongs with the picker rather than
+with a one-off cleanup.
+
 ## Working conventions
 - Dates DD/MM/YYYY. Currency: **HKD** for Hong Kong, **VND** for Vietnam, **EUR** for
   France — always state which, never a bare number. Keep a single reporting currency
